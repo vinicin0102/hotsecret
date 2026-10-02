@@ -14,9 +14,14 @@ export type NodeType =
   | "tag"
   | "end";
 
+/**
+ * inherit: usa o atraso padrão do fluxo · fixed: delayMs · random: entre delayMinMs e delayMaxMs ·
+ * auto: proporcional ao tamanho do texto (como alguém digitando)
+ */
+export type DelayMode = "inherit" | "fixed" | "random" | "auto";
+
 export interface DelaySettings {
-  /** fixed: usa delayMs; random: sorteia entre delayMinMs e delayMaxMs */
-  delayMode?: "fixed" | "random";
+  delayMode?: DelayMode;
   delayMs?: number;
   delayMinMs?: number;
   delayMaxMs?: number;
@@ -137,8 +142,19 @@ export interface RecoverySettings {
   buttonLabel: string;
 }
 
+/** Atraso padrão das mensagens do fluxo. */
+export interface FunnelDelay {
+  mode: "fixed" | "random" | "auto";
+  ms?: number;
+  minMs?: number;
+  maxMs?: number;
+}
+
+export const DEFAULT_FUNNEL_DELAY: FunnelDelay = { mode: "auto" };
+
 export interface FunnelSettings {
   defaultDelayMs?: number;
+  delay?: FunnelDelay;
   recovery?: RecoverySettings;
 }
 
@@ -172,6 +188,7 @@ export interface PublicFunnel {
   products: Record<string, PublicProduct>;
   experimentId?: string | null;
   variantId?: string | null;
+  delay?: FunnelDelay;
 }
 
 export const DEFAULT_RECOVERY: RecoverySettings = {

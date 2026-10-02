@@ -97,7 +97,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   }, [track]);
 
   const wait = useCallback(async (node: FlowNode, token: number, fallbackTyping = true) => {
-    const ms = resolveDelay(node.settings, 1200);
+    const c = node.content as unknown as Record<string, unknown>;
+    const textLength = String(c.text ?? c.caption ?? "").length;
+    const ms = resolveDelay(node.settings, funnel.delay, textLength);
     const showTyping = node.settings?.showTyping ?? fallbackTyping;
     if (showTyping && ms > 0) setTyping(true);
     await sleep(ms);
@@ -150,7 +152,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
               push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text }, nodeId: node.id, at: now() });
               markChatStarted();
             } else {
-              await sleep(Math.min(resolveDelay(node.settings, 400), 1500));
+              await sleep(Math.min(resolveDelay(node.settings, funnel.delay, 0), 1500));
               if (runId.current !== token) return;
             }
             track("message_viewed", node.id);

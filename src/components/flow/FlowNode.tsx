@@ -17,8 +17,11 @@ export type HsFlowNode = Node<HsNodeData, "hs">;
 function delayLabel(n: FlowNodeT) {
   const s = n.settings ?? {};
   if (n.type === "start" || n.type === "tag") return "";
-  if (s.delayMode === "random") return `${((s.delayMinMs ?? 1000) / 1000).toFixed(1)}–${((s.delayMaxMs ?? 4000) / 1000).toFixed(1)}s`;
-  return `${((s.delayMs ?? 1200) / 1000).toFixed(1)}s`;
+  const mode = s.delayMode ?? (s.delayMs != null ? "fixed" : "inherit");
+  if (mode === "inherit") return "⏱ padrão";
+  if (mode === "auto") return "⏱ auto";
+  if (mode === "random") return `⏱ ${((s.delayMinMs ?? 1000) / 1000).toFixed(1)}–${((s.delayMaxMs ?? 4000) / 1000).toFixed(1)}s`;
+  return `⏱ ${((s.delayMs ?? 1500) / 1000).toFixed(1)}s`;
 }
 
 function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {

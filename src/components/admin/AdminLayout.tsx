@@ -4,7 +4,6 @@ import { useRouter } from "next/router";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "@/components/ui/Logo";
 import { api } from "@/lib/client";
-import { ToastProvider } from "@/hooks/useToast";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", ico: "◈" },
@@ -55,7 +54,7 @@ export function AdminLayout({
   };
 
   return (
-    <ToastProvider>
+    <>
       <Head>
         <title>{`${title} · HOT SECRET`}</title>
         <meta name="robots" content="noindex" />
@@ -109,6 +108,6 @@ export function AdminLayout({
           <div className={bare ? "" : "content"}>{children}</div>
         </div>
       </div>
-    </ToastProvider>
+    </>
   );
 }

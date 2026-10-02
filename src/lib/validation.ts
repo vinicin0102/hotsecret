@@ -13,7 +13,7 @@ const button = z.object({ id, label: txt(80), keywords: optTxt(300) });
 const inputMode = z.enum(["type", "both", "click"]).optional();
 
 const delaySettings = z.object({
-  delayMode: z.enum(["fixed", "random"]).optional(),
+  delayMode: z.enum(["inherit", "fixed", "random", "auto"]).optional(),
   delayMs: z.number().int().min(0).max(60000).optional(),
   delayMinMs: z.number().int().min(0).max(60000).optional(),
   delayMaxMs: z.number().int().min(0).max(60000).optional(),
@@ -103,7 +103,18 @@ export const funnelMetaSchema = z.object({
   initialMessage: optTxt(1000).nullable(),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
   settings: z
-    .object({ defaultDelayMs: z.number().int().min(0).max(60000).optional(), recovery: recoverySchema.optional() })
+    .object({
+      defaultDelayMs: z.number().int().min(0).max(60000).optional(),
+      delay: z
+        .object({
+          mode: z.enum(["fixed", "random", "auto"]),
+          ms: z.number().int().min(0).max(60000).optional(),
+          minMs: z.number().int().min(0).max(60000).optional(),
+          maxMs: z.number().int().min(0).max(60000).optional(),
+        })
+        .optional(),
+      recovery: recoverySchema.optional(),
+    })
     .optional(),
 });
 

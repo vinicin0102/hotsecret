@@ -1,5 +1,6 @@
 // Flow Engine puro (sem React, sem rede) — usado pelo chat público, pelo preview e pelos testes.
-import type { ChoiceButton, DelaySettings, FlowEdge, FlowGraph, FlowNode } from "@/types/flow";
+import type { ChoiceButton, DelaySettings, FlowEdge, FlowGraph, FlowNode, FunnelDelay } from "@/types/flow";
+import { DEFAULT_FUNNEL_DELAY } from "@/types/flow";
 
 export const WAITING_TYPES = new Set(["question", "buttons", "offer"]);
 
@@ -32,15 +33,33 @@ export function nextNodeId(graph: FlowGraph, nodeId: string, condition = "defaul
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
-/** Delay configurado no nó: fixo (ex.: 1000ms, 3000ms) ou aleatório (ex.: 1000–4000ms). */
-export function resolveDelay(settings: DelaySettings | undefined, fallbackMs = 1200, rng = Math.random): number {
+/** Tempo "digitando" proporcional ao texto: ~35ms por caractere, entre 1s e 6s. */
+export function autoDelay(textLength: number): number {
+  return clamp(Math.round(700 + textLength * 35), 1000, 6000);
+}
+
+/**
+ * Atraso antes de uma mensagem. O nó pode ter tempo próprio (fixo, aleatório ou automático)
+ * ou herdar o padrão do fluxo. Nós antigos com delayMs e sem modo contam como "fixo".
+ */
+export function resolveDelay(
+  settings: DelaySettings | undefined,
+  funnelDelay: FunnelDelay = DEFAULT_FUNNEL_DELAY,
+  textLength = 0,
+  rng = Math.random,
+): number {
   const s = settings ?? {};
-  if (s.delayMode === "random") {
-    const min = clamp(s.delayMinMs ?? 1000, 0, 60000);
-    const max = clamp(s.delayMaxMs ?? 4000, min, 60000);
+  const mode = s.delayMode && s.delayMode !== "inherit" ? s.delayMode : !s.delayMode && s.delayMs != null ? "fixed" : null;
+  const d = mode
+    ? { mode, ms: s.delayMs, minMs: s.delayMinMs, maxMs: s.delayMaxMs }
+    : { mode: funnelDelay.mode, ms: funnelDelay.ms, minMs: funnelDelay.minMs, maxMs: funnelDelay.maxMs };
+  if (d.mode === "auto") return autoDelay(textLength);
+  if (d.mode === "random") {
+    const min = clamp(d.minMs ?? 1000, 0, 60000);
+    const max = clamp(d.maxMs ?? 4000, min, 60000);
     return Math.round(min + rng() * (max - min));
   }
-  return clamp(s.delayMs ?? fallbackMs, 0, 60000);
+  return clamp(d.ms ?? 1500, 0, 60000);
 }
 
 export interface GraphIssue {

@@ -1,5 +1,6 @@
 import type { AppProps } from "next/app";
 import Head from "next/head";
+import { ToastProvider } from "@/hooks/useToast";
 import "@/styles/globals.css";
 import "@/styles/chat.css";
 import "@/styles/admin.css";
@@ -13,7 +14,10 @@ export default function App({ Component, pageProps }: AppProps) {
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
         <title>HOT SECRET</title>
       </Head>
-      <Component {...pageProps} />
+      {/* avisos disponíveis em qualquer página (inclusive no construtor, que fica fora do layout) */}
+      <ToastProvider>
+        <Component {...pageProps} />
+      </ToastProvider>
     </>
   );
 }

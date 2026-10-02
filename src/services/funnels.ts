@@ -8,7 +8,7 @@ import type {
   PublicFunnel,
   PublicProduct,
 } from "@/types/flow";
-import { DEFAULT_RECOVERY } from "@/types/flow";
+import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY } from "@/types/flow";
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 
 type NodeRow = { id: string; type: string; content: unknown; settings: unknown; positionX: number; positionY: number };
@@ -86,6 +86,7 @@ export function getFunnelSettings(raw: unknown): Required<FunnelSettings> {
   const s = (raw ?? {}) as FunnelSettings;
   return {
     defaultDelayMs: s.defaultDelayMs ?? 1200,
+    delay: { ...DEFAULT_FUNNEL_DELAY, ...(s.delay ?? {}) },
     recovery: { ...DEFAULT_RECOVERY, ...(s.recovery ?? {}) },
   };
 }
@@ -197,6 +198,7 @@ async function buildPublicFunnel(
     },
     graph,
     products: publicProducts,
+    delay: getFunnelSettings(funnel.settings).delay,
   };
 }
 

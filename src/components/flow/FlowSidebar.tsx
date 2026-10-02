@@ -4,6 +4,7 @@ import { shortId } from "@/features/chat-engine/engine";
 import { UploadInput } from "@/components/admin/UploadInput";
 import { formatBRL } from "@/lib/format";
 import { NODE_META } from "./nodeMeta";
+import { DelayEditor } from "./DelayEditor";
 
 export interface SidebarProduct {
   id: string;
@@ -346,57 +347,18 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
 
         {hasDelay && (
           <>
-            <div className="section-title">Tempo de resposta</div>
-            <div className="field">
-              <div className="segmented">
-                {(["fixed", "random"] as const).map((m) => (
-                  <button key={m} type="button" className={(s.delayMode ?? "fixed") === m ? "active" : ""} onClick={() => setSettings({ delayMode: m })}>
-                    {m === "fixed" ? "Delay fixo" : "Delay aleatório"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {(s.delayMode ?? "fixed") === "fixed" ? (
-              <div className="field">
-                <label>Delay (segundos)</label>
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  max={60}
-                  step={0.5}
-                  value={(s.delayMs ?? 1200) / 1000}
-                  onChange={(e) => setSettings({ delayMs: Math.round(Number(e.target.value) * 1000) })}
-                />
-              </div>
-            ) : (
-              <div className="grid-2">
-                <div className="field">
-                  <label>Mínimo (s)</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={60}
-                    step={0.5}
-                    value={(s.delayMinMs ?? 1000) / 1000}
-                    onChange={(e) => setSettings({ delayMinMs: Math.round(Number(e.target.value) * 1000) })}
-                  />
-                </div>
-                <div className="field">
-                  <label>Máximo (s)</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={60}
-                    step={0.5}
-                    value={(s.delayMaxMs ?? 4000) / 1000}
-                    onChange={(e) => setSettings({ delayMaxMs: Math.round(Number(e.target.value) * 1000) })}
-                  />
-                </div>
-              </div>
-            )}
+            <div className="section-title">Atraso antes desta mensagem</div>
+            <DelayEditor
+              allowInherit
+              value={{
+                // nós antigos com delayMs e sem modo contam como "fixo"
+                mode: s.delayMode ?? (s.delayMs != null ? "fixed" : "inherit"),
+                ms: s.delayMs,
+                minMs: s.delayMinMs,
+                maxMs: s.delayMaxMs,
+              }}
+              onChange={(v) => setSettings({ delayMode: v.mode, delayMs: v.ms, delayMinMs: v.minMs, delayMaxMs: v.maxMs })}
+            />
             <label className="checkbox" style={{ marginBottom: 14 }}>
               <input type="checkbox" checked={s.showTyping ?? true} onChange={(e) => setSettings({ showTyping: e.target.checked })} />
               Mostrar “digitando...” durante o delay

@@ -44,12 +44,12 @@ export function defaultContent<T extends NodeType>(type: T): NodeContentMap[T] {
 }
 
 export function makeNode(type: NodeType, position: { x: number; y: number }): FlowNode {
-  const interactive = type === "buttons" || type === "question";
   return {
     id: shortId("n"),
     type,
     content: defaultContent(type),
-    settings: { delayMode: "fixed", delayMs: interactive ? 1000 : 1500, showTyping: type !== "tag" },
+    // atraso herdado do fluxo (⚙ Configurar → Tempo entre mensagens)
+    settings: { delayMode: "inherit", showTyping: type !== "tag" },
     position,
   };
 }

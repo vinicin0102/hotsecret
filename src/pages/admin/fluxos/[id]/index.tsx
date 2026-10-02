@@ -386,6 +386,19 @@ function Builder() {
           meta={meta}
           characters={characters}
           onClose={() => setShowSettings(false)}
+          onApplyDelayToAll={() => {
+            let count = 0;
+            setNodes((ns) =>
+              ns.map((n) => {
+                const t = n.data.node.type;
+                if (t === "start" || t === "tag") return n;
+                count++;
+                const { delayMs: _ms, delayMinMs: _min, delayMaxMs: _max, ...rest } = n.data.node.settings ?? {};
+                return { ...n, data: { ...n.data, node: { ...n.data.node, settings: { ...rest, delayMode: "inherit" } } } };
+              }),
+            );
+            return nodes.filter((n) => n.data.node.type !== "start" && n.data.node.type !== "tag").length || count;
+          }}
           onSave={async (m) => {
             await saveMeta(m);
             toast("Configurações salvas ✓");
@@ -409,6 +422,7 @@ function Builder() {
               showOnline: character?.showOnline ?? true,
             },
             graph,
+            delay: meta.settings?.delay,
             products: Object.fromEntries(
               products.map((p) => [
                 p.id,

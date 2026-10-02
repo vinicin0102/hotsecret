@@ -35,11 +35,20 @@ test("eventos de pagamento nunca caem no default", () => {
   assert.equal(nextNodeId(graph, "o", "payment:failed"), null);
 });
 
-test("delay fixo e aleatório", () => {
-  assert.equal(resolveDelay({ delayMs: 3000 }), 3000);
-  assert.equal(resolveDelay({ delayMode: "random", delayMinMs: 1000, delayMaxMs: 4000 }, 0, () => 0), 1000);
-  assert.equal(resolveDelay({ delayMode: "random", delayMinMs: 1000, delayMaxMs: 4000 }, 0, () => 1), 4000);
-  assert.equal(resolveDelay({ delayMs: 999999 }), 60000);
+test("atraso: fixo, aleatório, automático e padrão do fluxo", () => {
+  assert.equal(resolveDelay({ delayMode: "fixed", delayMs: 3000 }), 3000);
+  assert.equal(resolveDelay({ delayMs: 2500 }), 2500); // nós antigos sem modo = fixo
+  assert.equal(resolveDelay({ delayMode: "random", delayMinMs: 1000, delayMaxMs: 4000 }, undefined, 0, () => 0), 1000);
+  assert.equal(resolveDelay({ delayMode: "random", delayMinMs: 1000, delayMaxMs: 4000 }, undefined, 0, () => 1), 4000);
+  assert.equal(resolveDelay({ delayMode: "fixed", delayMs: 999999 }), 60000);
+  // automático: texto curto ≥ 1s, texto longo ≤ 6s, e cresce com o tamanho
+  assert.equal(resolveDelay({ delayMode: "auto" }, undefined, 5), 1000);
+  assert.equal(resolveDelay({ delayMode: "auto" }, undefined, 5000), 6000);
+  assert.ok(resolveDelay({ delayMode: "auto" }, undefined, 120) > resolveDelay({ delayMode: "auto" }, undefined, 40));
+  // herda o padrão do fluxo
+  assert.equal(resolveDelay({}, { mode: "fixed", ms: 2000 }), 2000);
+  assert.equal(resolveDelay({ delayMode: "inherit", delayMs: 500 }, { mode: "fixed", ms: 3000 }), 3000);
+  assert.equal(resolveDelay(undefined, { mode: "random", minMs: 2000, maxMs: 2000 }), 2000);
 });
 
 test("validação aponta nós soltos e saídas faltando", () => {

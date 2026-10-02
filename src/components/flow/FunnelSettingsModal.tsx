@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { slugify } from "@/lib/format";
 import { withBase } from "@/lib/paths";
-import { DEFAULT_RECOVERY, type FunnelSettings, type RecoverySettings } from "@/types/flow";
+import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, type FunnelDelay, type FunnelSettings, type RecoverySettings } from "@/types/flow";
+import { DelayEditor } from "./DelayEditor";
 
 export interface FunnelMeta {
   id: string;
@@ -20,13 +21,18 @@ export function FunnelSettingsModal({
   characters,
   onClose,
   onSave,
+  onApplyDelayToAll,
 }: {
   meta: FunnelMeta;
   characters: { id: string; name: string }[];
   onClose: () => void;
   onSave: (m: FunnelMeta) => Promise<void>;
+  /** faz todas as mensagens existentes usarem o atraso padrão do fluxo */
+  onApplyDelayToAll?: () => number;
 }) {
   const [m, setM] = useState<FunnelMeta>(meta);
+  const [delay, setDelay] = useState<FunnelDelay>({ ...DEFAULT_FUNNEL_DELAY, ...(meta.settings?.delay ?? {}) });
+  const [applied, setApplied] = useState<number | null>(null);
   const [recovery, setRecovery] = useState<RecoverySettings>({ ...DEFAULT_RECOVERY, ...(meta.settings?.recovery ?? {}) });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -35,7 +41,7 @@ export function FunnelSettingsModal({
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery } });
+      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -89,6 +95,21 @@ export function FunnelSettingsModal({
           <input className="input" value={m.initialMessage ?? ""} onChange={(e) => setM({ ...m, initialMessage: e.target.value })} />
         </div>
       </div>
+
+      <div className="section-title">Tempo entre mensagens</div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        Quanto tempo o personagem fica “digitando...” antes de cada mensagem aparecer. Vale para todos os blocos marcados como
+        “Padrão do fluxo”.
+      </p>
+      <DelayEditor value={delay} onChange={(v) => setDelay({ mode: v.mode === "inherit" ? "auto" : v.mode, ms: v.ms, minMs: v.minMs, maxMs: v.maxMs })} />
+      {onApplyDelayToAll && (
+        <div className="row" style={{ marginBottom: 14, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-sm" onClick={() => setApplied(onApplyDelayToAll())}>
+            Usar este padrão em todas as mensagens existentes
+          </button>
+          {applied != null && <span className="hint">✓ {applied} bloco(s) atualizados — salve o fluxo para manter.</span>}
+        </div>
+      )}
 
       <div className="section-title">Recuperação de checkout</div>
       <label className="checkbox" style={{ marginBottom: 12 }}>
