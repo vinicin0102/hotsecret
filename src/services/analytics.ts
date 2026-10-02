@@ -1,6 +1,6 @@
 // Métricas do funil calculadas a partir da tabela de eventos (leads distintos por etapa).
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, tbl } from "@/lib/prisma";
 
 export const FUNNEL_STEPS = [
   { key: "page_view", label: "Visitantes" },
@@ -20,7 +20,7 @@ function funnelFilter(funnelId?: string | null) {
 export async function distinctLeadsByType(from: Date, to: Date, funnelId?: string | null) {
   const rows = await prisma.$queryRaw<{ type: string; count: bigint }[]>`
     SELECT type, COUNT(DISTINCT "leadId") AS count
-    FROM events
+    FROM ${tbl("events")}
     WHERE "createdAt" BETWEEN ${from} AND ${to} ${funnelFilter(funnelId)}
     GROUP BY type`;
   return Object.fromEntries(rows.map((r) => [r.type, Number(r.count)])) as Record<string, number>;
@@ -54,7 +54,7 @@ export async function revenue(from: Date, to: Date, funnelId?: string | null) {
 export async function dailySeries(from: Date, to: Date, funnelId?: string | null) {
   const rows = await prisma.$queryRaw<{ day: Date; type: string; count: bigint }[]>`
     SELECT date_trunc('day', "createdAt" AT TIME ZONE ${TZ}) AS day, type, COUNT(DISTINCT "leadId") AS count
-    FROM events
+    FROM ${tbl("events")}
     WHERE "createdAt" BETWEEN ${from} AND ${to}
       AND type IN ('page_view','chat_started','checkout_started','payment_approved')
       ${funnelFilter(funnelId)}
@@ -105,9 +105,9 @@ export async function funnelSummaries(from?: Date) {
   const since = from ?? new Date(0);
   const rows = await prisma.$queryRaw<{ funnelId: string; visitors: bigint; sales: bigint }[]>`
     SELECT f.id AS "funnelId",
-      (SELECT COUNT(DISTINCT e."leadId") FROM events e WHERE e."funnelId" = f.id AND e.type = 'page_view' AND e."createdAt" >= ${since}) AS visitors,
-      (SELECT COUNT(*) FROM payments p WHERE p."funnelId" = f.id AND p.status = 'APPROVED' AND p."createdAt" >= ${since}) AS sales
-    FROM funnels f`;
+      (SELECT COUNT(DISTINCT e."leadId") FROM ${tbl("events")} e WHERE e."funnelId" = f.id AND e.type = 'page_view' AND e."createdAt" >= ${since}) AS visitors,
+      (SELECT COUNT(*) FROM ${tbl("payments")} p WHERE p."funnelId" = f.id AND p.status = 'APPROVED' AND p."createdAt" >= ${since}) AS sales
+    FROM ${tbl("funnels")} f`;
   return Object.fromEntries(
     rows.map((r) => [r.funnelId, { visitors: Number(r.visitors), sales: Number(r.sales) }]),
   ) as Record<string, { visitors: number; sales: number }>;
@@ -124,8 +124,8 @@ export async function campaigns(from: Date, to: Date, funnelId?: string | null) 
       COUNT(DISTINCT l.id) FILTER (WHERE l.stage IN ('CHECKOUT','ABANDONED','BUYER')) AS checkouts,
       COUNT(DISTINCT p.id) AS sales,
       COALESCE(SUM(p.amount), 0) AS revenue
-    FROM leads l
-    LEFT JOIN payments p ON p."leadId" = l.id AND p.status = 'APPROVED'
+    FROM ${tbl("leads")} l
+    LEFT JOIN ${tbl("payments")} p ON p."leadId" = l.id AND p.status = 'APPROVED'
     WHERE l."createdAt" BETWEEN ${from} AND ${to} ${ff}
     GROUP BY 1, 2
     ORDER BY sales DESC, leads DESC
@@ -148,13 +148,13 @@ export async function experimentReport(experimentId: string) {
   });
   const rows = await prisma.$queryRaw<{ variantId: string; type: string; count: bigint }[]>`
     SELECT l."variantId", e.type, COUNT(DISTINCT e."leadId") AS count
-    FROM events e JOIN leads l ON l.id = e."leadId"
+    FROM ${tbl("events")} e JOIN ${tbl("leads")} l ON l.id = e."leadId"
     WHERE l."experimentId" = ${experimentId}
       AND e.type IN ('page_view','chat_started','checkout_started','payment_approved')
     GROUP BY 1, 2`;
   const rev = await prisma.$queryRaw<{ variantId: string; revenue: bigint }[]>`
     SELECT l."variantId", COALESCE(SUM(p.amount),0) AS revenue
-    FROM payments p JOIN leads l ON l.id = p."leadId"
+    FROM ${tbl("payments")} p JOIN ${tbl("leads")} l ON l.id = p."leadId"
     WHERE l."experimentId" = ${experimentId} AND p.status = 'APPROVED'
     GROUP BY 1`;
   return variants.map((v) => {

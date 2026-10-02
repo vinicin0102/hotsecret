@@ -1,5 +1,5 @@
 import { apiHandler, parseRange, requireAdmin } from "@/lib/api";
-import { prisma } from "@/lib/prisma";
+import { prisma, tbl } from "@/lib/prisma";
 import { campaigns, dailySeries, funnelSteps, revenue } from "@/services/analytics";
 
 export default apiHandler({
@@ -14,7 +14,7 @@ export default apiHandler({
       revenue(from, to, id),
       campaigns(from, to, id),
       prisma.$queryRaw<{ nodeId: string; label: string; count: bigint }[]>`
-        SELECT "nodeId", data->>'label' AS label, COUNT(*) AS count FROM events
+        SELECT "nodeId", data->>'label' AS label, COUNT(*) AS count FROM ${tbl("events")}
         WHERE "funnelId" = ${id} AND type = 'button_clicked' AND "createdAt" BETWEEN ${from} AND ${to}
         GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 30`,
     ]);
