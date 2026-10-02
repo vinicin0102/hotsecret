@@ -33,11 +33,14 @@ export function PaymentStatus({
   productName,
   onRetry,
   onSimulate,
+  previewMode,
 }: {
   payment: PublicPaymentInfo | undefined;
   productName?: string;
   onRetry?: () => void;
   onSimulate?: (status: "APPROVED" | "FAILED") => void;
+  /** pré-visualização do construtor / rascunho: nada é cobrado */
+  previewMode?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const qr = usePixQr(payment?.pixQrCode, payment?.pixQrCodeBase64);
@@ -103,7 +106,9 @@ export function PaymentStatus({
 
           {pending && onSimulate && (
             <div className="sandbox-box">
-              Ambiente de teste — nenhum valor é cobrado.
+              {previewMode
+                ? "Pré-visualização: este PIX é simulado e nada é cobrado. Publique o fluxo e abra o link público para gerar o PIX real."
+                : "Ambiente de teste — nenhum valor é cobrado."}
               <div className="row">
                 <button className="btn btn-sm" onClick={() => onSimulate("APPROVED")}>
                   Simular aprovação

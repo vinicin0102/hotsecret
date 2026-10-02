@@ -25,7 +25,7 @@ export function PreviewModal({ funnel, onClose }: { funnel: PublicFunnel; onClos
           transport={transport}
           resume={null}
           embedded
-          previewLabel="Preview · nada é salvo"
+          previewLabel="Pré-visualização · nada é salvo e o PIX é simulado"
           onRestart={() => setRound((r) => r + 1)}
         />
       </div>

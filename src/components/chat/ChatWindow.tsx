@@ -122,7 +122,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             payment={p}
             productName={productOf(p?.offerNodeId)?.name}
             onRetry={p?.offerNodeId ? () => engine.openCheckout(p.offerNodeId!) : undefined}
-            onSimulate={transport?.simulatePayment && p?.provider !== "mercadopago" ? (s) => engine.simulatePayment(item.paymentId, s) : undefined}
+            onSimulate={transport?.simulatePayment && (p?.provider === "sandbox" || p?.provider === "preview") ? (s) => engine.simulatePayment(item.paymentId, s) : undefined}
+            previewMode={transport?.mode === "preview"}
           />
         );
       }

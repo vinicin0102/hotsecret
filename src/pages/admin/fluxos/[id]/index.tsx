@@ -10,6 +10,7 @@ import { FlowSidebar, type SidebarProduct, type SidebarTag } from "@/components/
 import { NODE_META, PALETTE, makeNode } from "@/components/flow/nodeMeta";
 import { FunnelSettingsModal, type FunnelMeta } from "@/components/flow/FunnelSettingsModal";
 import { PreviewModal } from "@/components/flow/PreviewModal";
+import { ShareLinkModal } from "@/components/admin/ShareLinkModal";
 import { useToast } from "@/hooks/useToast";
 import { api } from "@/lib/client";
 import { withBase } from "@/lib/paths";
@@ -72,6 +73,7 @@ function Builder() {
   const [saving, setSaving] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -308,6 +310,11 @@ function Builder() {
             ▶ Preview
           </button>
           {meta && (
+            <button className="btn btn-gold btn-sm" onClick={() => setShowShare(true)}>
+              🔗 Link
+            </button>
+          )}
+          {meta && (
             <a className="btn btn-sm" href={withBase(`/f/${meta.slug}`)} target="_blank" rel="noreferrer">
               ↗ Abrir fluxo
             </a>
@@ -373,6 +380,7 @@ function Builder() {
         </div>
       </div>
 
+      {showShare && meta && <ShareLinkModal slug={meta.slug} status={meta.status} onClose={() => setShowShare(false)} />}
       {showSettings && meta && (
         <FunnelSettingsModal
           meta={meta}

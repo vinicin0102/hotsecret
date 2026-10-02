@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Modal } from "@/components/ui/Modal";
+import { ShareLinkModal } from "@/components/admin/ShareLinkModal";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/client";
 import { formatNumber, slugify } from "@/lib/format";
@@ -31,6 +32,7 @@ export default function Funnels() {
   const { data, reload } = useFetch<{ funnels: FunnelRow[] }>("/api/admin/funnels");
   const { data: chars } = useFetch<{ characters: CharacterRow[] }>("/api/admin/characters");
   const [creating, setCreating] = useState(false);
+  const [sharing, setSharing] = useState<FunnelRow | null>(null);
   const [form, setForm] = useState({ name: "", description: "", slug: "", characterId: "", initialMessage: "" });
   const [slugTouched, setSlugTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +114,9 @@ export default function Funnels() {
               </div>
             </div>
             <div className="actions">
+              <button className="btn btn-gold btn-sm" onClick={() => setSharing(f)}>
+                🔗 Link
+              </button>
               <Link className="btn btn-primary btn-sm" href={`/admin/fluxos/${f.id}`}>
                 Editar
               </Link>
@@ -131,6 +136,8 @@ export default function Funnels() {
           </div>
         ))}
       </div>
+
+      {sharing && <ShareLinkModal slug={sharing.slug} status={sharing.status} onClose={() => setSharing(null)} />}
 
       {creating && (
         <Modal title="Criar fluxo" onClose={() => setCreating(false)}>

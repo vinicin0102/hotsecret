@@ -133,7 +133,7 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
           funnel={funnel}
           transport={transport}
           resume={resume}
-          previewLabel={draftPreview ? "Rascunho · pré-visualização (nada é salvo)" : undefined}
+          previewLabel={draftPreview ? "Rascunho · pré-visualização com PIX simulado — publique o fluxo para cobrar de verdade" : undefined}
           onRestart={draftPreview ? () => setRound((r) => r + 1) : () => startSession(true)}
         />
       )}
