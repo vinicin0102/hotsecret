@@ -7,7 +7,9 @@ if [ -z "$DATABASE_URL" ]; then
   echo "Na Vercel: projeto > Storage > Create Database > Neon (Postgres) > Connect (Production e Preview). Depois faça Redeploy."
   exit 1
 fi
+# migrations e seed usam conexão direta (poolers em modo transação não suportam migrations)
+DIRECT_URL="${POSTGRES_URL_NON_POOLING:-$DATABASE_URL}"
 npx prisma generate
-npx prisma migrate deploy
-npx tsx database/seed.ts --if-enabled
+DATABASE_URL="$DIRECT_URL" npx prisma migrate deploy
+DATABASE_URL="$DIRECT_URL" npx tsx database/seed.ts --if-enabled
 npx next build
