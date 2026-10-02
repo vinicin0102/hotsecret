@@ -10,6 +10,7 @@ import type { LeadSession } from "@/lib/auth";
 import { trackEvent } from "../tracking";
 import { addTagToLead, ensureTag } from "../tags";
 import { getProvider } from "./index";
+import { sendMetaPurchase } from "../meta-capi";
 
 const ALLOWED_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
   CREATED: ["PENDING", "APPROVED", "FAILED"],
@@ -201,6 +202,9 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
   if (status === "APPROVED") {
     const tag = await ensureTag("COMPROU", "#D8A85C");
     await addTagToLead(payment.leadId, tag.id, "automation");
+    // venda na API de Conversões da Meta (falha aqui nunca afeta o pagamento)
+    const approved = await prisma.payment.findUnique({ where: { id: paymentId } });
+    if (approved) await sendMetaPurchase(approved).catch((e) => console.error("[meta-capi]", e));
   }
   return prisma.payment.findUnique({ where: { id: paymentId } });
 }

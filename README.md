@@ -163,6 +163,14 @@ checkout_recovery_sent, delivery_viewed, link_clicked, chat_completed` — todos
 UTMs (`utm_source/medium/campaign/content/term`), referrer, landing page, dispositivo, navegador,
 SO e país (header da Vercel/Cloudflare) são capturados na primeira visita.
 
+### Pixels (Meta, TikTok, Google)
+
+Em **Configurações → Pixels e rastreamento** (padrão) ou **⚙ Configurar** do fluxo (sobrescreve):
+PageView ao abrir o chat, InitiateCheckout ao clicar na oferta e Purchase quando o gateway confirma o
+pagamento (com valor). A **API de Conversões da Meta** (token salvo só no servidor) envia o Purchase
+pelo servidor no momento da aprovação — com IP, user agent, `fbp`/`fbc` (capturado do `fbclid`) — e usa
+o id do pagamento como `event_id`, o mesmo do pixel do navegador, para a Meta deduplicar.
+
 ### A/B test
 
 Em *Analytics → Testes A/B*: um slug próprio distribui visitantes entre fluxos publicados por peso

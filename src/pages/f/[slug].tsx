@@ -10,6 +10,7 @@ import { getPublicFunnelById, getPublicFunnelBySlug, resolveExperiment } from "@
 import { activeProviderName, sandboxAllowed } from "@/services/payments";
 import { createLiveTransport, createPreviewTransport, type ChatTransport } from "@/features/chat-engine/transport";
 import type { ResumeState } from "@/features/chat-engine/useChatEngine";
+import { initPixels } from "@/features/chat-engine/pixels";
 import type { OfferContent, PublicFunnel } from "@/types/flow";
 
 interface Props {
@@ -77,6 +78,11 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
   useEffect(() => {
     void startSession(false);
   }, [startSession]);
+
+  // pixels de anúncios (não carregam na pré-visualização de rascunho)
+  useEffect(() => {
+    if (funnel && !draftPreview) initPixels(funnel.tracking);
+  }, [funnel, draftPreview]);
 
   const transport: ChatTransport | null = useMemo(() => {
     if (!funnel) return null;

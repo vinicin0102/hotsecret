@@ -10,6 +10,7 @@ import type {
 } from "@/types/flow";
 import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY } from "@/types/flow";
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
+import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
 
 type NodeRow = { id: string; type: string; content: unknown; settings: unknown; positionX: number; positionY: number };
 type EdgeRow = { id: string; sourceNode: string; targetNode: string; condition: string };
@@ -87,6 +88,7 @@ export function getFunnelSettings(raw: unknown): Required<FunnelSettings> {
   return {
     defaultDelayMs: s.defaultDelayMs ?? 1200,
     delay: { ...DEFAULT_FUNNEL_DELAY, ...(s.delay ?? {}) },
+    tracking: s.tracking ?? {},
     recovery: { ...DEFAULT_RECOVERY, ...(s.recovery ?? {}) },
   };
 }
@@ -199,6 +201,7 @@ async function buildPublicFunnel(
     graph,
     products: publicProducts,
     delay: getFunnelSettings(funnel.settings).delay,
+    tracking: publicTracking(mergeTracking(await getGlobalTracking(), (funnel.settings as FunnelSettings | null)?.tracking)),
   };
 }
 

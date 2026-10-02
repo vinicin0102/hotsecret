@@ -152,8 +152,17 @@ export interface FunnelDelay {
 
 export const DEFAULT_FUNNEL_DELAY: FunnelDelay = { mode: "auto" };
 
+/** IDs públicos dos pixels (vão ao navegador). Tokens secretos ficam só no servidor. */
+export interface TrackingIds {
+  metaPixelId?: string;
+  tiktokPixelId?: string;
+  googleTagId?: string;
+}
+
 export interface FunnelSettings {
   defaultDelayMs?: number;
+  /** pixels deste fluxo (vazio = usa os pixels padrão de Configurações) */
+  tracking?: TrackingIds;
   delay?: FunnelDelay;
   recovery?: RecoverySettings;
 }
@@ -189,6 +198,7 @@ export interface PublicFunnel {
   experimentId?: string | null;
   variantId?: string | null;
   delay?: FunnelDelay;
+  tracking?: TrackingIds;
 }
 
 export const DEFAULT_RECOVERY: RecoverySettings = {

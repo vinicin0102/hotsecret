@@ -1,6 +1,6 @@
 // Inicia (ou retoma) a sessão do visitante: cria lead + conversa, captura UTM/dispositivo e registra page_view.
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, getClientIp, HttpError, rateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { signLeadToken, verifyLeadToken } from "@/lib/auth";
 import { parseUserAgent } from "@/lib/device";
@@ -30,6 +30,16 @@ const schema = z.object({
   referrer: z.string().max(1000).optional().nullable(),
   landingPage: z.string().max(1000).optional().nullable(),
 });
+
+/** fbclid do anúncio → cookie fbc no formato da Meta (fb.1.<timestamp>.<fbclid>). */
+function fbcFromLanding(landing?: string | null): string | null {
+  try {
+    const id = landing ? new URL(landing).searchParams.get("fbclid") : null;
+    return id && /^[\w-]{10,300}$/.test(id) ? `fb.1.${Date.now()}.${id}` : null;
+  } catch {
+    return null;
+  }
+}
 
 const t = (v?: string | null) => (v ? sanitizeText(v, 200) || null : null);
 
@@ -101,6 +111,9 @@ export default apiHandler({
         country: country ? sanitizeText(country, 8) : null,
         experimentId,
         variantId,
+        fbc: fbcFromLanding(body.landingPage),
+        clientIp: getClientIp(req).slice(0, 64),
+        userAgent: String(req.headers["user-agent"] ?? "").slice(0, 400) || null,
       },
     });
     const conversation = await prisma.conversation.create({ data: { leadId: lead.id, funnelId: funnel.id } });

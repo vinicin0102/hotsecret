@@ -61,6 +61,110 @@ const CONFIG_LABEL: Record<string, string> = {
   blobStorage: "BLOB_READ_WRITE_TOKEN (uploads)",
 };
 
+interface TrackingForm {
+  metaPixelId: string;
+  tiktokPixelId: string;
+  googleTagId: string;
+  metaTestEventCode: string;
+  metaCapiConfigured: boolean;
+  metaCapiHint: string;
+}
+
+/** Pixels padrão (valem para todos os fluxos que não definirem os próprios). */
+function PixelsCard() {
+  const { data, reload } = useFetch<{ tracking: TrackingForm }>("/api/admin/tracking");
+  const [form, setForm] = useState<TrackingForm | null>(null);
+  const [token, setToken] = useState("");
+  const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
+  const f = form ?? data?.tracking ?? null;
+  if (!f) return <div className="card">Carregando pixels...</div>;
+  const set = (k: keyof TrackingForm, v: string) => setForm({ ...f, [k]: v });
+
+  const save = async (removeToken = false) => {
+    setMsg(null);
+    try {
+      await api("/api/admin/tracking", {
+        method: "PUT",
+        body: {
+          metaPixelId: f.metaPixelId,
+          tiktokPixelId: f.tiktokPixelId,
+          googleTagId: f.googleTagId,
+          metaTestEventCode: f.metaTestEventCode,
+          ...(removeToken ? { metaCapiToken: "" } : token.trim() ? { metaCapiToken: token.trim() } : {}),
+        },
+      });
+      setToken("");
+      setForm(null);
+      await reload();
+      setMsg({ text: "Pixels salvos ✓" });
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : "Erro ao salvar", error: true });
+    }
+  };
+
+  return (
+    <div className="card" style={{ gridColumn: "1 / -1" }}>
+      <h3>Pixels e rastreamento</h3>
+      <p className="hint" style={{ marginTop: -6 }}>
+        Eventos enviados automaticamente: <b>PageView</b> (abriu o chat), <b>InitiateCheckout</b> (clicou na oferta) e <b>Purchase</b> (pagamento
+        confirmado pelo gateway, com o valor). Valem para todos os fluxos — cada fluxo pode usar pixels próprios em ⚙ Configurar.
+      </p>
+      <div className="settings-grid" style={{ gap: 12 }}>
+        <div className="field">
+          <label htmlFor="px-meta">Pixel da Meta (Facebook / Instagram)</label>
+          <input id="px-meta" className="input" inputMode="numeric" placeholder="Ex.: 123456789012345" value={f.metaPixelId} onChange={(e) => set("metaPixelId", e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="px-tiktok">Pixel do TikTok</label>
+          <input id="px-tiktok" className="input" placeholder="Ex.: CABCDEFGHIJ1234567" value={f.tiktokPixelId} onChange={(e) => set("tiktokPixelId", e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="px-google">Google (GA4 / Google Ads)</label>
+          <input id="px-google" className="input" placeholder="Ex.: G-XXXXXXXXXX" value={f.googleTagId} onChange={(e) => set("googleTagId", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="section-title">API de Conversões da Meta (recomendado)</div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        Envia a venda pelo servidor assim que o pagamento é confirmado — conta a venda mesmo se o lead fechar a página (comum no PIX) e não é
+        bloqueada por navegadores. A Meta não duplica: o mesmo evento do pixel e do servidor é contado uma vez. Gere o token em Gerenciador de
+        Eventos → seu pixel → Configurações → API de Conversões → “Gerar token de acesso”.
+      </p>
+      <div className="settings-grid" style={{ gap: 12 }}>
+        <div className="field">
+          <label htmlFor="px-token">Token de acesso</label>
+          <input
+            id="px-token"
+            className="input"
+            type="password"
+            autoComplete="off"
+            placeholder={f.metaCapiConfigured ? `Configurado (${f.metaCapiHint}) — cole outro para trocar` : "Cole o token aqui"}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+          <span className="hint">{f.metaCapiConfigured ? <span className="check-ok">✓ Ativo</span> : "Não configurado"} · fica só no servidor, nunca aparece na página.</span>
+        </div>
+        <div className="field">
+          <label htmlFor="px-test">Código de teste (opcional)</label>
+          <input id="px-test" className="input" placeholder="Ex.: TEST12345" value={f.metaTestEventCode} onChange={(e) => set("metaTestEventCode", e.target.value)} />
+          <span className="hint">Use para ver os eventos em “Testar eventos” na Meta. Apague depois de testar.</span>
+        </div>
+      </div>
+      {msg && <div className={msg.error ? "error-text" : "check-ok"} style={{ marginBottom: 10 }}>{msg.text}</div>}
+      <div className="row" style={{ flexWrap: "wrap" }}>
+        <button className="btn btn-primary btn-sm" onClick={() => save()}>
+          Salvar pixels
+        </button>
+        {f.metaCapiConfigured && (
+          <button className="btn btn-ghost btn-sm" onClick={() => confirm("Remover o token da API de Conversões?") && save(true)}>
+            Remover token
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { data: tags, reload: reloadTags } = useFetch<{ tags: Tag[] }>("/api/admin/tags");
   const { data: autos, reload: reloadAutos } = useFetch<{ automations: Automation[] }>("/api/admin/automations");
@@ -88,6 +192,7 @@ export default function SettingsPage() {
     <AdminLayout title="Configurações" subtitle="Tags, automações, integrações e equipe">
       {error && <div className="error-text" style={{ marginBottom: 12 }}>{error}</div>}
       <div className="settings-grid">
+        <PixelsCard />
         <div className="card">
           <h3>Tags</h3>
           <div className="row" style={{ marginBottom: 12 }}>

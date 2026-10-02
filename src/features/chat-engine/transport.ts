@@ -1,6 +1,7 @@
 // Transporte do chat: "live" fala com a API (eventos persistidos), "preview" simula tudo em memória.
 import { withBase } from "@/lib/paths";
 import type { FlowNode } from "@/types/flow";
+import { metaCookies } from "./pixels";
 
 export interface ClientEvent {
   type: string;
@@ -83,7 +84,7 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
     },
     async checkout(offerNodeId, form) {
       await chain;
-      const r = await post<{ payment: PublicPaymentInfo }>("/api/public/checkout", { token: getToken(), offerNodeId, ...form });
+      const r = await post<{ payment: PublicPaymentInfo }>("/api/public/checkout", { token: getToken(), offerNodeId, ...form, ...metaCookies() });
       return r.payment;
     },
     poll(since) {

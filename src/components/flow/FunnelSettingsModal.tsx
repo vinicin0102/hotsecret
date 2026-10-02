@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { slugify } from "@/lib/format";
 import { withBase } from "@/lib/paths";
-import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, type FunnelDelay, type FunnelSettings, type RecoverySettings } from "@/types/flow";
+import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, type FunnelDelay, type FunnelSettings, type RecoverySettings, type TrackingIds } from "@/types/flow";
 import { DelayEditor } from "./DelayEditor";
 
 export interface FunnelMeta {
@@ -33,6 +33,7 @@ export function FunnelSettingsModal({
   const [m, setM] = useState<FunnelMeta>(meta);
   const [delay, setDelay] = useState<FunnelDelay>({ ...DEFAULT_FUNNEL_DELAY, ...(meta.settings?.delay ?? {}) });
   const [applied, setApplied] = useState<number | null>(null);
+  const [tracking, setTracking] = useState<TrackingIds>({ ...(meta.settings?.tracking ?? {}) });
   const [recovery, setRecovery] = useState<RecoverySettings>({ ...DEFAULT_RECOVERY, ...(meta.settings?.recovery ?? {}) });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -41,7 +42,7 @@ export function FunnelSettingsModal({
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay } });
+      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -110,6 +111,25 @@ export function FunnelSettingsModal({
           {applied != null && <span className="hint">✓ {applied} bloco(s) atualizados — salve o fluxo para manter.</span>}
         </div>
       )}
+
+      <div className="section-title">Pixels deste fluxo</div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        Deixe vazio para usar os pixels padrão (Configurações → Pixels e rastreamento). Preencha só se este fluxo usa outra conta de anúncios.
+      </p>
+      <div className="grid-2">
+        <div className="field">
+          <label htmlFor="fp-meta">Pixel da Meta</label>
+          <input id="fp-meta" className="input" inputMode="numeric" placeholder="padrão" value={tracking.metaPixelId ?? ""} onChange={(e) => setTracking({ ...tracking, metaPixelId: e.target.value })} />
+        </div>
+        <div className="field">
+          <label htmlFor="fp-tiktok">Pixel do TikTok</label>
+          <input id="fp-tiktok" className="input" placeholder="padrão" value={tracking.tiktokPixelId ?? ""} onChange={(e) => setTracking({ ...tracking, tiktokPixelId: e.target.value })} />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="fp-google">Google (GA4 / Ads)</label>
+        <input id="fp-google" className="input" placeholder="padrão" value={tracking.googleTagId ?? ""} onChange={(e) => setTracking({ ...tracking, googleTagId: e.target.value })} />
+      </div>
 
       <div className="section-title">Recuperação de checkout</div>
       <label className="checkbox" style={{ marginBottom: 12 }}>

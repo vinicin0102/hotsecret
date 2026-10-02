@@ -155,6 +155,11 @@ model Lead {
   country           String?
   experimentId      String?
   variantId         String?
+  /// sinais para a API de Conversões (Meta): dispositivo da compra e cookies do pixel
+  clientIp          String?
+  userAgent         String?
+  fbp               String?
+  fbc               String?
   lastInteractionAt DateTime  @default(now())
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -400,4 +405,13 @@ model Media {
   createdAt DateTime @default(now())
 
   @@map("media")
+}
+
+/// Configurações gerais do painel (ex.: pixels padrão). Valores secretos nunca vão ao navegador.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
 }

@@ -84,6 +84,13 @@ export const graphSchema = z
     return { nodes, edges };
   });
 
+const emptyToUndef = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : typeof v === "string" ? v.trim() : v);
+export const trackingIdsSchema = z.object({
+  metaPixelId: z.preprocess(emptyToUndef, z.string().regex(/^\d{5,20}$/, "Pixel da Meta: só números").optional()),
+  tiktokPixelId: z.preprocess(emptyToUndef, z.string().regex(/^[A-Z0-9]{10,32}$/i, "Pixel do TikTok inválido").optional()),
+  googleTagId: z.preprocess(emptyToUndef, z.string().regex(/^(G|AW|GT)-[A-Z0-9]{4,20}$/i, "Use um ID como G-XXXXXXX").optional()),
+});
+
 export const recoverySchema = z.object({
   enabled: z.boolean(),
   delayMinutes: z.number().int().min(1).max(60 * 24 * 7),
@@ -114,6 +121,7 @@ export const funnelMetaSchema = z.object({
         })
         .optional(),
       recovery: recoverySchema.optional(),
+      tracking: trackingIdsSchema.optional(),
     })
     .optional(),
 });
@@ -166,4 +174,7 @@ export const checkoutSchema = z.object({
   token: z.string().min(10).max(2000),
   offerNodeId: id,
   method: z.enum(["PIX", "CARD"]).default("PIX"),
+  // cookies do pixel da Meta (para a API de Conversões)
+  fbp: z.string().max(200).regex(/^fb\.\d\.\d+\.\d+$/).optional().catch(undefined),
+  fbc: z.string().max(400).regex(/^fb\.\d\.\d+\.[\w-]+$/).optional().catch(undefined),
 });

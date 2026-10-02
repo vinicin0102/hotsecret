@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, PublicFunnel } from "@/types/flow";
 import { getNode, findStartNode, matchChoice, nextNodeId, resolveDelay } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
+import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
 
 export type ChatItem =
   | { kind: "message"; id: string; sender: "bot" | "user" | "system"; type: "text" | "image" | "video" | "audio"; content: Record<string, unknown>; nodeId?: string | null; at: string }
@@ -257,6 +258,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const product = productId ? funnel.products[productId] : undefined;
       track("offer_clicked", offerNodeId);
       track("checkout_started", offerNodeId);
+      if (product && transportRef.current?.mode === "live") {
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, eventId: `ic_${offerNodeId}_${Date.now()}` });
+      }
       setCheckoutOpened(true);
       if (product?.externalCheckoutUrl) {
         window.open(product.externalCheckoutUrl, "_blank", "noopener");
@@ -332,6 +336,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       if (!p.offerNodeId || advancedPayments.current.has(p.id)) continue;
       if (p.status === "APPROVED" || p.status === "FAILED") {
         advancedPayments.current.add(p.id);
+        // venda confirmada pelo gateway (mesmo id do evento enviado pela API de Conversões)
+        if (p.status === "APPROVED" && transportRef.current?.mode === "live") {
+          const product = funnel.products[p.productId];
+          pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id });
+        }
         const target = nextNodeId(graphRef.current, p.offerNodeId, p.status === "APPROVED" ? "payment:approved" : "payment:failed");
         // busca a confirmação registrada pelo servidor antes de seguir o ramo do pagamento
         const t = transportRef.current;
@@ -344,7 +353,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         });
       }
     }
-  }, [payments, run, addServerMessages]);
+  }, [payments, run, addServerMessages, funnel.products]);
 
   // ---------- Polling: status do pagamento + mensagens do servidor (recuperação) ----------
   const hasPending = Object.values(payments).some((p) => p.status === "PENDING" || p.status === "CREATED");
