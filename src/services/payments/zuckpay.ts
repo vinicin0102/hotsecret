@@ -32,8 +32,9 @@ export function mapZuckPayStatus(s: string | undefined): PaymentStatus {
 }
 
 function authHeader(): string {
-  const id = process.env.ZUCKPAY_CLIENT_ID;
-  const secret = process.env.ZUCKPAY_CLIENT_SECRET;
+  // aceita também CLIENT_ID / CLIENT_SECRET (nomes usados no painel da ZuckPay)
+  const id = process.env.ZUCKPAY_CLIENT_ID || process.env.CLIENT_ID;
+  const secret = process.env.ZUCKPAY_CLIENT_SECRET || process.env.CLIENT_SECRET;
   if (!id || !secret) throw new Error("ZUCKPAY_CLIENT_ID / ZUCKPAY_CLIENT_SECRET não configurados");
   return "Basic " + Buffer.from(`${id}:${secret}`, "utf8").toString("base64");
 }

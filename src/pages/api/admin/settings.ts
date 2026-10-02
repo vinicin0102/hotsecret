@@ -13,7 +13,8 @@ export default apiHandler({
       webhookUrl: absoluteUrl(`/api/webhooks/payments/${provider}`),
       cronUrl: absoluteUrl("/api/cron/recovery"),
       configured: {
-        zuckpayCredentials: !!process.env.ZUCKPAY_CLIENT_ID && !!process.env.ZUCKPAY_CLIENT_SECRET,
+        zuckpayCredentials:
+          !!(process.env.ZUCKPAY_CLIENT_ID || process.env.CLIENT_ID) && !!(process.env.ZUCKPAY_CLIENT_SECRET || process.env.CLIENT_SECRET),
         zuckpayWebhookSecret: !!process.env.ZUCKPAY_WEBHOOK_SECRET,
         payerData: !!process.env.CHECKOUT_PAYER_CPF && !!process.env.CHECKOUT_PAYER_PHONE,
         supabaseStorage: !!process.env.SUPABASE_URL && !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY),
