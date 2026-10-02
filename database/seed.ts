@@ -3,7 +3,9 @@
 import bcrypt from "bcryptjs";
 import { PrismaClient, type Prisma } from "@prisma/client";
 
-const prisma = new PrismaClient();
+import { resolveDatabaseUrl } from "../src/lib/prisma";
+
+const prisma = new PrismaClient({ datasourceUrl: resolveDatabaseUrl() });
 
 const T = (id: string, text: string, x: number, y: number, delayMs = 1600) => ({
   id,
