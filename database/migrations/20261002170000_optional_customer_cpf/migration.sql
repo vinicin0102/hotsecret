@@ -1,0 +1,1 @@
+ALTER TABLE "payments" ALTER COLUMN "customerCpf" DROP NOT NULL;

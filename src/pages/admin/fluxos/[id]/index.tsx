@@ -13,7 +13,7 @@ import { PreviewModal } from "@/components/flow/PreviewModal";
 import { useToast } from "@/hooks/useToast";
 import { api } from "@/lib/client";
 import { withBase } from "@/lib/paths";
-import { shortId, validateGraph, type GraphIssue } from "@/features/chat-engine/engine";
+import { lockedNodeIds, shortId, validateGraph, type GraphIssue } from "@/features/chat-engine/engine";
 import type { FlowEdge, FlowGraph, FlowNode, NodeType } from "@/types/flow";
 
 interface CharacterRow {
@@ -125,6 +125,7 @@ function Builder() {
   const errorNodes = useMemo(() => new Set(issues.filter((i) => i.level === "error" && i.nodeId).map((i) => i.nodeId!)), [issues]);
   const productNames = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p.name])), [products]);
   const tagNames = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t.name])), [tags]);
+  const paidNodes = useMemo(() => lockedNodeIds(graph), [graph]);
 
   const displayNodes = useMemo(
     () =>
@@ -136,13 +137,14 @@ function Builder() {
           data: {
             ...n.data,
             hasError: errorNodes.has(n.id),
+            paid: paidNodes.has(n.id),
             productName: c.productId ? productNames[c.productId] : undefined,
             tagName: c.tagId ? tagNames[c.tagId] : undefined,
             onToggleMinimize: toggleMinimize,
           },
         };
       }),
-    [nodes, selectedId, errorNodes, productNames, tagNames, toggleMinimize],
+    [nodes, selectedId, errorNodes, paidNodes, productNames, tagNames, toggleMinimize],
   );
 
   const onNodesChange = useCallback((changes: NodeChange<HsFlowNode>[]) => {

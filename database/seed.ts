@@ -80,7 +80,6 @@ async function main() {
         description: "Descubra como reacender a conexão e entender o que a outra pessoa sente — passo a passo.",
         originalPrice: 2700,
         price: 990,
-        deliveryUrl: "https://example.com/acesso/guia-hot-secret",
         active: true,
       },
     });
@@ -129,15 +128,11 @@ async function main() {
       settings: { delayMode: "fixed", delayMs: 1500, showTyping: true },
       position: { x: 220, y: 1300 },
     },
-    T("ok1", "Pronto! ❤️ Seu acesso foi liberado.", 20, 1560, 1200),
-    {
-      id: "del1",
-      type: "delivery",
-      content: { text: "Clique abaixo para acessar agora:", productId: product.id, buttonLabel: "ACESSAR MEU PRODUTO" },
-      settings: { delayMode: "fixed", delayMs: 1200, showTyping: true },
-      position: { x: 20, y: 1720 },
-    },
-    { id: "end1", type: "end", content: { text: "Qualquer coisa, estou por aqui. 💌" }, settings: { delayMs: 2000, showTyping: true }, position: { x: 20, y: 1900 } },
+    T("ok1", "Pronto! ❤️ Seu acesso foi liberado. Vou te contar tudo aqui mesmo...", 20, 1560, 1200),
+    T("c1", "🔓 Segredo nº 1\nQuando alguém se afasta, raramente é falta de amor. Quase sempre é falta de espaço para falar sem ser julgado.", 20, 1720, 2600),
+    T("c2", "🔓 Segredo nº 2\nPergunte \"como foi o seu dia?\" e escute até o fim, sem corrigir e sem aconselhar. Faça isso por 7 dias seguidos.", 20, 1880, 2600),
+    T("c3", "🔓 Segredo nº 3\nTroque cobranças por convites: em vez de \"você nunca...\", diga \"eu adoraria se a gente...\".", 20, 2040, 2600),
+    { id: "end1", type: "end", content: { text: "Esse é o começo. Volte aqui sempre que precisar — a conversa fica salva. 💌" }, settings: { delayMs: 2000, showTyping: true }, position: { x: 20, y: 2200 } },
     T("fail1", "Hmm... parece que o pagamento não foi aprovado. 😕\nQuer tentar novamente? É só tocar no botão da oferta acima.", 440, 1560, 1200),
   ];
   const edges = [
@@ -156,8 +151,10 @@ async function main() {
     ["m3", "offer1", "default"],
     ["offer1", "ok1", "payment:approved"],
     ["offer1", "fail1", "payment:failed"],
-    ["ok1", "del1", "default"],
-    ["del1", "end1", "default"],
+    ["ok1", "c1", "default"],
+    ["c1", "c2", "default"],
+    ["c2", "c3", "default"],
+    ["c3", "end1", "default"],
   ];
 
   await prisma.funnelNode.createMany({

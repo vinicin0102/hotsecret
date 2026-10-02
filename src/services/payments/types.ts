@@ -5,7 +5,7 @@ export interface CreatePaymentInput {
   amount: number; // centavos
   description: string;
   method: PaymentMethod;
-  customer: { name: string; email: string; cpf: string };
+  customer: { name: string; email: string };
   notificationUrl: string;
   returnUrl: string;
 }

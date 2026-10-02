@@ -152,8 +152,5 @@ export const experimentSchema = z.object({
 export const checkoutSchema = z.object({
   token: z.string().min(10).max(2000),
   offerNodeId: id,
-  name: txt(120).pipe(z.string().min(3, "Informe seu nome completo")),
-  email: z.string().trim().toLowerCase().pipe(z.email("E-mail inválido")).pipe(z.string().max(160)),
-  cpf: z.string().max(20),
-  method: z.enum(["PIX", "CARD"]),
+  method: z.enum(["PIX", "CARD"]).default("PIX"),
 });

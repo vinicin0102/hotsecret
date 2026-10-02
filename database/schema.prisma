@@ -269,9 +269,10 @@ model Payment {
   pixQrCode         String?
   pixQrCodeBase64   String?
   redirectUrl       String?
+  /// dados técnicos do pagador enviados ao gateway (o visitante não preenche nada)
   customerName      String
   customerEmail     String
-  customerCpf       String
+  customerCpf       String?
   approvedAt        DateTime?
   lastSyncedAt      DateTime?
   createdAt         DateTime      @default(now())

@@ -52,7 +52,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   };
 
   const productOf = (offerNodeId: string | null | undefined) => {
-    const node = getNode(funnel.graph, offerNodeId);
+    const node = getNode(engine.graph, offerNodeId);
     const pid = (node?.content as OfferContent | undefined)?.productId;
     return pid ? funnel.products[pid] : undefined;
   };
@@ -95,7 +95,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         );
       }
       case "offer": {
-        const node = getNode(funnel.graph, item.nodeId);
+        const node = getNode(engine.graph, item.nodeId);
         return (
           <OfferCard
             key={item.id}
@@ -124,7 +124,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         );
       }
       case "delivery": {
-        const node = getNode(funnel.graph, item.nodeId);
+        const node = getNode(engine.graph, item.nodeId);
         const c = (node?.content ?? {}) as DeliveryContent;
         return (
           <DeliveryCard
@@ -139,7 +139,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         );
       }
       case "link": {
-        const node = getNode(funnel.graph, item.nodeId);
+        const node = getNode(engine.graph, item.nodeId);
         const c = (node?.content ?? {}) as LinkContent;
         return (
           <div key={item.id} className="msg-row bot">

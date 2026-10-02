@@ -37,7 +37,7 @@ export function OfferCard({
           <button className="btn btn-primary cta-glow" onClick={onCta} disabled={disabled}>
             {offer.ctaLabel || "QUERO ACESSAR ❤️"}
           </button>
-          <div className="secure-note">🔒 Compra segura · você confirma os dados antes de pagar</div>
+          <div className="secure-note">🔒 Compra segura via PIX · sem cadastro</div>
         </div>
       </div>
     </div>

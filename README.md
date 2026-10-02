@@ -50,7 +50,7 @@ O sandbox é **bloqueado em produção**, a não ser que `ALLOW_SANDBOX_PAYMENTS
 1. `PAYMENT_PROVIDER=mercadopago` e `MERCADOPAGO_ACCESS_TOKEN=<token de produção>`.
 2. Em *Suas integrações → Webhooks*, cadastre `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/mercadopago`
    (evento **Pagamentos**) e copie a assinatura secreta para `MERCADOPAGO_WEBHOOK_SECRET`.
-3. PIX é exibido dentro do chat (QR Code + copia e cola). Cartão abre o Checkout Pro do Mercado Pago.
+3. PIX é exibido dentro do chat (QR Code + copia e cola), sem pedir dados ao visitante.
 4. Um pagamento **só é aprovado** quando o webhook tem assinatura válida **e** a consulta à API do
    Mercado Pago confirma o status — chegar à tela final nunca aprova nada.
 
@@ -110,6 +110,17 @@ do lead, aplica tags e automações.
 **Tipos de bloco:** Mensagem (texto, remetente), Imagem, Vídeo (thumbnail, autoplay), Áudio,
 Pergunta (aberta → salva em nome/e-mail/telefone/variável, ou botões), Botões, Oferta (card de
 produto + checkout no chat), Entrega (link liberado só com pagamento aprovado), Link, Tag e Fim.
+
+### Checkout sem cadastro + conteúdo entregue no chat
+
+- O visitante **não preenche nenhum dado**: toca em “QUERO ACESSAR”, confirma o produto/preço e recebe
+  a **chave PIX** (QR Code + copia e cola) dentro do chat.
+- Os dados que o gateway exige do pagador são do próprio SaaS (`CHECKOUT_PAYER_NAME`,
+  `CHECKOUT_PAYER_EMAIL`; sem eles, um e-mail técnico é gerado por pagamento).
+- **O produto é o próprio conteúdo do fluxo**: tudo que vem depois da saída “Pagamento aprovado” da
+  oferta (marcado 🔒 no construtor) é **removido da página pública** e só é enviado ao navegador pela
+  rota `/api/public/unlock` quando existe pagamento aprovado. O servidor também ignora eventos de nós
+  pagos de quem não pagou, então o conteúdo não vaza nem pelo histórico da conversa.
 
 ### Pagamentos
 

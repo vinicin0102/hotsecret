@@ -52,3 +52,23 @@ test("validação aponta nós soltos e saídas faltando", () => {
   assert.ok(!issues.some((i) => i.level === "error"));
   assert.ok(validateGraph({ nodes: [], edges: [] }).some((i) => i.level === "error"));
 });
+
+test("conteúdo pago: só nós depois de payment:approved ficam bloqueados", async () => {
+  const { lockedNodeIds, unlockedByOffers } = await import("../src/features/chat-engine/engine");
+  const g: FlowGraph = {
+    nodes: [
+      ...graph.nodes,
+      { id: "fail", type: "text", content: { text: "recusado" }, settings: {}, position: { x: 0, y: 0 } },
+      { id: "secret2", type: "image", content: { url: "/x.png" }, settings: {}, position: { x: 0, y: 0 } },
+    ],
+    edges: [
+      ...graph.edges,
+      { id: "6", source: "o", target: "fail", condition: "payment:failed" },
+      { id: "7", source: "ok", target: "secret2", condition: "default" },
+    ],
+  };
+  const locked = lockedNodeIds(g);
+  assert.deepEqual([...locked].sort(), ["ok", "secret2"]);
+  assert.deepEqual([...unlockedByOffers(g, ["o"])].sort(), ["ok", "secret2"]);
+  assert.equal(unlockedByOffers(g, []).size, 0);
+});

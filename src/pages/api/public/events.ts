@@ -9,6 +9,7 @@ import { trackEvent } from "@/services/tracking";
 import { addTagToLead } from "@/services/tags";
 import { addConversationMessage } from "@/services/payments/service";
 import { requireLeadSession } from "@/services/conversation";
+import { entitledNodes } from "@/services/funnels";
 import type { ChoiceButton } from "@/types/flow";
 
 const CLIENT_EVENTS = [
@@ -58,9 +59,13 @@ export default apiHandler({
     const nodes = await prisma.funnelNode.findMany({ where: { funnelId, id: { in: nodeIds } } });
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
+    // conteúdo pago: só registra nós liberados por pagamento aprovado
+    const access = await entitledNodes(funnelId, leadId);
+
     for (const ev of body.events) {
       const node = ev.nodeId ? nodeMap.get(ev.nodeId) : undefined;
       if (ev.nodeId && !node) continue; // nó inexistente: ignora
+      if (node && access.locked.has(node.id) && !access.unlocked.has(node.id)) continue;
       const content = (node?.content ?? {}) as Record<string, unknown>;
       const data: Record<string, Prisma.InputJsonValue> = {};
 

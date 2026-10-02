@@ -1,5 +1,6 @@
 // Transporte do chat: "live" fala com a API (eventos persistidos), "preview" simula tudo em memória.
 import { withBase } from "@/lib/paths";
+import type { FlowNode } from "@/types/flow";
 
 export interface ClientEvent {
   type: string;
@@ -30,9 +31,6 @@ export interface ServerMessage {
 }
 
 export interface CheckoutForm {
-  name: string;
-  email: string;
-  cpf: string;
   method: "PIX" | "CARD";
 }
 
@@ -43,6 +41,8 @@ export interface ChatTransport {
   checkout(offerNodeId: string, form: CheckoutForm): Promise<PublicPaymentInfo>;
   poll(since: string | null): Promise<{ payments: PublicPaymentInfo[]; messages: ServerMessage[]; serverTime: string }>;
   delivery(productId?: string | null): Promise<{ url: string | null; productName: string }>;
+  /** conteúdo pago liberado pelos pagamentos aprovados */
+  unlock(): Promise<FlowNode[]>;
   simulatePayment?(paymentId: string, status: "APPROVED" | "FAILED"): Promise<PublicPaymentInfo | null>;
 }
 
@@ -92,6 +92,10 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
     delivery(productId) {
       return post("/api/public/delivery", { token: getToken(), productId });
     },
+    async unlock() {
+      const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
+      return r.nodes;
+    },
     simulatePayment: opts.sandbox
       ? async (paymentId, status) => {
           const r = await post<{ payment: PublicPaymentInfo | null }>("/api/public/sandbox-approve", {
@@ -135,6 +139,9 @@ export function createPreviewTransport(products: Record<string, { price: number 
     },
     async delivery() {
       return { url: "#preview", productName: "Produto (preview)" };
+    },
+    async unlock() {
+      return []; // o preview já recebe o fluxo completo
     },
     async simulatePayment(paymentId, status) {
       const p = payments.get(paymentId);

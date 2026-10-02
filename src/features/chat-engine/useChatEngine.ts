@@ -1,7 +1,7 @@
 // Executa o fluxo no navegador: percorre os nós em sequência, mostra "digitando", aguarda
 // respostas/cliques, abre o checkout e avança somente quando o servidor confirma o pagamento.
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChoiceButton, FlowNode, PublicFunnel } from "@/types/flow";
+import type { ChoiceButton, FlowGraph, FlowNode, PublicFunnel } from "@/types/flow";
 import { getNode, findStartNode, nextNodeId, resolveDelay } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 
@@ -32,7 +32,10 @@ const lid = () => `l${++localSeq}_${Date.now().toString(36)}`;
 const now = () => new Date().toISOString();
 
 export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | null, resume: ResumeState | null) {
-  const graph = funnel.graph;
+  // o grafo público chega sem o conteúdo pago; ele é mesclado após o pagamento aprovado
+  const [graph, setGraph] = useState<FlowGraph>(funnel.graph);
+  const graphRef = useRef<FlowGraph>(funnel.graph);
+  const unlocking = useRef<Promise<void> | null>(null);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [typing, setTyping] = useState(false);
   const [awaiting, setAwaiting] = useState<Awaiting>(null);
@@ -48,6 +51,28 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const seenServerMsgs = useRef(new Set<string>());
   const transportRef = useRef(transport);
   transportRef.current = transport;
+
+  /** Busca no servidor o conteúdo pago liberado (apenas com pagamento aprovado). */
+  const ensureUnlocked = useCallback(async () => {
+    const t = transportRef.current;
+    if (!t) return;
+    if (!unlocking.current) {
+      unlocking.current = t
+        .unlock()
+        .then((nodes) => {
+          if (!nodes.length) return;
+          const byId = new Map(nodes.map((n) => [n.id, n]));
+          const next = { ...graphRef.current, nodes: graphRef.current.nodes.map((n) => byId.get(n.id) ?? n) };
+          graphRef.current = next;
+          setGraph(next);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          unlocking.current = null;
+        });
+    }
+    await unlocking.current;
+  }, []);
 
   const track = useCallback((type: string, nodeId?: string | null, data?: Record<string, unknown>) => {
     transportRef.current?.track([{ type, nodeId: nodeId ?? null, data }]);
@@ -78,14 +103,19 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       let guard = 0;
       while (id && guard++ < 300) {
         if (runId.current !== token) return;
-        const node = getNode(graph, id);
-        if (!node) break;
+        let node = getNode(graphRef.current, id);
+        if (node?.locked) {
+          await ensureUnlocked();
+          if (runId.current !== token) return;
+          node = getNode(graphRef.current, id);
+        }
+        if (!node || node.locked) break;
         if (node.type !== "start") track("node_entered", node.id);
         const c = node.content as unknown as Record<string, unknown>;
 
         switch (node.type) {
           case "start":
-            id = nextNodeId(graph, node.id);
+            id = nextNodeId(graphRef.current, node.id);
             continue;
 
           case "text":
@@ -98,7 +128,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             track("message_viewed", node.id);
             if (node.type === "image") track("image_viewed", node.id);
             markChatStarted();
-            id = nextNodeId(graph, node.id);
+            id = nextNodeId(graphRef.current, node.id);
             continue;
           }
 
@@ -136,12 +166,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             if (c.text) push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: c.text }, nodeId: node.id, at: now() });
             push({ kind: node.type, id: lid(), nodeId: node.id, at: now() });
             track("message_viewed", node.id);
-            id = nextNodeId(graph, node.id);
+            id = nextNodeId(graphRef.current, node.id);
             continue;
           }
 
           case "tag":
-            id = nextNodeId(graph, node.id); // aplicada no servidor (node_entered)
+            id = nextNodeId(graphRef.current, node.id); // aplicada no servidor (node_entered)
             continue;
 
           case "end": {
@@ -158,7 +188,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       }
       if (runId.current === token) setEnded(true);
     },
-    [graph, markChatStarted, push, track, wait],
+    [ensureUnlocked, markChatStarted, push, track, wait],
   );
 
   // ---------- Ações do visitante ----------
@@ -170,9 +200,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       markChatStarted();
       push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text: button.label }, nodeId, at: now() });
       track("button_clicked", nodeId, { buttonId: button.id });
-      void run(nextNodeId(graph, nodeId, `btn:${button.id}`));
+      void run(nextNodeId(graphRef.current, nodeId, `btn:${button.id}`));
     },
-    [awaiting, graph, markChatStarted, push, run, track],
+    [awaiting, markChatStarted, push, run, track],
   );
 
   const submitAnswer = useCallback(
@@ -184,14 +214,14 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       markChatStarted();
       push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text }, nodeId, at: now() });
       track("question_answered", nodeId, { value: text });
-      void run(nextNodeId(graph, nodeId));
+      void run(nextNodeId(graphRef.current, nodeId));
     },
-    [awaiting, graph, markChatStarted, push, run, track],
+    [awaiting, markChatStarted, push, run, track],
   );
 
   const openCheckout = useCallback(
     (offerNodeId: string) => {
-      const node = getNode(graph, offerNodeId);
+      const node = getNode(graphRef.current, offerNodeId);
       const productId = (node?.content as { productId?: string } | undefined)?.productId;
       const product = productId ? funnel.products[productId] : undefined;
       track("offer_clicked", offerNodeId);
@@ -207,7 +237,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         return open ? prev : [...prev, { kind: "checkout", id: lid(), nodeId: offerNodeId, at: now() }];
       });
     },
-    [funnel.products, graph, track],
+    [funnel.products, track],
   );
 
   const submitCheckout = useCallback(
@@ -271,7 +301,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       if (!p.offerNodeId || advancedPayments.current.has(p.id)) continue;
       if (p.status === "APPROVED" || p.status === "FAILED") {
         advancedPayments.current.add(p.id);
-        const target = nextNodeId(graph, p.offerNodeId, p.status === "APPROVED" ? "payment:approved" : "payment:failed");
+        const target = nextNodeId(graphRef.current, p.offerNodeId, p.status === "APPROVED" ? "payment:approved" : "payment:failed");
         // busca a confirmação registrada pelo servidor antes de seguir o ramo do pagamento
         const t = transportRef.current;
         void (t ? t.poll(lastPoll.current).catch(() => null) : Promise.resolve(null)).then((r) => {
@@ -283,7 +313,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         });
       }
     }
-  }, [payments, graph, run, addServerMessages]);
+  }, [payments, run, addServerMessages]);
 
   // ---------- Polling: status do pagamento + mensagens do servidor (recuperação) ----------
   const hasPending = Object.values(payments).some((p) => p.status === "PENDING" || p.status === "CREATED");
@@ -319,7 +349,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     started.current = true;
 
     if (!resume || !resume.resumed) {
-      void run(findStartNode(graph)?.id ?? null);
+      void run(findStartNode(graphRef.current)?.id ?? null);
       return;
     }
 
@@ -346,41 +376,48 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       } else if (m.type === "payment_update")
         restored.push({ kind: "message", id: m.id, sender: "system", type: "text", content: c, at: m.createdAt });
     }
-    const current = getNode(graph, resume.conversation.currentNodeId);
+    const savedCurrent = getNode(graphRef.current, resume.conversation.currentNodeId);
     // só pagamentos da oferta em que o visitante parou ainda podem avançar o fluxo
     for (const p of resume.payments) {
-      if (!(current?.type === "offer" && p.offerNodeId === current.id)) advancedPayments.current.add(p.id);
+      if (!(savedCurrent?.type === "offer" && p.offerNodeId === savedCurrent.id)) advancedPayments.current.add(p.id);
     }
     setItems(restored);
     setPayments(paymentMap);
     if (resume.payments.length) setCheckoutOpened(true);
 
     if (resume.conversation.status === "completed") {
+      if (resume.payments.some((p) => p.status === "APPROVED")) void ensureUnlocked();
       setEnded(true);
       return;
     }
-    if (!current) {
-      void run(findStartNode(graph)?.id ?? null);
-      return;
-    }
-    const c = current.content as unknown as Record<string, unknown>;
-    if (current.type === "buttons" || (current.type === "question" && c.mode !== "open")) {
-      setAwaiting({ kind: "buttons", nodeId: current.id, buttons: (c.buttons as ChoiceButton[]) ?? [] });
-    } else if (current.type === "question") {
-      setAwaiting({ kind: "open", nodeId: current.id, placeholder: (c.placeholder as string) || undefined });
-    } else if (current.type === "offer") {
-      // pagamentos já decididos e ainda não avançados são tratados pelo efeito de pagamentos
-      if (!restored.some((i) => i.kind === "offer" && i.nodeId === current.id)) {
-        restored.push({ kind: "offer", id: lid(), nodeId: current.id, at: now() });
-        setItems([...restored]);
+
+    void (async () => {
+      // quem já pagou recebe de volta o conteúdo liberado (entregas, links e próximos passos)
+      if (resume.payments.some((p) => p.status === "APPROVED") || savedCurrent?.locked) await ensureUnlocked();
+      const current = getNode(graphRef.current, resume.conversation.currentNodeId);
+      if (!current || current.locked) {
+        if (!current) void run(findStartNode(graphRef.current)?.id ?? null);
+        return;
       }
-    } else {
-      void run(nextNodeId(graph, current.id));
-    }
+      const c = current.content as unknown as Record<string, unknown>;
+      if (current.type === "buttons" || (current.type === "question" && c.mode !== "open")) {
+        setAwaiting({ kind: "buttons", nodeId: current.id, buttons: (c.buttons as ChoiceButton[]) ?? [] });
+      } else if (current.type === "question") {
+        setAwaiting({ kind: "open", nodeId: current.id, placeholder: (c.placeholder as string) || undefined });
+      } else if (current.type === "offer") {
+        // pagamentos já decididos e ainda não avançados são tratados pelo efeito de pagamentos
+        if (!restored.some((i) => i.kind === "offer" && i.nodeId === current.id)) {
+          setItems((prev) => [...prev, { kind: "offer", id: lid(), nodeId: current.id, at: now() }]);
+        }
+      } else {
+        void run(nextNodeId(graphRef.current, current.id));
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transport]);
 
   return {
+    graph,
     items,
     typing,
     awaiting,

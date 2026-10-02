@@ -105,6 +105,8 @@ export interface FlowNode<T extends NodeType = NodeType> {
   content: NodeContentMap[T];
   settings: DelaySettings & { minimized?: boolean; label?: string };
   position: { x: number; y: number };
+  /** conteúdo pago ainda não liberado (apenas no chat público) */
+  locked?: boolean;
 }
 
 export interface FlowEdge {

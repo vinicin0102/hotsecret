@@ -4,7 +4,7 @@
 import type { Payment, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/api";
-import { isValidCpf, onlyDigits } from "@/lib/cpf";
+import { randomBytes } from "node:crypto";
 import { absoluteUrl } from "@/lib/paths";
 import type { LeadSession } from "@/lib/auth";
 import { trackEvent } from "../tracking";
@@ -54,15 +54,23 @@ export async function addConversationMessage(
 
 interface CheckoutInput {
   offerNodeId: string;
-  name: string;
-  email: string;
-  cpf: string;
   method: PaymentMethod;
 }
 
+/**
+ * Dados do pagador enviados ao gateway. O visitante NÃO preenche nada: o gateway exige
+ * nome/e-mail, então usamos dados do próprio SaaS. CHECKOUT_PAYER_NAME / CHECKOUT_PAYER_EMAIL
+ * fixam os mesmos dados para todos; sem eles, gera um e-mail técnico por pagamento.
+ */
+export function payerIdentity(ref: string) {
+  const domain = process.env.CHECKOUT_PAYER_EMAIL_DOMAIN || "hotsecret.app";
+  return {
+    name: process.env.CHECKOUT_PAYER_NAME || "Cliente Hot Secret",
+    email: process.env.CHECKOUT_PAYER_EMAIL || `pix.${ref.toLowerCase().replace(/[^a-z0-9]/g, "").slice(-12)}@${domain}`,
+  };
+}
+
 export async function createCheckout(session: LeadSession, input: CheckoutInput) {
-  if (!isValidCpf(input.cpf)) throw new HttpError(400, "CPF inválido");
-  const cpf = onlyDigits(input.cpf);
 
   const conversation = await prisma.conversation.findUnique({ where: { id: session.conversationId } });
   if (!conversation || conversation.leadId !== session.leadId) throw new HttpError(403, "Sessão inválida");
@@ -95,6 +103,7 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     console.error("[checkout] gateway não configurado", err);
     throw new HttpError(503, "Pagamentos indisponíveis no momento. Tente novamente mais tarde.");
   }
+  const payer = payerIdentity(randomBytes(6).toString("hex"));
   const payment = await prisma.payment.create({
     data: {
       leadId: session.leadId,
@@ -106,9 +115,8 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
       method: input.method,
       status: "CREATED",
       provider: provider.name,
-      customerName: input.name,
-      customerEmail: input.email,
-      customerCpf: cpf,
+      customerName: payer.name,
+      customerEmail: payer.email,
     },
   });
   await trackEvent({
@@ -120,11 +128,6 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     data: { paymentId: payment.id, productId: product.id, amount: product.price, method: input.method },
   });
 
-  await prisma.lead.update({
-    where: { id: session.leadId },
-    data: { name: input.name, email: input.email, cpf },
-  });
-
   const funnel = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { slug: true } });
   let result;
   try {
@@ -133,7 +136,7 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
       amount: product.price,
       description: product.name,
       method: input.method,
-      customer: { name: input.name, email: input.email, cpf },
+      customer: payer,
       notificationUrl: absoluteUrl(`/api/webhooks/payments/${provider.name}`),
       returnUrl: absoluteUrl(`/f/${funnel?.slug ?? ""}?payment=${payment.id}`),
     });

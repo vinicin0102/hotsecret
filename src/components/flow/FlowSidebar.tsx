@@ -233,7 +233,10 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
               <input className="input" value={String(c.ctaLabel ?? "")} onChange={(e) => setContent({ ctaLabel: e.target.value })} />
             </div>
             <p className="hint">
-              Conecte as saídas <b>Pagamento aprovado</b> e <b>Pagamento recusado</b>. O fluxo só avança quando o gateway confirma o pagamento via webhook.
+              O visitante não preenche nada: ao tocar no botão ele recebe a chave PIX na hora.
+              <br />
+              Tudo que vier depois de <b>Pagamento aprovado</b> é o <b>conteúdo pago</b> (marcado com 🔒): fica bloqueado no servidor e só é
+              entregue no chat quando o gateway confirma o pagamento. Conecte também <b>Pagamento recusado</b>.
             </p>
           </>
         )}
@@ -254,7 +257,7 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
                   </option>
                 ))}
               </select>
-              <span className="hint">O link de acesso (cadastrado no produto) só é revelado com pagamento aprovado.</span>
+              <span className="hint">Opcional: use só se o produto tiver um link externo. Para entregar o conteúdo no próprio chat, basta colocar os blocos (texto, imagem, vídeo, áudio) depois de “Pagamento aprovado”.</span>
             </div>
             <div className="field">
               <label>Texto do botão</label>

@@ -9,6 +9,7 @@ import type {
   PublicProduct,
 } from "@/types/flow";
 import { DEFAULT_RECOVERY } from "@/types/flow";
+import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 
 type NodeRow = { id: string; type: string; content: unknown; settings: unknown; positionX: number; positionY: number };
 type EdgeRow = { id: string; sourceNode: string; targetNode: string; condition: string };
@@ -137,11 +138,14 @@ export async function duplicateFunnel(funnelId: string) {
 }
 
 /** Fluxo publicado + personagem + produtos públicos. Nunca expõe deliveryUrl. */
-export async function getPublicFunnelBySlug(slug: string, opts: { allowDraft?: boolean } = {}): Promise<PublicFunnel | null> {
+export async function getPublicFunnelBySlug(
+  slug: string,
+  opts: { allowDraft?: boolean; includeLocked?: boolean } = {},
+): Promise<PublicFunnel | null> {
   const funnel = await prisma.funnel.findUnique({ where: { slug }, include: { character: true } });
   if (!funnel) return null;
   if (funnel.status !== "PUBLISHED" && !opts.allowDraft) return null;
-  return buildPublicFunnel(funnel);
+  return buildPublicFunnel(funnel, opts.includeLocked);
 }
 
 export async function getPublicFunnelById(id: string): Promise<PublicFunnel | null> {
@@ -152,9 +156,16 @@ export async function getPublicFunnelById(id: string): Promise<PublicFunnel | nu
 
 async function buildPublicFunnel(
   funnel: Prisma.FunnelGetPayload<{ include: { character: true } }>,
+  includeLocked = false,
 ): Promise<PublicFunnel> {
-  const graph = await loadGraph(funnel.id);
-  const productIds = graph.nodes
+  const fullGraph = await loadGraph(funnel.id);
+  // conteúdo pago (depois de "pagamento aprovado") só vai ao navegador após a confirmação
+  const locked = includeLocked ? new Set<string>() : lockedNodeIds(fullGraph);
+  const graph = {
+    ...fullGraph,
+    nodes: fullGraph.nodes.map((n) => (locked.has(n.id) ? { ...n, content: {} as never, locked: true } : n)),
+  };
+  const productIds = fullGraph.nodes
     .filter((n) => n.type === "offer")
     .map((n) => (n.content as { productId?: string }).productId)
     .filter((v): v is string => !!v);
@@ -210,4 +221,15 @@ export async function resolveExperiment(slug: string, stickyVariantId?: string |
     if (r < 0) return { experimentId: exp.id, variant: v };
   }
   return { experimentId: exp.id, variant: variants[variants.length - 1] };
+}
+
+/** Nós pagos que o lead já desbloqueou (pagamentos aprovados neste fluxo). */
+export async function entitledNodes(funnelId: string, leadId: string) {
+  const graph = await loadGraph(funnelId);
+  const paid = await prisma.payment.findMany({
+    where: { leadId, funnelId, status: "APPROVED", offerNodeId: { not: null } },
+    select: { offerNodeId: true },
+  });
+  const unlocked = unlockedByOffers(graph, paid.map((p) => p.offerNodeId!));
+  return { graph, locked: lockedNodeIds(graph), unlocked };
 }

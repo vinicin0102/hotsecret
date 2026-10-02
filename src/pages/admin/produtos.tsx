@@ -93,7 +93,7 @@ export default function Products() {
             <div className="hint">
               {p.stats.sales} venda(s) · <span className="gold">{formatBRL(p.stats.revenue)}</span>
             </div>
-            <div className="hint">{p.deliveryUrl ? "✓ Link de acesso configurado" : "⚠ Sem link de acesso"}</div>
+            <div className="hint">{p.deliveryUrl ? "✓ Link de acesso externo" : "Entrega no próprio chat"}</div>
             <div className="row">
               <button
                 className="btn btn-sm"
@@ -147,9 +147,9 @@ export default function Products() {
             </div>
           </div>
           <div className="field">
-            <label>Link de acesso (entrega)</label>
+            <label>Link de acesso externo (opcional)</label>
             <input className="input" placeholder="https://..." value={form.deliveryUrl} onChange={(e) => setForm({ ...form, deliveryUrl: e.target.value })} />
-            <span className="hint">Mostrado ao comprador somente após o pagamento aprovado pelo gateway.</span>
+            <span className="hint">Deixe vazio se o conteúdo é entregue no próprio chat (blocos depois de “Pagamento aprovado”). Se preenchido, só é revelado após o pagamento aprovado.</span>
           </div>
           <div className="field">
             <label>Checkout externo (opcional)</label>

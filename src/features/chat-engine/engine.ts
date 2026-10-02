@@ -105,3 +105,45 @@ export function shortId(prefix = "n"): string {
   const rnd = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
   return `${prefix}_${rnd}`;
 }
+
+/**
+ * Conteúdo pago: nós alcançáveis apenas depois de uma conexão "payment:approved".
+ * Esses nós nunca são enviados ao navegador antes da confirmação do pagamento.
+ */
+export function lockedNodeIds(graph: FlowGraph): Set<string> {
+  const walk = (starts: string[], skipApproved: boolean) => {
+    const seen = new Set<string>();
+    const stack = [...starts];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      for (const e of outgoingEdges(graph, id)) {
+        if (skipApproved && e.condition === "payment:approved") continue;
+        stack.push(e.target);
+      }
+    }
+    return seen;
+  };
+  const free = walk(graph.nodes.filter((n) => n.type === "start").map((n) => n.id), true);
+  const paidStarts = graph.edges.filter((e) => e.condition === "payment:approved").map((e) => e.target);
+  const locked = new Set<string>();
+  for (const id of walk(paidStarts, false)) if (!free.has(id)) locked.add(id);
+  return locked;
+}
+
+/** Nós pagos liberados pelos pagamentos aprovados das ofertas informadas. */
+export function unlockedByOffers(graph: FlowGraph, paidOfferNodeIds: string[]): Set<string> {
+  const locked = lockedNodeIds(graph);
+  const out = new Set<string>();
+  const stack = graph.edges
+    .filter((e) => e.condition === "payment:approved" && paidOfferNodeIds.includes(e.source))
+    .map((e) => e.target);
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (out.has(id) || !locked.has(id)) continue;
+    out.add(id);
+    for (const e of outgoingEdges(graph, id)) stack.push(e.target);
+  }
+  return out;
+}

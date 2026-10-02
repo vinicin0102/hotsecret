@@ -165,7 +165,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ params, re
     // administradores podem abrir rascunhos (modo preview, sem gravar dados)
     const admin = await verifyAdminSession(req.cookies[ADMIN_COOKIE]);
     if (admin) {
-      funnel = await getPublicFunnelBySlug(slug, { allowDraft: true });
+      funnel = await getPublicFunnelBySlug(slug, { allowDraft: true, includeLocked: true });
       draftPreview = !!funnel;
     }
   }

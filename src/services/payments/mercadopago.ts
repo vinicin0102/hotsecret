@@ -55,11 +55,7 @@ export const mercadoPagoProvider: PaymentProvider = {
   name: "mercadopago",
 
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
-    const payer = {
-      email: input.customer.email,
-      ...splitName(input.customer.name),
-      identification: { type: "CPF", number: input.customer.cpf },
-    };
+    const payer = { email: input.customer.email, ...splitName(input.customer.name) };
 
     if (input.method === "PIX") {
       const data = await mp<{
@@ -93,7 +89,7 @@ export const mercadoPagoProvider: PaymentProvider = {
       idempotencyKey: input.paymentId,
       body: JSON.stringify({
         items: [{ id: input.paymentId, title: input.description, quantity: 1, unit_price: input.amount / 100, currency_id: "BRL" }],
-        payer: { name: payer.first_name, surname: payer.last_name, email: payer.email, identification: payer.identification },
+        payer: { name: payer.first_name, surname: payer.last_name, email: payer.email },
         external_reference: input.paymentId,
         notification_url: input.notificationUrl,
         back_urls: { success: input.returnUrl, pending: input.returnUrl, failure: input.returnUrl },

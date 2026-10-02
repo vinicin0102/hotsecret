@@ -6,6 +6,8 @@ import { NODE_META } from "./nodeMeta";
 export type HsNodeData = {
   node: FlowNodeT;
   hasError?: boolean;
+  /** conteúdo pago (só liberado após pagamento aprovado) */
+  paid?: boolean;
   productName?: string;
   tagName?: string;
   onToggleMinimize?: (id: string) => void;
@@ -98,6 +100,11 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
         <span className="nt" style={{ color: meta.color }}>
           {n.settings?.label || meta.label}
         </span>
+        {data.paid && (
+          <span className="paid-badge" title="Conteúdo pago: liberado só após pagamento aprovado">
+            🔒 pago
+          </span>
+        )}
         <span className="nd">{delayLabel(n)}</span>
         {n.type !== "start" && (
           <button
