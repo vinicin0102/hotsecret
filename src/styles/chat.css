@@ -702,3 +702,49 @@
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
 }
+
+/* Vídeo sem controles: só o botão de play */
+.video-msg {
+  position: relative;
+  cursor: pointer;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  -webkit-tap-highlight-color: transparent;
+}
+.bubble.media .video-msg video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 0;
+}
+.video-msg video::-webkit-media-controls {
+  display: none !important;
+}
+.video-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  background: rgba(13, 7, 16, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 4px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 0.15s ease,
+    background 0.2s ease;
+  pointer-events: none; /* o clique vai para o container */
+}
+.video-msg:hover .video-play {
+  transform: scale(1.06);
+  background: rgba(217, 79, 125, 0.75);
+}

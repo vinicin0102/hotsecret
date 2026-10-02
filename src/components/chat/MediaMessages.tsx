@@ -10,6 +10,7 @@ export function ImageMessage({ url, caption }: { url: string; caption?: string }
   );
 }
 
+/** Vídeo sem barra de controles: apenas o botão de play (toque pausa/retoma). */
 export function VideoMessage({
   url,
   thumbnailUrl,
@@ -23,24 +24,64 @@ export function VideoMessage({
   autoplay?: boolean;
   onPlay?: () => void;
 }) {
-  const played = useRef(false);
+  const ref = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(!!autoplay);
+  const tracked = useRef(false);
+
+  const markPlayed = () => {
+    if (!tracked.current) {
+      tracked.current = true;
+      onPlay?.();
+    }
+  };
+
+  const toggle = () => {
+    const v = ref.current;
+    if (!v) return;
+    // autoplay começa mudo: o primeiro toque liga o som em vez de pausar
+    if (muted && !v.paused) {
+      v.muted = false;
+      setMuted(false);
+      return;
+    }
+    if (v.paused) {
+      v.muted = false;
+      setMuted(false);
+      void v.play();
+    } else {
+      v.pause();
+    }
+  };
+
   return (
     <>
-      <video
-        src={url}
-        poster={thumbnailUrl || undefined}
-        controls
-        playsInline
-        preload="metadata"
-        autoPlay={autoplay}
-        muted={autoplay}
-        onPlay={() => {
-          if (!played.current) {
-            played.current = true;
-            onPlay?.();
-          }
-        }}
-      />
+      <div className={`video-msg ${playing ? "is-playing" : ""}`} onClick={toggle} onContextMenu={(e) => e.preventDefault()}>
+        <video
+          ref={ref}
+          src={url}
+          poster={thumbnailUrl || undefined}
+          playsInline
+          preload="metadata"
+          autoPlay={autoplay}
+          muted={muted}
+          disablePictureInPicture
+          controlsList="nodownload nofullscreen noremoteplayback"
+          onPlay={() => {
+            setPlaying(true);
+            markPlayed();
+          }}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+        />
+        {!playing && (
+          <button type="button" className="video-play" aria-label="Reproduzir vídeo">
+            <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+              <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />
+            </svg>
+          </button>
+        )}
+      </div>
       {caption && <div className="caption">{caption}</div>}
     </>
   );
