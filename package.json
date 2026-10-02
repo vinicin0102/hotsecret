@@ -1,0 +1,46 @@
+{
+  "name": "hot-secret",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HOT SECRET — Chat Funnel Builder",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "prisma generate && next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx database/seed.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build"
+  },
+  "prisma": {
+    "schema": "database/schema.prisma",
+    "seed": "tsx database/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19",
+    "@xyflow/react": "^12.12.0",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.12",
+    "next": "15.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "recharts": "^3.10.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "prisma": "6.19",
+    "tsx": "^4.23.15",
+    "typescript": "5.9"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

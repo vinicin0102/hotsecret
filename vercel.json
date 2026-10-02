@@ -1,0 +1,4 @@
+{
+  "buildCommand": "npm run vercel-build",
+  "crons": [{ "path": "/hot-secret/api/cron/recovery", "schedule": "*/5 * * * *" }]
+}

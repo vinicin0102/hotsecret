@@ -1,0 +1,391 @@
+// HOT SECRET — modelo relacional
+// Permite responder: qual lead entrou em qual fluxo, passou por quais nós,
+// clicou em quais botões, iniciou qual checkout e comprou qual produto.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum FunnelStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LeadStage {
+  NEW
+  INTERESTED
+  CHECKOUT
+  BUYER
+  ABANDONED
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  APPROVED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  PIX
+  CARD
+}
+
+/// Contas com acesso ao painel administrativo ("users" / "admins").
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         UserRole  @default(ADMIN)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Character {
+  id              String   @id @default(cuid())
+  name            String
+  avatarUrl       String?
+  description     String?
+  status          String   @default("online")
+  showOnline      Boolean  @default(true)
+  initialMessages Json     @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  funnels Funnel[]
+
+  @@map("characters")
+}
+
+model Funnel {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  slug           String       @unique
+  status         FunnelStatus @default(DRAFT)
+  characterId    String?
+  initialMessage String?
+  /// Configurações gerais: digitação, recuperação de checkout etc.
+  settings       Json         @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  character     Character?          @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  nodes         FunnelNode[]
+  edges         FunnelEdge[]
+  offers        Offer[]
+  leads         Lead[]
+  conversations Conversation[]
+  payments      Payment[]
+  events        Event[]
+  variants      ExperimentVariant[]
+
+  @@map("funnels")
+}
+
+model FunnelNode {
+  funnelId  String
+  id        String
+  type      String
+  content   Json     @default("{}")
+  settings  Json     @default("{}")
+  positionX Float    @default(0)
+  positionY Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  funnel Funnel @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+
+  @@id([funnelId, id])
+  @@map("funnel_nodes")
+}
+
+model FunnelEdge {
+  funnelId   String
+  id         String
+  sourceNode String
+  targetNode String
+  /// "default", "btn:<id>", "payment:approved", "payment:failed"
+  condition  String @default("default")
+
+  funnel Funnel @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+
+  @@id([funnelId, id])
+  @@index([funnelId, sourceNode])
+  @@map("funnel_edges")
+}
+
+model Lead {
+  id                String    @id @default(cuid())
+  funnelId          String?
+  name              String?
+  email             String?
+  phone             String?
+  cpf               String?
+  stage             LeadStage @default(NEW)
+  currentNodeId     String?
+  variables         Json      @default("{}")
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  utmContent        String?
+  utmTerm           String?
+  referrer          String?
+  landingPage       String?
+  device            String?
+  browser           String?
+  os                String?
+  country           String?
+  experimentId      String?
+  variantId         String?
+  lastInteractionAt DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  funnel        Funnel?        @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  experiment    Experiment?    @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+  conversations Conversation[]
+  payments      Payment[]
+  tags          LeadTag[]
+  events        Event[]
+
+  @@index([funnelId, createdAt])
+  @@index([stage])
+  @@index([utmCampaign])
+  @@map("leads")
+}
+
+model Conversation {
+  id                String    @id @default(cuid())
+  leadId            String
+  funnelId          String?
+  status            String    @default("active") // active | completed
+  currentNodeId     String?
+  /// checkout iniciado (CTA da oferta clicado) — base da recuperação de checkout
+  checkoutStartedAt DateTime?
+  checkoutNodeId    String?
+  recoverySentAt    DateTime?
+  startedAt         DateTime  @default(now())
+  endedAt           DateTime?
+  updatedAt         DateTime  @updatedAt
+
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  funnel   Funnel?   @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  messages Message[]
+  payments Payment[]
+
+  @@index([funnelId, startedAt])
+  @@index([checkoutStartedAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  /// bot | user | system
+  sender         String
+  /// text | image | video | audio | buttons | offer | checkout | payment | delivery | link
+  type           String
+  content        Json     @default("{}")
+  nodeId         String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  imageUrl      String?
+  /// valores em centavos
+  originalPrice Int?
+  price         Int
+  /// link de checkout externo opcional (se preenchido, usado no lugar do checkout integrado)
+  checkoutUrl   String?
+  /// link de acesso liberado SOMENTE após pagamento aprovado (nunca enviado ao front antes disso)
+  deliveryUrl   String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  offers   Offer[]
+  payments Payment[]
+
+  @@map("products")
+}
+
+/// Ofertas exibidas dentro do chat (sincronizadas a partir dos nós "offer").
+model Offer {
+  id        String   @id @default(cuid())
+  funnelId  String
+  nodeId    String
+  productId String
+  headline  String?
+  ctaLabel  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  funnel  Funnel  @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([funnelId, nodeId])
+  @@map("offers")
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  leadId            String
+  conversationId    String?
+  funnelId          String?
+  productId         String
+  offerNodeId       String?
+  amount            Int
+  currency          String        @default("BRL")
+  method            PaymentMethod
+  status            PaymentStatus @default(CREATED)
+  provider          String
+  providerPaymentId String?
+  pixQrCode         String?
+  pixQrCodeBase64   String?
+  redirectUrl       String?
+  customerName      String
+  customerEmail     String
+  customerCpf       String
+  approvedAt        DateTime?
+  lastSyncedAt      DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  funnel       Funnel?       @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  webhooks     WebhookLog[]
+
+  @@unique([provider, providerPaymentId])
+  @@index([status, createdAt])
+  @@index([funnelId, createdAt])
+  @@map("payments")
+}
+
+model WebhookLog {
+  id             String   @id @default(cuid())
+  provider       String
+  paymentId      String?
+  eventType      String?
+  signatureValid Boolean
+  payload        Json
+  createdAt      DateTime @default(now())
+
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@map("webhook_logs")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#D94F7D")
+  createdAt DateTime @default(now())
+
+  leads LeadTag[]
+
+  @@map("tags")
+}
+
+model LeadTag {
+  leadId    String
+  tagId     String
+  /// manual | automation | flow
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+  @@map("lead_tags")
+}
+
+model Event {
+  id             String   @id @default(cuid())
+  leadId         String
+  funnelId       String?
+  conversationId String?
+  type           String
+  nodeId         String?
+  data           Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  lead   Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  funnel Funnel? @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+
+  @@index([funnelId, type, createdAt])
+  @@index([leadId, createdAt])
+  @@index([type, createdAt])
+  @@map("events")
+}
+
+/// Regras automáticas: quando <evento> acontecer → <ação>.
+model Automation {
+  id        String   @id @default(cuid())
+  name      String
+  trigger   String
+  funnelId  String?
+  action    String // add_tag | remove_tag
+  tagId     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("automations")
+}
+
+/// A/B test: um slug distribui visitantes entre fluxos por peso.
+model Experiment {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants ExperimentVariant[]
+  leads    Lead[]
+
+  @@map("experiments")
+}
+
+model ExperimentVariant {
+  id           String @id @default(cuid())
+  experimentId String
+  funnelId     String
+  label        String
+  weight       Int    @default(50)
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  funnel     Funnel     @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+
+  @@map("experiment_variants")
+}

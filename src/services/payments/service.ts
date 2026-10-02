@@ -1,0 +1,219 @@
+// Ciclo de vida dos pagamentos:
+// payment_created → payment_pending → payment_approved | payment_failed → payment_refunded
+// Um pagamento só é APROVADO quando o gateway confirma (webhook validado ou consulta à API).
+import type { Payment, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { HttpError } from "@/lib/api";
+import { isValidCpf, onlyDigits } from "@/lib/cpf";
+import { absoluteUrl } from "@/lib/paths";
+import type { LeadSession } from "@/lib/auth";
+import { trackEvent } from "../tracking";
+import { addTagToLead, ensureTag } from "../tags";
+import { getProvider } from "./index";
+
+const ALLOWED_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
+  CREATED: ["PENDING", "APPROVED", "FAILED"],
+  PENDING: ["APPROVED", "FAILED"],
+  FAILED: ["APPROVED"], // ex.: nova tentativa aprovada pelo gateway
+  APPROVED: ["REFUNDED"],
+  REFUNDED: [],
+};
+
+const STATUS_EVENT: Record<PaymentStatus, string> = {
+  CREATED: "payment_created",
+  PENDING: "payment_pending",
+  APPROVED: "payment_approved",
+  FAILED: "payment_failed",
+  REFUNDED: "payment_refunded",
+};
+
+export function publicPayment(p: Payment) {
+  return {
+    id: p.id,
+    status: p.status,
+    method: p.method,
+    amount: p.amount,
+    pixQrCode: p.pixQrCode,
+    pixQrCodeBase64: p.pixQrCodeBase64,
+    redirectUrl: p.redirectUrl,
+    offerNodeId: p.offerNodeId,
+    productId: p.productId,
+    provider: p.provider,
+  };
+}
+
+export async function addConversationMessage(
+  conversationId: string,
+  sender: "bot" | "user" | "system",
+  type: string,
+  content: Prisma.InputJsonValue,
+  nodeId?: string | null,
+) {
+  return prisma.message.create({ data: { conversationId, sender, type, content, nodeId: nodeId ?? null } });
+}
+
+interface CheckoutInput {
+  offerNodeId: string;
+  name: string;
+  email: string;
+  cpf: string;
+  method: PaymentMethod;
+}
+
+export async function createCheckout(session: LeadSession, input: CheckoutInput) {
+  if (!isValidCpf(input.cpf)) throw new HttpError(400, "CPF inválido");
+  const cpf = onlyDigits(input.cpf);
+
+  const conversation = await prisma.conversation.findUnique({ where: { id: session.conversationId } });
+  if (!conversation || conversation.leadId !== session.leadId) throw new HttpError(403, "Sessão inválida");
+
+  const node = await prisma.funnelNode.findUnique({
+    where: { funnelId_id: { funnelId: session.funnelId, id: input.offerNodeId } },
+  });
+  if (!node || node.type !== "offer") throw new HttpError(400, "Oferta inválida");
+  const productId = (node.content as { productId?: string }).productId;
+  const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
+  if (!product || !product.active) throw new HttpError(400, "Produto indisponível");
+
+  // Reaproveita um pagamento pendente recente (evita cobranças duplicadas por duplo clique).
+  const recent = await prisma.payment.findFirst({
+    where: {
+      leadId: session.leadId,
+      productId: product.id,
+      method: input.method,
+      status: { in: ["CREATED", "PENDING"] },
+      createdAt: { gte: new Date(Date.now() - 25 * 60 * 1000) },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (recent && (recent.pixQrCode || recent.redirectUrl || recent.provider === "sandbox")) return recent;
+
+  let provider;
+  try {
+    provider = getProvider();
+  } catch (err) {
+    console.error("[checkout] gateway não configurado", err);
+    throw new HttpError(503, "Pagamentos indisponíveis no momento. Tente novamente mais tarde.");
+  }
+  const payment = await prisma.payment.create({
+    data: {
+      leadId: session.leadId,
+      conversationId: session.conversationId,
+      funnelId: session.funnelId,
+      productId: product.id,
+      offerNodeId: input.offerNodeId,
+      amount: product.price,
+      method: input.method,
+      status: "CREATED",
+      provider: provider.name,
+      customerName: input.name,
+      customerEmail: input.email,
+      customerCpf: cpf,
+    },
+  });
+  await trackEvent({
+    leadId: session.leadId,
+    funnelId: session.funnelId,
+    conversationId: session.conversationId,
+    type: "payment_created",
+    nodeId: input.offerNodeId,
+    data: { paymentId: payment.id, productId: product.id, amount: product.price, method: input.method },
+  });
+
+  await prisma.lead.update({
+    where: { id: session.leadId },
+    data: { name: input.name, email: input.email, cpf },
+  });
+
+  const funnel = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { slug: true } });
+  let result;
+  try {
+    result = await provider.createPayment({
+      paymentId: payment.id,
+      amount: product.price,
+      description: product.name,
+      method: input.method,
+      customer: { name: input.name, email: input.email, cpf },
+      notificationUrl: absoluteUrl(`/api/webhooks/payments/${provider.name}`),
+      returnUrl: absoluteUrl(`/f/${funnel?.slug ?? ""}?payment=${payment.id}`),
+    });
+  } catch (err) {
+    console.error("[checkout] falha no gateway", err);
+    await applyPaymentStatus(payment.id, "FAILED", "gateway_error");
+    throw new HttpError(502, "Não foi possível gerar o pagamento agora. Tente novamente em instantes.");
+  }
+
+  const updated = await prisma.payment.update({
+    where: { id: payment.id },
+    data: {
+      providerPaymentId: result.providerPaymentId,
+      pixQrCode: result.pixQrCode ?? null,
+      pixQrCodeBase64: result.pixQrCodeBase64 ?? null,
+      redirectUrl: result.redirectUrl ?? null,
+    },
+  });
+  await addConversationMessage(session.conversationId, "user", "checkout", {
+    text: `Pedido: ${product.name} — ${input.method === "PIX" ? "PIX" : "Cartão"}`,
+    paymentId: payment.id,
+  }, input.offerNodeId);
+  await applyPaymentStatus(payment.id, result.status === "CREATED" ? "PENDING" : result.status, "checkout");
+  return (await prisma.payment.findUnique({ where: { id: updated.id } }))!;
+}
+
+/**
+ * Aplica um novo status de forma idempotente, registra eventos, mensagens e tags.
+ * Chamado SOMENTE a partir de confirmações do gateway (webhook/API) ou do sandbox.
+ */
+export async function applyPaymentStatus(paymentId: string, status: PaymentStatus, source: string) {
+  const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+  if (!payment) return null;
+  if (payment.status === status) return payment;
+  if (!ALLOWED_TRANSITIONS[payment.status].includes(status)) {
+    console.warn(`[payments] transição ignorada ${payment.status} → ${status} (${paymentId})`);
+    return payment;
+  }
+
+  // Atualização condicional evita processar o mesmo webhook duas vezes em paralelo.
+  const { count } = await prisma.payment.updateMany({
+    where: { id: paymentId, status: payment.status },
+    data: { status, ...(status === "APPROVED" ? { approvedAt: new Date() } : {}) },
+  });
+  if (count === 0) return prisma.payment.findUnique({ where: { id: paymentId } });
+
+  await trackEvent({
+    leadId: payment.leadId,
+    funnelId: payment.funnelId,
+    conversationId: payment.conversationId,
+    type: STATUS_EVENT[status],
+    nodeId: payment.offerNodeId,
+    data: { paymentId, amount: payment.amount, productId: payment.productId, source },
+  });
+
+  if (payment.conversationId && (status === "APPROVED" || status === "FAILED" || status === "REFUNDED")) {
+    const text =
+      status === "APPROVED" ? "Pagamento aprovado ✅" : status === "FAILED" ? "Pagamento não aprovado" : "Pagamento estornado";
+    await addConversationMessage(payment.conversationId, "system", "payment_update", { text, status, paymentId });
+  }
+
+  if (status === "APPROVED") {
+    const tag = await ensureTag("COMPROU", "#D8A85C");
+    await addTagToLead(payment.leadId, tag.id, "automation");
+  }
+  return prisma.payment.findUnique({ where: { id: paymentId } });
+}
+
+/** Consulta o gateway quando o webhook atrasa (máx. 1 consulta a cada 15s por pagamento). */
+export async function syncPaymentWithProvider(payment: Payment): Promise<Payment> {
+  if (!payment.providerPaymentId || payment.status === "APPROVED" || payment.status === "REFUNDED") return payment;
+  if (payment.lastSyncedAt && Date.now() - payment.lastSyncedAt.getTime() < 15000) return payment;
+  await prisma.payment.update({ where: { id: payment.id }, data: { lastSyncedAt: new Date() } });
+  try {
+    const info = await getProvider(payment.provider).fetchPayment(payment.providerPaymentId);
+    if (info && info.externalReference === payment.id && info.status !== payment.status) {
+      return (await applyPaymentStatus(payment.id, info.status, "api_sync")) ?? payment;
+    }
+  } catch (err) {
+    console.error("[payments] sync falhou", err);
+  }
+  return payment;
+}
