@@ -62,7 +62,7 @@ interface CheckoutInput {
  * nome/e-mail, então usamos dados do próprio SaaS. CHECKOUT_PAYER_NAME / CHECKOUT_PAYER_EMAIL
  * fixam os mesmos dados para todos; sem eles, gera um e-mail técnico por pagamento.
  */
-export function payerIdentity(ref: string) {
+export function payerIdentity(ref: string): { name: string; email: string } {
   const domain = process.env.CHECKOUT_PAYER_EMAIL_DOMAIN || "hotsecret.app";
   return {
     name: process.env.CHECKOUT_PAYER_NAME || "Cliente Hot Secret",
@@ -205,14 +205,16 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
   return prisma.payment.findUnique({ where: { id: paymentId } });
 }
 
-/** Consulta o gateway quando o webhook atrasa (máx. 1 consulta a cada 15s por pagamento). */
+/** Consulta o gateway quando o webhook atrasa (máx. 1 consulta a cada 8s por pagamento). */
 export async function syncPaymentWithProvider(payment: Payment): Promise<Payment> {
   if (!payment.providerPaymentId || payment.status === "APPROVED" || payment.status === "REFUNDED") return payment;
-  if (payment.lastSyncedAt && Date.now() - payment.lastSyncedAt.getTime() < 15000) return payment;
+  if (payment.lastSyncedAt && Date.now() - payment.lastSyncedAt.getTime() < 8000) return payment;
   await prisma.payment.update({ where: { id: payment.id }, data: { lastSyncedAt: new Date() } });
   try {
     const info = await getProvider(payment.provider).fetchPayment(payment.providerPaymentId);
-    if (info && info.externalReference === payment.id && info.status !== payment.status) {
+    // alguns gateways não devolvem a referência externa na consulta; o id do gateway já identifica o pagamento
+    const sameRef = !info?.externalReference || info.externalReference === payment.id;
+    if (info && sameRef && info.status !== payment.status) {
       return (await applyPaymentStatus(payment.id, info.status, "api_sync")) ?? payment;
     }
   } catch (err) {

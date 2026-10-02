@@ -26,7 +26,7 @@ export function ChatHeader({ character, typing, onBack }: { character: PublicCha
         <Avatar character={character} />
         <div className="who">
           <div className="name">{character.name}</div>
-          <div className={`status ${typing ? "typing" : ""}`}>
+          <div className={`status ${typing ? "is-typing" : ""}`}>
             {typing ? (
               "digitando..."
             ) : (

@@ -390,3 +390,14 @@ model ExperimentVariant {
 
   @@map("experiment_variants")
 }
+
+/// Arquivos enviados pelo painel quando não há storage externo (Supabase Storage / Vercel Blob).
+model Media {
+  id        String   @id @default(cuid())
+  mime      String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@map("media")
+}

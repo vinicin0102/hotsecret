@@ -45,6 +45,17 @@ botões **“Simular aprovação / recusa”**. A simulação passa pelo **mesmo
 webhook assinado (HMAC) é validado, registrado em `webhook_logs` e aplicado ao pagamento.
 O sandbox é **bloqueado em produção**, a não ser que `ALLOW_SANDBOX_PAYMENTS=true`.
 
+### ZuckPay (produção)
+
+1. `PAYMENT_PROVIDER=zuckpay`, `ZUCKPAY_CLIENT_ID` e `ZUCKPAY_CLIENT_SECRET` (painel ZuckPay → Desenvolvedores → Credenciais API).
+2. A API exige nome, CPF, e-mail e telefone do pagador. Como o visitante não preenche nada, configure
+   `CHECKOUT_PAYER_CPF` e `CHECKOUT_PAYER_PHONE` (dados do titular) — nome/e-mail usam `CHECKOUT_PAYER_*`.
+3. Gere o **Webhook Secret** no painel da ZuckPay e salve em `ZUCKPAY_WEBHOOK_SECRET`. O endereço
+   `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/zuckpay` é enviado automaticamente em cada
+   cobrança (`urlnoty`) — `APP_URL` precisa ser o domínio público com https.
+4. Mesmo sem webhook, o chat consulta `GET /v3/pix/status` a cada ~8s enquanto o PIX está pendente.
+5. Algumas adquirentes da ZuckPay exigem valor mínimo de R$ 10,00.
+
 ### Mercado Pago (produção)
 
 1. `PAYMENT_PROVIDER=mercadopago` e `MERCADOPAGO_ACCESS_TOKEN=<token de produção>`.
@@ -110,6 +121,14 @@ do lead, aplica tags e automações.
 **Tipos de bloco:** Mensagem (texto, remetente), Imagem, Vídeo (thumbnail, autoplay), Áudio,
 Pergunta (aberta → salva em nome/e-mail/telefone/variável, ou botões), Botões, Oferta (card de
 produto + checkout no chat), Entrega (link liberado só com pagamento aprovado), Link, Tag e Fim.
+
+### Respostas digitadas
+
+No bloco **Resposta** (e na Pergunta em modo de opções) o lead **digita o que quiser**. Cada caminho
+tem um nome e palavras-chave; a resposta é comparada sem acentos/maiúsculas (a palavra-chave mais
+específica vence) e, se nada bater, o fluxo segue pela saída **“Qualquer outra resposta”** (ou pelo
+1º caminho). Também dá para usar “Digitando ou clicando” ou “Só botões”. Tudo que o lead digita fica
+salvo na conversa.
 
 ### Checkout sem cadastro + conteúdo entregue no chat
 

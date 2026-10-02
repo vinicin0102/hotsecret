@@ -112,9 +112,12 @@ export default apiHandler({
           const buttons = (content.buttons as ChoiceButton[] | undefined) ?? [];
           const btn = buttons.find((b) => b.id === ev.data?.buttonId);
           if (!btn) continue;
-          await addConversationMessage(conversationId, "user", "text", { text: btn.label }, node.id);
+          // resposta digitada pelo lead (ou o rótulo, quando ele clicou)
+          const typed = sanitizeText(ev.data?.value, 1000);
+          await addConversationMessage(conversationId, "user", "text", { text: typed || btn.label }, node.id);
           data.buttonId = btn.id;
           data.label = btn.label;
+          if (typed) data.value = typed;
           break;
         }
         case "question_answered": {

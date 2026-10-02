@@ -318,3 +318,11 @@
   padding: 1px 6px;
   white-space: nowrap;
 }
+
+.hs-node .out.other {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+}

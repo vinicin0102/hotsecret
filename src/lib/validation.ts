@@ -9,7 +9,8 @@ const url = z.string().max(2048).transform((v) => sanitizeUrl(v));
 const optUrl = url.optional();
 const id = z.string().regex(/^[a-zA-Z0-9_:-]{1,64}$/);
 
-const button = z.object({ id, label: txt(80) });
+const button = z.object({ id, label: txt(80), keywords: optTxt(300) });
+const inputMode = z.enum(["type", "both", "click"]).optional();
 
 const delaySettings = z.object({
   delayMode: z.enum(["fixed", "random"]).optional(),
@@ -33,8 +34,9 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
     variable: z.string().regex(/^[a-zA-Z0-9_]{0,40}$/).optional(),
     placeholder: optTxt(120),
     buttons: z.array(button).max(10).optional(),
+    inputMode,
   }),
-  buttons: z.object({ text: optTxt(2000), buttons: z.array(button).max(10) }),
+  buttons: z.object({ text: optTxt(2000), buttons: z.array(button).max(10), inputMode, placeholder: optTxt(120) }),
   offer: z.object({
     productId: z.string().max(64),
     headline: optTxt(120),

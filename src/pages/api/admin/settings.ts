@@ -13,6 +13,10 @@ export default apiHandler({
       webhookUrl: absoluteUrl(`/api/webhooks/payments/${provider}`),
       cronUrl: absoluteUrl("/api/cron/recovery"),
       configured: {
+        zuckpayCredentials: !!process.env.ZUCKPAY_CLIENT_ID && !!process.env.ZUCKPAY_CLIENT_SECRET,
+        zuckpayWebhookSecret: !!process.env.ZUCKPAY_WEBHOOK_SECRET,
+        payerData: !!process.env.CHECKOUT_PAYER_CPF && !!process.env.CHECKOUT_PAYER_PHONE,
+        supabaseStorage: !!process.env.SUPABASE_URL && !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY),
         mercadopagoToken: !!process.env.MERCADOPAGO_ACCESS_TOKEN,
         mercadopagoWebhookSecret: !!process.env.MERCADOPAGO_WEBHOOK_SECRET,
         cronSecret: !!process.env.CRON_SECRET,

@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { HttpError, rateLimit, requireAdmin } from "@/lib/api";
 import { ALLOWED_MIME, MAX_UPLOAD_BYTES, sniffMatches, storeFile } from "@/services/storage";
 
+// Fallback do upload direto (Supabase): o arquivo passa pelo servidor e vai para o Blob ou para o banco.
+
 export const config = { api: { bodyParser: false } };
 
 // Upload binário direto (corpo = arquivo, Content-Type = mime). Evita dependências de multipart.

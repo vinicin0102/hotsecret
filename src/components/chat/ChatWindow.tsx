@@ -35,9 +35,12 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [items.length, typing, awaiting]);
 
+  // o lead digita nas perguntas abertas e nas opções configuradas para digitação
+  const canType = awaiting?.kind === "open" || (awaiting?.kind === "buttons" && awaiting.inputMode !== "click");
+
   useEffect(() => {
-    if (awaiting?.kind === "open") inputRef.current?.focus({ preventScroll: true });
-  }, [awaiting]);
+    if (canType) inputRef.current?.focus({ preventScroll: true });
+  }, [canType, awaiting]);
 
   const send = () => {
     if (!draft.trim()) return;
@@ -186,7 +189,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           </div>
           {items.map(renderItem)}
           {typing && <TypingIndicator />}
-          {awaiting?.kind === "buttons" && <OptionButtons buttons={awaiting.buttons} onChoose={engine.chooseButton} />}
+          {awaiting?.kind === "buttons" && awaiting.inputMode !== "type" && (
+            <OptionButtons buttons={awaiting.buttons} onChoose={engine.chooseButton} />
+          )}
           {ended && onRestart && (
             <div className="restart-bar">
               <button className="btn btn-ghost btn-sm" onClick={onRestart}>
@@ -200,10 +205,10 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             ref={inputRef}
             rows={1}
             value={draft}
-            disabled={awaiting?.kind !== "open"}
+            disabled={!canType}
             placeholder={
-              awaiting?.kind === "open"
-                ? awaiting.placeholder || "Digite sua resposta..."
+              canType
+                ? (awaiting?.placeholder ?? "") || "Digite sua resposta..."
                 : awaiting?.kind === "buttons"
                   ? "Escolha uma opção acima"
                   : "Mensagem"
@@ -213,7 +218,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             maxLength={1000}
             enterKeyHint="send"
           />
-          <button className="send" aria-label="Enviar" disabled={awaiting?.kind !== "open" || !draft.trim()} onClick={send}>
+          <button className="send" aria-label="Enviar" disabled={!canType || !draft.trim()} onClick={send}>
             ➤
           </button>
         </div>

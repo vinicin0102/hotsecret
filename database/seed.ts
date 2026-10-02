@@ -14,10 +14,10 @@ const T = (id: string, text: string, x: number, y: number, delayMs = 1600) => ({
   settings: { delayMode: "fixed", delayMs, showTyping: true },
   position: { x, y },
 });
-const B = (id: string, text: string, buttons: [string, string][], x: number, y: number) => ({
+const B = (id: string, text: string, buttons: [string, string, string?][], x: number, y: number) => ({
   id,
   type: "buttons",
-  content: { text, buttons: buttons.map(([bid, label]) => ({ id: bid, label })) },
+  content: { text, inputMode: "type", buttons: buttons.map(([bid, label, keywords]) => ({ id: bid, label, keywords })) },
   settings: { delayMode: "fixed", delayMs: 1400, showTyping: true },
   position: { x, y },
 });
@@ -113,9 +113,9 @@ async function main() {
   const nodes = [
     { id: "start", type: "start", content: {}, settings: {}, position: { x: 260, y: 0 } },
     T("m1", "Oi... posso te fazer uma pergunta que talvez você não esperava? 👀", 220, 120, 1800),
-    B("b1", "", [["pode", "Pode"], ["claro", "Claro ❤️"]], 220, 290),
+    B("b1", "", [["pode", "Pode", "sim, claro, manda, fala, pode sim"], ["claro", "Claro ❤️"]], 220, 290),
     T("m2", "Você sente que alguma coisa mudou na sua relação?", 220, 450),
-    B("b2", "", [["sim", "Sim"], ["nao", "Não"], ["naosei", "Não sei"]], 220, 610),
+    B("b2", "", [["sim", "Sim", "mudou, muito, demais, aham, s, com certeza"], ["nao", "Não", "n, nada, nunca, de jeito nenhum"], ["naosei", "Não sei", "talvez, sei la, duvida, mais ou menos"]], 220, 610),
     T("s1", "Eu imaginei... 💭\nQuando algo muda, quase sempre existe um motivo que a pessoa não fala.", -160, 820),
     T("n1", "Que bom! Mas mesmo relações boas guardam segredos que ninguém conta. 🤫", 220, 820),
     T("ns1", "Essa dúvida é mais comum do que você imagina...\nE ela costuma dizer muita coisa.", 600, 820),

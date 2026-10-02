@@ -51,6 +51,10 @@ const TRIGGERS = [
 
 const CONFIG_LABEL: Record<string, string> = {
   authSecret: "AUTH_SECRET (sessões)",
+  zuckpayCredentials: "ZUCKPAY_CLIENT_ID + ZUCKPAY_CLIENT_SECRET",
+  zuckpayWebhookSecret: "ZUCKPAY_WEBHOOK_SECRET (webhook assinado)",
+  payerData: "CHECKOUT_PAYER_CPF + CHECKOUT_PAYER_PHONE (exigidos pela ZuckPay)",
+  supabaseStorage: "Supabase Storage (uploads de fotos e vídeos)",
   mercadopagoToken: "MERCADOPAGO_ACCESS_TOKEN",
   mercadopagoWebhookSecret: "MERCADOPAGO_WEBHOOK_SECRET",
   cronSecret: "CRON_SECRET",

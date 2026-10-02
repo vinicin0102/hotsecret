@@ -1,10 +1,12 @@
 import { mercadoPagoProvider } from "./mercadopago";
 import { sandboxProvider } from "./sandbox";
+import { zuckPayProvider } from "./zuckpay";
 import type { PaymentProvider } from "./types";
 
 const providers: Record<string, PaymentProvider> = {
   mercadopago: mercadoPagoProvider,
   sandbox: sandboxProvider,
+  zuckpay: zuckPayProvider,
 };
 
 export function sandboxAllowed(): boolean {

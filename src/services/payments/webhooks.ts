@@ -49,6 +49,8 @@ export async function handlePaymentWebhook(providerName: string, req: WebhookReq
   let payment = await prisma.payment.findUnique({
     where: { provider_providerPaymentId: { provider: provider.name, providerPaymentId: verification.providerPaymentId } },
   });
+  // a referência externa do webhook também serve (cobranças cujo id do gateway chegou depois)
+  if (verification.signed) externalReference = externalReference ?? verification.externalReference ?? null;
   if (!payment && externalReference) {
     payment = await prisma.payment.findUnique({ where: { id: externalReference } });
     // Checkout Pro: o id do pagamento só é conhecido aqui.
@@ -60,6 +62,10 @@ export async function handlePaymentWebhook(providerName: string, req: WebhookReq
     }
   }
   if (!payment || payment.provider !== provider.name) return { status: 200, body: { ignored: "unknown_payment" } };
+  // a transação confirmada precisa ser exatamente a deste pedido
+  if (payment.providerPaymentId && payment.providerPaymentId !== verification.providerPaymentId) {
+    return { status: 200, body: { ignored: "transaction_mismatch" } };
+  }
 
   await prisma.webhookLog.update({ where: { id: log.id }, data: { paymentId: payment.id } });
   if (status) await applyPaymentStatus(payment.id, status, "webhook");

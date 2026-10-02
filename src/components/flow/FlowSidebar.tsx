@@ -144,7 +144,7 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
 
         {(node.type === "question" || node.type === "buttons") && (
           <div className="field">
-            <label>{node.type === "question" ? "Pergunta" : "Mensagem antes dos botões (opcional)"}</label>
+            <label>{node.type === "question" ? "Pergunta" : "Pergunta / mensagem antes da resposta (opcional)"}</label>
             <textarea className="textarea" rows={3} value={String(c.text ?? "")} onChange={(e) => setContent({ text: e.target.value })} />
           </div>
         )}
@@ -188,23 +188,62 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
         )}
 
         {showButtons && (
-          <div className="field">
-            <label>Botões (cada um leva a um nó)</label>
-            {buttons.map((b, i) => (
-              <div key={b.id} className="btn-editor-row">
-                <input className="input" value={b.label} maxLength={80} onChange={(e) => updateButton(i, e.target.value)} />
-                <button type="button" className="btn btn-icon btn-ghost" onClick={() => removeButton(i)} aria-label="Remover botão">
-                  ✕
-                </button>
+          <>
+            <div className="field">
+              <label>Como o lead responde</label>
+              <div className="segmented">
+                {(
+                  [
+                    ["type", "Digitando"],
+                    ["both", "Digitando ou clicando"],
+                    ["click", "Só botões"],
+                  ] as const
+                ).map(([m, l]) => (
+                  <button key={m} type="button" className={((c.inputMode as string) ?? "type") === m ? "active" : ""} onClick={() => setContent({ inputMode: m })}>
+                    {l}
+                  </button>
+                ))}
               </div>
-            ))}
-            {buttons.length < 10 && (
-              <button type="button" className="btn btn-sm" onClick={addButton}>
-                + Adicionar botão
-              </button>
+            </div>
+            {(c.inputMode ?? "type") !== "click" && (
+              <div className="field">
+                <label>Texto de ajuda no campo (opcional)</label>
+                <input className="input" placeholder="Digite sua resposta..." value={String(c.placeholder ?? "")} onChange={(e) => setContent({ placeholder: e.target.value })} />
+              </div>
             )}
-            <span className="hint">Arraste a bolinha à direita de cada botão até o próximo nó.</span>
-          </div>
+            <div className="field">
+              <label>Caminhos (cada um leva a um nó)</label>
+              {buttons.map((b, i) => (
+                <div key={b.id} style={{ marginBottom: 10 }}>
+                  <div className="btn-editor-row">
+                    <input className="input" value={b.label} maxLength={80} placeholder="Ex.: Sim" onChange={(e) => updateButton(i, e.target.value)} />
+                    <button type="button" className="btn btn-icon btn-ghost" onClick={() => removeButton(i)} aria-label="Remover caminho">
+                      ✕
+                    </button>
+                  </div>
+                  {(c.inputMode ?? "type") !== "click" && (
+                    <input
+                      className="input"
+                      style={{ fontSize: 13, padding: "8px 12px" }}
+                      placeholder="Outras palavras que levam aqui (ex.: quero, claro, pode)"
+                      value={b.keywords ?? ""}
+                      onChange={(e) => setContent({ buttons: buttons.map((x, j) => (j === i ? { ...x, keywords: e.target.value } : x)) })}
+                    />
+                  )}
+                </div>
+              ))}
+              {buttons.length < 10 && (
+                <button type="button" className="btn btn-sm" onClick={addButton}>
+                  + Adicionar caminho
+                </button>
+              )}
+              <span className="hint">
+                {(c.inputMode ?? "type") === "click"
+                  ? "Arraste a bolinha à direita de cada botão até o próximo nó."
+                  : "O lead digita o que quiser. Se a resposta contiver o nome do caminho ou uma das palavras, segue por ele (sem diferenciar acentos/maiúsculas). Se nada bater, segue por “Qualquer outra resposta” — ou pelo 1º caminho, se essa saída não estiver conectada."}
+              </span>
+            </div>
+          </>
         )}
 
         {node.type === "offer" && (

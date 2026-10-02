@@ -156,7 +156,7 @@
   width: 7px;
   height: 7px;
 }
-.chat-header .status.typing {
+.chat-header .status.is-typing {
   color: var(--pink-light);
 }
 .chat-header .info {

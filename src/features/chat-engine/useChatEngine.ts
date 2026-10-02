@@ -1,8 +1,8 @@
 // Executa o fluxo no navegador: percorre os nós em sequência, mostra "digitando", aguarda
 // respostas/cliques, abre o checkout e avança somente quando o servidor confirma o pagamento.
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChoiceButton, FlowGraph, FlowNode, PublicFunnel } from "@/types/flow";
-import { getNode, findStartNode, nextNodeId, resolveDelay } from "./engine";
+import type { AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, PublicFunnel } from "@/types/flow";
+import { getNode, findStartNode, matchChoice, nextNodeId, resolveDelay } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 
 export type ChatItem =
@@ -16,7 +16,7 @@ export type ChatItem =
 
 export type Awaiting =
   | null
-  | { kind: "buttons"; nodeId: string; buttons: ChoiceButton[] }
+  | { kind: "buttons"; nodeId: string; buttons: ChoiceButton[]; inputMode: AnswerInputMode; placeholder?: string }
   | { kind: "open"; nodeId: string; placeholder?: string };
 
 export interface ResumeState {
@@ -24,6 +24,16 @@ export interface ResumeState {
   conversation: { status: string; currentNodeId: string | null };
   messages: ServerMessage[];
   payments: PublicPaymentInfo[];
+}
+
+function buttonsAwaiting(nodeId: string, c: Record<string, unknown>): Awaiting {
+  return {
+    kind: "buttons",
+    nodeId,
+    buttons: (c.buttons as ChoiceButton[]) ?? [],
+    inputMode: (c.inputMode as AnswerInputMode) ?? "type",
+    placeholder: (c.placeholder as string) || undefined,
+  };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -147,7 +157,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             if (node.type === "question" && c.mode === "open") {
               setAwaiting({ kind: "open", nodeId: node.id, placeholder: (c.placeholder as string) || undefined });
             } else {
-              setAwaiting({ kind: "buttons", nodeId: node.id, buttons: (c.buttons as ChoiceButton[]) ?? [] });
+              setAwaiting(buttonsAwaiting(node.id, c));
             }
             return;
           }
@@ -208,8 +218,27 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const submitAnswer = useCallback(
     (value: string) => {
       const text = value.trim();
-      if (!text || !awaiting || awaiting.kind !== "open") return;
+      if (!text || !awaiting) return;
       const nodeId = awaiting.nodeId;
+      if (awaiting.kind === "buttons") {
+        if (awaiting.inputMode === "click") return;
+        // resposta livre: identifica o caminho pelas opções/palavras-chave; sem acerto → "qualquer outra resposta"
+        const choice = matchChoice(awaiting.buttons, text);
+        setAwaiting(null);
+        markChatStarted();
+        push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text }, nodeId, at: now() });
+        if (choice) {
+          track("button_clicked", nodeId, { buttonId: choice.id, value: text });
+          void run(nextNodeId(graphRef.current, nodeId, `btn:${choice.id}`));
+        } else {
+          track("question_answered", nodeId, { value: text });
+          const fallback =
+            nextNodeId(graphRef.current, nodeId, "default") ??
+            (awaiting.buttons[0] ? nextNodeId(graphRef.current, nodeId, `btn:${awaiting.buttons[0].id}`) : null);
+          void run(fallback);
+        }
+        return;
+      }
       setAwaiting(null);
       markChatStarted();
       push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text }, nodeId, at: now() });
@@ -401,7 +430,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       }
       const c = current.content as unknown as Record<string, unknown>;
       if (current.type === "buttons" || (current.type === "question" && c.mode !== "open")) {
-        setAwaiting({ kind: "buttons", nodeId: current.id, buttons: (c.buttons as ChoiceButton[]) ?? [] });
+        setAwaiting(buttonsAwaiting(current.id, c));
       } else if (current.type === "question") {
         setAwaiting({ kind: "open", nodeId: current.id, placeholder: (c.placeholder as string) || undefined });
       } else if (current.type === "offer") {

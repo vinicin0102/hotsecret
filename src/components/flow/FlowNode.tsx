@@ -121,12 +121,20 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
       {body && <div className="nb">{body}</div>}
       {buttons.length > 0 && (
         <div className="outs">
+          {c.inputMode !== "click" && <div className="dim" style={{ fontSize: 11 }}>✍️ o lead digita a resposta</div>}
           {buttons.map((b) => (
-            <div key={b.id} className="out">
+            <div key={b.id} className="out" title={b.keywords ? `Também: ${b.keywords}` : undefined}>
               {b.label}
+              {b.keywords ? <span className="dim" style={{ fontWeight: 400 }}> · +{b.keywords.split(",").filter((k) => k.trim()).length}</span> : null}
               <Handle type="source" id={`btn:${b.id}`} position={Position.Right} />
             </div>
           ))}
+          {c.inputMode !== "click" && (
+            <div className="out other">
+              ↳ Qualquer outra resposta
+              <Handle type="source" id="default" position={Position.Right} />
+            </div>
+          )}
         </div>
       )}
       {n.type === "offer" && (

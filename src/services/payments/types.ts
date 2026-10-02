@@ -37,6 +37,8 @@ export interface WebhookVerification {
   /** status informado pelo próprio webhook (apenas sandbox — gateways reais são consultados via API) */
   status?: PaymentStatus;
   externalReference?: string;
+  /** true quando a assinatura foi verificada (dados do corpo são confiáveis) */
+  signed?: boolean;
 }
 
 export interface PaymentProvider {

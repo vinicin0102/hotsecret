@@ -72,3 +72,20 @@ test("conteúdo pago: só nós depois de payment:approved ficam bloqueados", asy
   assert.deepEqual([...unlockedByOffers(g, ["o"])].sort(), ["ok", "secret2"]);
   assert.equal(unlockedByOffers(g, []).size, 0);
 });
+
+test("resposta digitada encontra o caminho certo", async () => {
+  const { matchChoice } = await import("../src/features/chat-engine/engine");
+  const buttons = [
+    { id: "sim", label: "Sim ❤️", keywords: "claro, com certeza, aham" },
+    { id: "nao", label: "Não", keywords: "nunca" },
+    { id: "talvez", label: "Não sei" },
+  ];
+  assert.equal(matchChoice(buttons, "SIM")?.id, "sim");
+  assert.equal(matchChoice(buttons, "claro que sim!!")?.id, "sim");
+  assert.equal(matchChoice(buttons, "com certeza")?.id, "sim");
+  assert.equal(matchChoice(buttons, "nao")?.id, "nao");
+  assert.equal(matchChoice(buttons, "acho que não sei")?.id, "talvez"); // a chave mais específica vence
+  assert.equal(matchChoice(buttons, "não sei")?.id, "talvez"); // igualdade exata vence
+  assert.equal(matchChoice(buttons, "eu gosto de pizza"), null);
+  assert.equal(matchChoice(buttons, "   "), null);
+});

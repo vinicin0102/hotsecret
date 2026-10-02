@@ -1,5 +1,5 @@
 // Flow Engine puro (sem React, sem rede) — usado pelo chat público, pelo preview e pelos testes.
-import type { DelaySettings, FlowEdge, FlowGraph, FlowNode } from "@/types/flow";
+import type { ChoiceButton, DelaySettings, FlowEdge, FlowGraph, FlowNode } from "@/types/flow";
 
 export const WAITING_TYPES = new Set(["question", "buttons", "offer"]);
 
@@ -146,4 +146,42 @@ export function unlockedByOffers(graph: FlowGraph, paidOfferNodeIds: string[]): 
     for (const e of outgoingEdges(graph, id)) stack.push(e.target);
   }
   return out;
+}
+
+/** Minúsculas, sem acentos, sem emojis/pontuação, espaços simples. */
+export function normalizeAnswer(v: string): string {
+  return v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Resposta digitada → caminho. Compara com o rótulo e as palavras-chave de cada opção:
+ * 1º igualdade exata, 2º a resposta contém a palavra-chave inteira (a mais longa vence),
+ * 3º a palavra-chave contém a resposta.
+ * Retorna null quando nada bate (o fluxo segue pela saída "qualquer outra resposta").
+ */
+export function matchChoice(buttons: ChoiceButton[], answer: string): ChoiceButton | null {
+  const a = normalizeAnswer(answer);
+  if (!a) return null;
+  const options = buttons.map((b) => ({
+    b,
+    keys: [b.label, ...(b.keywords ?? "").split(",")].map(normalizeAnswer).filter(Boolean),
+  }));
+  for (const o of options) if (o.keys.includes(a)) return o.b;
+  const padded = ` ${a} `;
+  // a resposta contém a palavra-chave: vence a mais específica (mais longa)
+  let best: { b: ChoiceButton; len: number } | null = null;
+  for (const o of options) {
+    for (const k of o.keys) {
+      if (padded.includes(` ${k} `) && (!best || k.length > best.len)) best = { b: o.b, len: k.length };
+    }
+  }
+  if (best) return best.b;
+  if (a.length >= 3) for (const o of options) if (o.keys.some((k) => ` ${k} `.includes(padded))) return o.b;
+  return null;
 }

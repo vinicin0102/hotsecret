@@ -27,7 +27,12 @@ export interface DelaySettings {
 export interface ChoiceButton {
   id: string;
   label: string;
+  /** palavras/frases alternativas que também levam a este caminho (separadas por vírgula) */
+  keywords?: string;
 }
+
+/** type: o lead digita (padrão) · both: digita ou clica · click: só botões */
+export type AnswerInputMode = "type" | "both" | "click";
 
 export interface TextContent {
   text: string;
@@ -56,10 +61,13 @@ export interface QuestionContent {
   variable?: string;
   placeholder?: string;
   buttons?: ChoiceButton[];
+  inputMode?: AnswerInputMode;
 }
 export interface ButtonsContent {
   text?: string;
   buttons: ChoiceButton[];
+  inputMode?: AnswerInputMode;
+  placeholder?: string;
 }
 export interface OfferContent {
   productId: string;

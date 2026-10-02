@@ -1,25 +1,15 @@
-// Serve arquivos enviados ao disco local (quando não há Vercel Blob configurado).
+// Serve arquivos guardados no banco (quando não há storage externo).
 import type { NextApiRequest, NextApiResponse } from "next";
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import path from "node:path";
-import { ALLOWED_MIME, UPLOAD_DIR } from "@/services/storage";
-
-const EXT_TO_MIME = Object.fromEntries(Object.entries(ALLOWED_MIME).map(([m, e]) => [e, m]));
+import { prisma } from "@/lib/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const name = String(req.query.name ?? "");
-  if (!/^[\w-]+\.(\w{2,5})$/.test(name)) return res.status(400).end();
-  const mime = EXT_TO_MIME[name.split(".").pop()!];
-  if (!mime) return res.status(404).end();
-  const file = path.join(UPLOAD_DIR, name);
-  try {
-    const info = await stat(file);
-    res.setHeader("Content-Type", mime);
-    res.setHeader("Content-Length", info.size);
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    createReadStream(file).pipe(res);
-  } catch {
-    res.status(404).end();
-  }
+  const match = /^([a-z0-9]{10,40})\.\w{2,5}$/.exec(String(req.query.name ?? ""));
+  if (!match) return res.status(404).end();
+  const media = await prisma.media.findUnique({ where: { id: match[1] } });
+  if (!media) return res.status(404).end();
+  res.setHeader("Content-Type", media.mime);
+  res.setHeader("Content-Length", media.size);
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.status(200).send(Buffer.from(media.data));
 }

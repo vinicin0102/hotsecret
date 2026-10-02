@@ -1,6 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import { formatBRL } from "@/lib/format";
 import type { PublicPaymentInfo } from "@/features/chat-engine/transport";
+
+/** Imagem do gateway (URL, data URI ou base64 puro) — usada só se não der para gerar o QR localmente. */
+function gatewayQrSrc(v: string): string {
+  if (/^https:\/\//.test(v) || v.startsWith("data:image/")) return v;
+  return `data:image/png;base64,${v}`;
+}
+
+/** QR Code gerado no navegador a partir do PIX copia e cola (não depende da imagem do gateway). */
+function usePixQr(code: string | null | undefined, fallback: string | null | undefined) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (!code) {
+      setSrc(fallback ? gatewayQrSrc(fallback) : null);
+      return;
+    }
+    QRCode.toDataURL(code, { margin: 1, width: 400, errorCorrectionLevel: "M" })
+      .then((url) => alive && setSrc(url))
+      .catch(() => alive && setSrc(fallback ? gatewayQrSrc(fallback) : null));
+    return () => {
+      alive = false;
+    };
+  }, [code, fallback]);
+  return src;
+}
 
 export function PaymentStatus({
   payment,
@@ -14,6 +40,7 @@ export function PaymentStatus({
   onSimulate?: (status: "APPROVED" | "FAILED") => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const qr = usePixQr(payment?.pixQrCode, payment?.pixQrCodeBase64);
   if (!payment) return null;
   const pending = payment.status === "PENDING" || payment.status === "CREATED";
 
@@ -52,9 +79,9 @@ export function PaymentStatus({
 
           {pending && payment.method === "PIX" && (
             <>
-              {payment.pixQrCodeBase64 && (
+              {qr && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="qr" src={`data:image/png;base64,${payment.pixQrCodeBase64}`} alt="QR Code PIX" />
+                <img className="qr" src={qr} alt="QR Code PIX" />
               )}
               <p style={{ fontSize: 13 }}>Copie o código abaixo e pague no app do seu banco (PIX copia e cola):</p>
               {payment.pixQrCode && <div className="pix-code">{payment.pixQrCode}</div>}
