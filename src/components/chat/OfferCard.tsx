@@ -25,7 +25,6 @@ export function OfferCard({
           <div className="card-img" />
         )}
         <div className="card-body">
-          <div className="eyebrow">Oferta exclusiva</div>
           <h3>{offer.headline || product.name}</h3>
           {(offer.description || product.description) && <p>{offer.description || product.description}</p>}
           {product.originalPrice && product.originalPrice > product.price ? (
