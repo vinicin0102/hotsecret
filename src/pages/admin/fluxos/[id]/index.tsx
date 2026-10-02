@@ -7,7 +7,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { FlowCanvas, edgeStyle } from "@/components/flow/FlowCanvas";
 import type { HsFlowNode } from "@/components/flow/FlowNode";
 import { FlowSidebar, type SidebarProduct, type SidebarTag } from "@/components/flow/FlowSidebar";
-import { NODE_META, PALETTE, makeNode } from "@/components/flow/nodeMeta";
+import { PALETTE, makeNode, type PaletteItem } from "@/components/flow/nodeMeta";
 import { FunnelSettingsModal, type FunnelMeta } from "@/components/flow/FunnelSettingsModal";
 import { PreviewModal } from "@/components/flow/PreviewModal";
 import { ShareLinkModal } from "@/components/admin/ShareLinkModal";
@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/useToast";
 import { api } from "@/lib/client";
 import { withBase } from "@/lib/paths";
 import { lockedNodeIds, shortId, validateGraph, type GraphIssue } from "@/features/chat-engine/engine";
-import type { FlowEdge, FlowGraph, FlowNode, NodeType } from "@/types/flow";
+import type { FlowEdge, FlowGraph, FlowNode } from "@/types/flow";
 
 interface CharacterRow {
   id: string;
@@ -173,7 +173,7 @@ function Builder() {
     });
   }, []);
 
-  const addNode = (type: NodeType) => {
+  const addNode = ({ type, content }: PaletteItem) => {
     const wrap = document.querySelector(".canvas-wrap")?.getBoundingClientRect();
     const center = wrap
       ? rf.screenToFlowPosition({ x: wrap.left + wrap.width / 2, y: wrap.top + wrap.height / 2 })
@@ -186,7 +186,7 @@ function Builder() {
       : lowest
         ? { x: lowest.position.x, y: lowest.position.y + 220 }
         : { x: center.x - 125, y: center.y - 60 };
-    const node = makeNode(type, position);
+    const node = makeNode(type, position, content?.());
     setNodes((ns) => [...ns, { id: node.id, type: "hs", position, data: { node } }]);
     // conecta automaticamente ao nó selecionado quando ele tem saída livre
     if (selected) {
@@ -335,12 +335,12 @@ function Builder() {
           <div className="canvas-wrap">
             <div className="palette">
               <div className="label">Adicionar bloco</div>
-              {PALETTE.map((t) => (
-                <button key={t} onClick={() => addNode(t)} title={NODE_META[t].hint}>
-                  <span className="pi" style={{ color: NODE_META[t].color }}>
-                    {NODE_META[t].icon}
+              {PALETTE.map((p) => (
+                <button key={p.key} onClick={() => addNode(p)} title={p.hint}>
+                  <span className="pi" style={{ color: p.color }}>
+                    {p.icon}
                   </span>
-                  {NODE_META[t].label}
+                  {p.label}
                 </button>
               ))}
             </div>

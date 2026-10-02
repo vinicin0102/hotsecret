@@ -162,7 +162,11 @@ export function unlockedByOffers(graph: FlowGraph, paidOfferNodeIds: string[]): 
     const id = stack.pop()!;
     if (out.has(id) || !locked.has(id)) continue;
     out.add(id);
-    for (const e of outgoingEdges(graph, id)) stack.push(e.target);
+    for (const e of outgoingEdges(graph, id)) {
+      // conteúdo de outra oferta (upsell) só libera com o pagamento dela
+      if (e.condition === "payment:approved" && !paidOfferNodeIds.includes(id)) continue;
+      stack.push(e.target);
+    }
   }
   return out;
 }

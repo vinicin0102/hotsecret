@@ -3,7 +3,7 @@ import type { ChoiceButton, FlowNode, NodeType } from "@/types/flow";
 import { shortId } from "@/features/chat-engine/engine";
 import { UploadInput } from "@/components/admin/UploadInput";
 import { formatBRL } from "@/lib/format";
-import { NODE_META } from "./nodeMeta";
+import { NODE_META, nodeTypeLabel } from "./nodeMeta";
 import { DelayEditor } from "./DelayEditor";
 
 export interface SidebarProduct {
@@ -53,7 +53,7 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
   return (
     <aside className="flow-sidebar">
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <h3>Editar {meta.label.toLowerCase()}</h3>
+        <h3>Editar {nodeTypeLabel(node).toLowerCase()}</h3>
         <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Fechar">
           ✕
         </button>
@@ -66,7 +66,7 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
         {node.type !== "start" && (
           <div className="field">
             <label>Rótulo no canvas (opcional)</label>
-            <input className="input" value={s.label ?? ""} placeholder={meta.label} onChange={(e) => setSettings({ label: e.target.value })} />
+            <input className="input" value={s.label ?? ""} placeholder={nodeTypeLabel(node)} onChange={(e) => setSettings({ label: e.target.value })} />
           </div>
         )}
 

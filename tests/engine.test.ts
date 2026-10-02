@@ -82,6 +82,27 @@ test("conteúdo pago: só nós depois de payment:approved ficam bloqueados", asy
   assert.equal(unlockedByOffers(g, []).size, 0);
 });
 
+test("upsell: comprar a 1ª oferta não libera o conteúdo da 2ª", async () => {
+  const { lockedNodeIds, unlockedByOffers } = await import("../src/features/chat-engine/engine");
+  const t = (id: string) => ({ id, type: "text" as const, content: { text: id }, settings: {}, position: { x: 0, y: 0 } });
+  const o = (id: string) => ({ id, type: "offer" as const, content: { productId: "p" }, settings: {}, position: { x: 0, y: 0 } });
+  const g: FlowGraph = {
+    nodes: [
+      { id: "start", type: "start", content: {} as never, settings: {}, position: { x: 0, y: 0 } },
+      o("oA"), t("contA"), o("oB"), t("contB"),
+    ],
+    edges: [
+      { id: "1", source: "start", target: "oA", condition: "default" },
+      { id: "2", source: "oA", target: "contA", condition: "payment:approved" },
+      { id: "3", source: "contA", target: "oB", condition: "default" },
+      { id: "4", source: "oB", target: "contB", condition: "payment:approved" },
+    ],
+  };
+  assert.deepEqual([...lockedNodeIds(g)].sort(), ["contA", "contB", "oB"]);
+  assert.deepEqual([...unlockedByOffers(g, ["oA"])].sort(), ["contA", "oB"]);
+  assert.deepEqual([...unlockedByOffers(g, ["oA", "oB"])].sort(), ["contA", "contB", "oB"]);
+});
+
 test("resposta digitada encontra o caminho certo", async () => {
   const { matchChoice } = await import("../src/features/chat-engine/engine");
   const buttons = [

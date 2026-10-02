@@ -1,7 +1,7 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { memo } from "react";
 import type { ChoiceButton, FlowNode as FlowNodeT, OfferContent } from "@/types/flow";
-import { NODE_META } from "./nodeMeta";
+import { NODE_META, nodeLabel } from "./nodeMeta";
 
 export type HsNodeData = {
   node: FlowNodeT;
@@ -101,7 +101,7 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
           {meta.icon}
         </span>
         <span className="nt" style={{ color: meta.color }}>
-          {n.settings?.label || meta.label}
+          {nodeLabel(n)}
         </span>
         {data.paid && (
           <span className="paid-badge" title="Conteúdo pago: liberado só após pagamento aprovado">
