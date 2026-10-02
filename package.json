@@ -14,7 +14,7 @@
     "db:seed": "tsx database/seed.ts",
     "test": "tsx --test tests/*.test.ts",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build"
+    "vercel-build": "prisma generate && prisma migrate deploy && tsx database/seed.ts --if-enabled && next build"
   },
   "prisma": {
     "schema": "database/schema.prisma",

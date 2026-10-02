@@ -21,6 +21,11 @@ const B = (id: string, text: string, buttons: [string, string][], x: number, y: 
 });
 
 async function main() {
+  // no build da Vercel o seed só roda com SEED_DEMO=true
+  if (process.argv.includes("--if-enabled") && process.env.SEED_DEMO !== "true") {
+    console.log("• seed ignorado (SEED_DEMO != true)");
+    return;
+  }
   const email = (process.env.ADMIN_EMAIL ?? "").toLowerCase();
   const password = process.env.ADMIN_PASSWORD ?? "";
   if (email && password) {

@@ -58,9 +58,10 @@ O sandbox é **bloqueado em produção**, a não ser que `ALLOW_SANDBOX_PAYMENTS
 
 1. Importe o repositório e crie um banco Postgres (Neon / Vercel Postgres / Supabase).
 2. Configure as variáveis do `.env.example` (incluindo `APP_URL` com o domínio final e `CRON_SECRET`).
-3. O `vercel.json` já usa `npm run vercel-build` (gera o client, aplica migrations e compila) e agenda
-   `/hot-secret/api/cron/recovery` a cada 5 minutos. *No plano Hobby a Vercel só permite cron diário —
-   o chat aberto também verifica a recuperação a cada consulta, então visitantes ativos não dependem do cron.*
+3. O `vercel.json` já usa `npm run vercel-build` (gera o client, aplica migrations, roda o seed se
+   `SEED_DEMO=true` e compila) e agenda `/hot-secret/api/cron/recovery` uma vez por dia (limite do plano
+   Hobby). No plano Pro, troque o `schedule` para `*/5 * * * *`. O chat aberto também verifica a
+   recuperação a cada consulta, então visitantes ativos não dependem do cron.
 4. Uploads: defina `BLOB_READ_WRITE_TOKEN` (Vercel Blob). Sem ele, arquivos vão para `public/uploads`,
    o que só funciona em servidores com disco persistente (VPS, Railway, Render...).
 5. Rode `npm run db:seed` uma vez apontando para o banco de produção (opcional).
