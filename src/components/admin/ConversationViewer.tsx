@@ -32,7 +32,12 @@ export function ConversationViewer({ messages }: { messages: ViewerMessage[] }) 
             );
             break;
           case "video":
-            body = <>🎬 Vídeo {c.caption ? `— ${String(c.caption)}` : ""}</>;
+            body = (
+              <>
+                🎬 Vídeo {c.caption ? `— ${String(c.caption)}` : ""}
+                {c.viewOnce ? <div className="hint">① visualização única{c.viewed ? " · já visualizado" : " · ainda não aberto"}</div> : null}
+              </>
+            );
             break;
           case "audio":
             body = <>🎧 Áudio {c.caption ? `— ${String(c.caption)}` : ""}</>;

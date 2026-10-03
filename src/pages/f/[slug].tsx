@@ -90,7 +90,8 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
       return createPreviewTransport(funnel.products, (id) => {
         const n = funnel.graph.nodes.find((x) => x.id === id);
         return (n?.content as OfferContent | undefined)?.productId;
-      });
+      },
+      (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined);
     }
     if (!token) return null;
     return createLiveTransport(() => token, { sandbox });

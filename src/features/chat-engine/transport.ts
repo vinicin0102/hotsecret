@@ -44,6 +44,8 @@ export interface ChatTransport {
   delivery(productId?: string | null): Promise<{ url: string | null; productName: string }>;
   /** conteúdo pago liberado pelos pagamentos aprovados */
   unlock(): Promise<FlowNode[]>;
+  /** link do vídeo de visualização única (null = já visualizado) */
+  viewOnce(nodeId: string): Promise<string | null>;
   simulatePayment?(paymentId: string, status: "APPROVED" | "FAILED"): Promise<PublicPaymentInfo | null>;
 }
 
@@ -97,6 +99,15 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
       return r.nodes;
     },
+    async viewOnce(nodeId) {
+      try {
+        const r = await post<{ url: string }>("/api/public/view-once", { token: getToken(), nodeId });
+        return r.url;
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 410) return null;
+        throw e;
+      }
+    },
     simulatePayment: opts.sandbox
       ? async (paymentId, status) => {
           const r = await post<{ payment: PublicPaymentInfo | null }>("/api/public/sandbox-approve", {
@@ -111,7 +122,12 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
 }
 
 /** Preview do construtor: nenhum dado é gravado; pagamentos são simulados localmente. */
-export function createPreviewTransport(products: Record<string, { price: number }>, graphOfferProduct: (nodeId: string) => string | undefined): ChatTransport {
+export function createPreviewTransport(
+  products: Record<string, { price: number }>,
+  graphOfferProduct: (nodeId: string) => string | undefined,
+  nodeUrl: (nodeId: string) => string | undefined = () => undefined,
+): ChatTransport {
+  const opened = new Set<string>();
   const payments = new Map<string, PublicPaymentInfo>();
   let seq = 0;
   return {
@@ -143,6 +159,11 @@ export function createPreviewTransport(products: Record<string, { price: number 
     },
     async unlock() {
       return []; // o preview já recebe o fluxo completo
+    },
+    async viewOnce(nodeId) {
+      if (opened.has(nodeId)) return null;
+      opened.add(nodeId);
+      return nodeUrl(nodeId) ?? null;
     },
     async simulatePayment(paymentId, status) {
       const p = payments.get(paymentId);

@@ -83,6 +83,14 @@ export async function saveGraph(funnelId: string, graph: FlowGraph) {
   ]);
 }
 
+/** Vídeo de visualização única: o link nunca vai na página, só pelo /api/public/view-once (uma vez por lead). */
+export function publicNode(n: FlowNode): FlowNode {
+  if (n.type === "video" && (n.content as { viewOnce?: boolean }).viewOnce) {
+    return { ...n, content: { ...(n.content as object), url: "" } as FlowNode["content"] };
+  }
+  return n;
+}
+
 export function getFunnelSettings(raw: unknown): Required<FunnelSettings> {
   const s = (raw ?? {}) as FunnelSettings;
   return {
@@ -166,7 +174,8 @@ async function buildPublicFunnel(
   const locked = includeLocked ? new Set<string>() : lockedNodeIds(fullGraph);
   const graph = {
     ...fullGraph,
-    nodes: fullGraph.nodes.map((n) => (locked.has(n.id) ? { ...n, content: {} as never, locked: true } : n)),
+    // rascunho aberto pelo admin (includeLocked) recebe tudo para o preview funcionar
+    nodes: fullGraph.nodes.map((n) => (locked.has(n.id) ? { ...n, content: {} as never, locked: true } : includeLocked ? n : publicNode(n))),
   };
   const productIds = fullGraph.nodes
     .filter((n) => n.type === "offer")

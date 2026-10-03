@@ -79,7 +79,11 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           const m = c as unknown as VideoContent;
           return (
             <MessageBubble key={item.id} sender={item.sender} at={item.at} media>
-              <VideoMessage {...m} onPlay={() => engine.track("video_started", item.nodeId)} />
+              <VideoMessage
+                {...m}
+                loadOnce={m.viewOnce && item.nodeId && transport ? () => transport.viewOnce(item.nodeId!) : undefined}
+                onPlay={() => engine.track("video_started", item.nodeId)}
+              />
             </MessageBubble>
           );
         }

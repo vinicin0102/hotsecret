@@ -12,7 +12,8 @@ export function PreviewModal({ funnel, onClose }: { funnel: PublicFunnel; onClos
       createPreviewTransport(funnel.products, (id) => {
         const n = funnel.graph.nodes.find((x) => x.id === id);
         return (n?.content as OfferContent | undefined)?.productId;
-      }),
+      },
+      (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [round],
   );

@@ -53,6 +53,10 @@ export interface VideoContent {
   thumbnailUrl?: string;
   caption?: string;
   autoplay?: boolean;
+  /** visualização única: o lead assiste uma vez e o link só é liberado pelo servidor no play */
+  viewOnce?: boolean;
+  /** (mensagem salva) vídeo de visualização única já aberto */
+  viewed?: boolean;
 }
 export interface AudioContent {
   url: string;

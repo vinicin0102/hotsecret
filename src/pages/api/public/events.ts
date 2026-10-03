@@ -92,7 +92,8 @@ export default apiHandler({
             const sender = content.sender === "user" ? "user" : "bot";
             await addConversationMessage(conversationId, sender, "text", { text: String(content.text ?? "") }, node.id);
           } else if (MEDIA_MESSAGE[node.type]) {
-            await addConversationMessage(conversationId, "bot", MEDIA_MESSAGE[node.type], content as Prisma.InputJsonValue, node.id);
+            const stored = node.type === "video" && content.viewOnce ? { ...content, url: "" } : content;
+            await addConversationMessage(conversationId, "bot", MEDIA_MESSAGE[node.type], stored as Prisma.InputJsonValue, node.id);
           } else if (node.type === "buttons" || node.type === "question") {
             await addConversationMessage(conversationId, "bot", node.type === "question" && content.mode === "open" ? "text" : "buttons", {
               text: String(content.text ?? ""),
@@ -180,6 +181,7 @@ export default apiHandler({
 
       if (ev.type === "video_started" || ev.type === "audio_played" || ev.type === "image_viewed") {
         data.url = String(content.url ?? "");
+        if (content.viewOnce) data.viewOnce = true;
       }
 
       await trackEvent({ leadId, funnelId, conversationId, type: ev.type, nodeId: node?.id ?? null, data });

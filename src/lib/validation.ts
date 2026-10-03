@@ -26,7 +26,7 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
   start: z.object({}).passthrough().transform(() => ({})),
   text: z.object({ text: txt(4000), sender: z.enum(["bot", "user"]).optional() }),
   image: z.object({ url, caption: optTxt(500) }),
-  video: z.object({ url, thumbnailUrl: optUrl, caption: optTxt(500), autoplay: z.boolean().optional() }),
+  video: z.object({ url, thumbnailUrl: optUrl, caption: optTxt(500), autoplay: z.boolean().optional(), viewOnce: z.boolean().optional() }),
   audio: z.object({ url, durationSec: z.number().min(0).max(3600).optional(), caption: optTxt(500) }),
   question: z.object({
     text: txt(2000),

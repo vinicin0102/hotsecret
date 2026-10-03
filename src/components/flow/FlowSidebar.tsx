@@ -117,6 +117,16 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
               <input type="checkbox" checked={!!c.autoplay} onChange={(e) => setContent({ autoplay: e.target.checked })} />
               Autoplay (sem som)
             </label>
+            <label className="checkbox" style={{ marginBottom: 6 }}>
+              <input type="checkbox" checked={!!c.viewOnce} onChange={(e) => setContent({ viewOnce: e.target.checked, ...(e.target.checked ? { autoplay: false } : {}) })} />
+              Visualização única (assiste uma vez só)
+            </label>
+            {!!c.viewOnce && (
+              <p className="hint" style={{ marginBottom: 14 }}>
+                O vídeo toca uma única vez por lead e depois aparece como “já visualizado”, mesmo recarregando a página ou recomeçando a
+                conversa. Não dá para pausar nem voltar. O link não fica na página: o servidor só libera no momento do play.
+              </p>
+            )}
           </>
         )}
 

@@ -10,8 +10,146 @@ export function ImageMessage({ url, caption }: { url: string; caption?: string }
   );
 }
 
+const PlayIcon = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+    <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />
+  </svg>
+);
+
+/**
+ * Visualização única: o link é pedido ao servidor no play (uma vez por lead), o vídeo toca até o fim
+ * sem pausar/voltar e depois vira "visualizado".
+ */
+function ViewOnceVideo({
+  thumbnailUrl,
+  caption,
+  viewed,
+  loadOnce,
+  onPlay,
+}: {
+  thumbnailUrl?: string;
+  caption?: string;
+  viewed?: boolean;
+  loadOnce?: () => Promise<string | null>;
+  onPlay?: () => void;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [phase, setPhase] = useState<"idle" | "loading" | "playing" | "done">(viewed || !loadOnce ? "done" : "idle");
+  const [src, setSrc] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [error, setError] = useState(false);
+
+  const open = async () => {
+    if (phase !== "idle" || !loadOnce) return;
+    setPhase("loading");
+    setError(false);
+    try {
+      const url = await loadOnce();
+      if (!url) return setPhase("done");
+      setSrc(url);
+      setPhase("playing");
+      onPlay?.();
+    } catch {
+      setError(true);
+      setPhase("idle");
+    }
+  };
+
+  useEffect(() => {
+    // o toque do lead ainda vale como gesto; se o navegador bloquear, o botão de play reaparece
+    if (phase === "playing" && src) ref.current?.play().catch(() => setPaused(true));
+  }, [phase, src]);
+
+  if (phase === "done") {
+    return (
+      <div className="video-once is-done">
+        <span className="once-ico" aria-hidden="true">
+          1
+        </span>
+        <div>
+          <b>Vídeo visualizado</b>
+          <small>Visualização única</small>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "playing" && src) {
+    return (
+      <div
+        className="video-msg is-playing video-once-playing"
+        // só retoma se o sistema pausou (ex.: app em segundo plano); não pausa nem volta
+        onClick={() => ref.current?.paused && void ref.current.play().catch(() => undefined)}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <video
+          ref={ref}
+          src={src}
+          playsInline
+          preload="auto"
+          disablePictureInPicture
+          controlsList="nodownload nofullscreen noremoteplayback"
+          onPlay={() => setPaused(false)}
+          onPause={() => setPaused(true)}
+          onEnded={() => {
+            setSrc(null);
+            setPhase("done");
+          }}
+          onSeeking={(e) => {
+            // impede pular/voltar pelo teclado ou por gestos do sistema
+            const v = e.currentTarget;
+            const last = Number(v.dataset.t ?? 0);
+            if (Math.abs(v.currentTime - last) > 1) v.currentTime = last;
+          }}
+          onTimeUpdate={(e) => {
+            e.currentTarget.dataset.t = String(e.currentTarget.currentTime);
+          }}
+        />
+        <span className="once-badge">1</span>
+        {paused && (
+          <button type="button" className="video-play" aria-label="Continuar vídeo">
+            <PlayIcon />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="video-msg video-once-cover" onClick={open} style={thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})` } : undefined}>
+        <span className="once-badge">1</span>
+        <button type="button" className="video-play" aria-label="Assistir vídeo de visualização única" disabled={phase === "loading"}>
+          {phase === "loading" ? <span className="once-spin" /> : <PlayIcon />}
+        </button>
+        <div className="once-label">{error ? "Não abriu. Toque para tentar de novo" : "Visualização única · toque para assistir"}</div>
+      </div>
+      {caption && <div className="caption">{caption}</div>}
+    </>
+  );
+}
+
 /** Vídeo sem barra de controles: apenas o botão de play (toque pausa/retoma). */
 export function VideoMessage({
+  viewOnce,
+  viewed,
+  loadOnce,
+  ...props
+}: {
+  url: string;
+  thumbnailUrl?: string;
+  caption?: string;
+  autoplay?: boolean;
+  viewOnce?: boolean;
+  viewed?: boolean;
+  loadOnce?: () => Promise<string | null>;
+  onPlay?: () => void;
+}) {
+  if (viewOnce) return <ViewOnceVideo thumbnailUrl={props.thumbnailUrl} caption={props.caption} viewed={viewed} loadOnce={loadOnce} onPlay={props.onPlay} />;
+  return <PlainVideo {...props} />;
+}
+
+function PlainVideo({
   url,
   thumbnailUrl,
   caption,

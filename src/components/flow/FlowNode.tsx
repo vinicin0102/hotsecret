@@ -50,7 +50,7 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
       break;
     case "video":
     case "audio":
-      body = c.url ? `${n.type === "video" ? "🎬" : "🎧"} ${String(c.caption || String(c.url).split("/").pop())}` : <i>Sem arquivo</i>;
+      body = c.url ? `${n.type === "video" ? "🎬" : "🎧"} ${c.viewOnce ? "① visualização única · " : ""}${String(c.caption || String(c.url).split("/").pop())}` : <i>Sem arquivo</i>;
       break;
     case "question":
       body = (
