@@ -150,6 +150,10 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
             ✕ Pagamento recusado
             <Handle type="source" id="payment:failed" position={Position.Right} />
           </div>
+          <div className="out other" title="Mensagens, áudios e vídeos enviados logo após a oferta. Param quando o lead clica em comprar.">
+            💬 Enquanto não compra
+            <Handle type="source" id="default" position={Position.Right} />
+          </div>
         </div>
       )}
       {hasDefaultOut && <Handle type="source" id="default" position={Position.Bottom} />}

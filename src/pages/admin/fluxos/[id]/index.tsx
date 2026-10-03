@@ -192,7 +192,7 @@ function Builder() {
     if (selected) {
       const t = selected.data.node.type;
       const c = selected.data.node.content as { mode?: string };
-      const hasDefault = !["end", "offer", "buttons"].includes(t) && !(t === "question" && c.mode === "buttons");
+      const hasDefault = !["end", "buttons"].includes(t) && !(t === "question" && c.mode === "buttons");
       if (hasDefault && !edges.some((e) => e.source === selected.id && (e.sourceHandle ?? "default") === "default")) {
         setEdges((es) => [...es, { id: shortId("e"), source: selected.id, target: node.id, sourceHandle: "default" }]);
       }

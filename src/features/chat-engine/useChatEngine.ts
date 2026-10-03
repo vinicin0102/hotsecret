@@ -2,7 +2,7 @@
 // respostas/cliques, abre o checkout e avança somente quando o servidor confirma o pagamento.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, PublicFunnel } from "@/types/flow";
-import { getNode, findStartNode, matchChoice, nextNodeId, resolveDelay } from "./engine";
+import { getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
 
@@ -55,6 +55,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const [checkoutOpened, setCheckoutOpened] = useState(false);
 
   const runId = useRef(0);
+  /** ofertas exibidas com mensagens de apoio rodando (param no clique em comprar ou na aprovação) */
+  const followUpOffers = useRef(new Set<string>());
   const started = useRef(false);
   const chatStartedSent = useRef(false);
   const advancedPayments = useRef(new Set<string>());
@@ -170,6 +172,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             push({ kind: "offer", id: lid(), nodeId: node.id, at: now() });
             track("offer_viewed", node.id);
             markChatStarted();
+            // "Enquanto não compra": mensagens/áudios de apoio logo após o card (quebra de objeções)
+            const followUp = nextNodeId(graphRef.current, node.id, "default");
+            if (followUp) {
+              followUpOffers.current.add(node.id);
+              id = followUp;
+              continue;
+            }
             return; // aguarda clique no CTA → checkout → confirmação do pagamento
           }
 
@@ -188,6 +197,15 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             continue;
 
           case "end": {
+            if (followUpOffers.current.size > 0) {
+              // dentro das mensagens de apoio, "Fim" só encerra a sequência; a oferta segue aberta
+              if (c.text) {
+                if (!(await wait(node, token))) return;
+                push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: c.text }, nodeId: node.id, at: now() });
+                track("message_viewed", node.id);
+              }
+              return;
+            }
             if (c.text) {
               if (!(await wait(node, token))) return;
               push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: c.text }, nodeId: node.id, at: now() });
@@ -199,7 +217,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           }
         }
       }
-      if (runId.current === token) setEnded(true);
+      // fim das mensagens de apoio: a oferta continua aberta esperando a compra
+      if (runId.current === token && followUpOffers.current.size === 0) setEnded(true);
     },
     [ensureUnlocked, markChatStarted, push, track, wait],
   );
@@ -258,6 +277,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const product = productId ? funnel.products[productId] : undefined;
       track("offer_clicked", offerNodeId);
       track("checkout_started", offerNodeId);
+      // quem clicou em comprar não recebe mais as mensagens de apoio
+      if (followUpOffers.current.size > 0) {
+        followUpOffers.current.clear();
+        runId.current++;
+        setTyping(false);
+        setAwaiting(null);
+      }
       if (product && transportRef.current?.mode === "live") {
         pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, eventId: `ic_${offerNodeId}_${Date.now()}` });
       }
@@ -342,6 +368,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id });
         }
         const target = nextNodeId(graphRef.current, p.offerNodeId, p.status === "APPROVED" ? "payment:approved" : "payment:failed");
+        if (target) {
+          // interrompe as mensagens de apoio que ainda estiverem rodando
+          followUpOffers.current.clear();
+          runId.current++;
+          setTyping(false);
+          setAwaiting(null);
+        }
         // busca a confirmação registrada pelo servidor antes de seguir o ramo do pagamento
         const t = transportRef.current;
         void (t ? t.poll(lastPoll.current).catch(() => null) : Promise.resolve(null)).then((r) => {
@@ -417,9 +450,20 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         restored.push({ kind: "message", id: m.id, sender: "system", type: "text", content: c, at: m.createdAt });
     }
     const savedCurrent = getNode(graphRef.current, resume.conversation.currentNodeId);
-    // só pagamentos da oferta em que o visitante parou ainda podem avançar o fluxo
+    const shownOffers = new Set(restored.flatMap((i) => (i.kind === "offer" ? [i.nodeId] : [])));
+    const seenNodes = new Set(resume.messages.map((m) => m.nodeId).filter(Boolean));
+    // ramo de pagamento ainda não exibido: a oferta parada (ou com mensagens de apoio) ainda pode avançar
+    const branchPending = (offerNodeId: string) =>
+      ![...unlockedByOffers(graphRef.current, [offerNodeId])].some((nid) => seenNodes.has(nid));
     for (const p of resume.payments) {
-      if (!(savedCurrent?.type === "offer" && p.offerNodeId === savedCurrent.id)) advancedPayments.current.add(p.id);
+      const atOffer = savedCurrent?.type === "offer" && p.offerNodeId === savedCurrent.id;
+      const followUp = !!p.offerNodeId && shownOffers.has(p.offerNodeId) && p.status === "APPROVED" && branchPending(p.offerNodeId);
+      if (!atOffer && !followUp) advancedPayments.current.add(p.id);
+    }
+    // ofertas ainda abertas com mensagens de apoio: o fim da sequência não encerra a conversa
+    for (const offerId of shownOffers) {
+      const paid = resume.payments.some((p) => p.offerNodeId === offerId && p.status === "APPROVED");
+      if (!paid && nextNodeId(graphRef.current, offerId, "default")) followUpOffers.current.add(offerId);
     }
     setItems(restored);
     setPayments(paymentMap);

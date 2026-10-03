@@ -103,6 +103,28 @@ test("upsell: comprar a 1ª oferta não libera o conteúdo da 2ª", async () => 
   assert.deepEqual([...unlockedByOffers(g, ["oA", "oB"])].sort(), ["contA", "contB", "oB"]);
 });
 
+test("mensagens de apoio: saída padrão da oferta, sem atravessar pagamentos", async () => {
+  const { followUpNodeIds, lockedNodeIds } = await import("../src/features/chat-engine/engine");
+  const t = (id: string, type: "text" | "end" = "text") => ({ id, type, content: { text: id }, settings: {}, position: { x: 0, y: 0 } }) as FlowGraph["nodes"][number];
+  const g: FlowGraph = {
+    nodes: [
+      { id: "start", type: "start", content: {} as never, settings: {}, position: { x: 0, y: 0 } },
+      t("hi"), { id: "o", type: "offer", content: { productId: "p" }, settings: {}, position: { x: 0, y: 0 } },
+      t("f1"), t("f2", "end"), t("paid"), t("fim", "end"),
+    ],
+    edges: [
+      { id: "1", source: "start", target: "hi", condition: "default" },
+      { id: "2", source: "hi", target: "o", condition: "default" },
+      { id: "3", source: "o", target: "f1", condition: "default" },
+      { id: "4", source: "f1", target: "f2", condition: "default" },
+      { id: "5", source: "o", target: "paid", condition: "payment:approved" },
+      { id: "6", source: "paid", target: "fim", condition: "default" },
+    ],
+  };
+  assert.deepEqual([...followUpNodeIds(g)].sort(), ["f1", "f2"]);
+  assert.deepEqual([...lockedNodeIds(g)].sort(), ["fim", "paid"]); // apoio é público, conteúdo pago não
+});
+
 test("resposta digitada encontra o caminho certo", async () => {
   const { matchChoice } = await import("../src/features/chat-engine/engine");
   const buttons = [

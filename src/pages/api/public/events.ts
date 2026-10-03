@@ -10,6 +10,7 @@ import { addTagToLead } from "@/services/tags";
 import { addConversationMessage } from "@/services/payments/service";
 import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
+import { followUpNodeIds } from "@/features/chat-engine/engine";
 import type { ChoiceButton } from "@/types/flow";
 
 const CLIENT_EVENTS = [
@@ -61,6 +62,8 @@ export default apiHandler({
 
     // conteúdo pago: só registra nós liberados por pagamento aprovado
     const access = await entitledNodes(funnelId, leadId);
+    // "Fim" dentro das mensagens de apoio de uma oferta não encerra a conversa
+    const followUps = followUpNodeIds(access.graph);
 
     for (const ev of body.events) {
       const node = ev.nodeId ? nodeMap.get(ev.nodeId) : undefined;
@@ -77,7 +80,7 @@ export default apiHandler({
             const tag = await prisma.tag.findUnique({ where: { id: content.tagId } });
             if (tag) await addTagToLead(leadId, tag.id, "flow");
           }
-          if (node.type === "end") {
+          if (node.type === "end" && !followUps.has(node.id)) {
             await prisma.conversation.update({ where: { id: conversationId }, data: { status: "completed", endedAt: new Date() } });
           }
           data.nodeType = node.type;

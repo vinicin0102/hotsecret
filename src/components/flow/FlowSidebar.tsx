@@ -278,6 +278,11 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
               Tudo que vier depois de <b>Pagamento aprovado</b> é o <b>conteúdo pago</b> (marcado com 🔒): fica bloqueado no servidor e só é
               entregue no chat quando o gateway confirma o pagamento. Conecte também <b>Pagamento recusado</b>.
             </p>
+            <p className="hint">
+              <b>💬 Enquanto não compra:</b> conecte essa saída a mensagens, áudios, vídeos ou botões para explicar o produto e quebrar
+              objeções logo depois do card. Elas usam o tempo de cada bloco e param assim que o lead toca em comprar ou o pagamento é
+              aprovado. O card continua disponível o tempo todo.
+            </p>
           </>
         )}
 

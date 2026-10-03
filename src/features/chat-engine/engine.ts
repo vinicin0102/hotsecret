@@ -151,6 +151,24 @@ export function lockedNodeIds(graph: FlowGraph): Set<string> {
   return locked;
 }
 
+/**
+ * Nós das mensagens de apoio ("Enquanto não compra"): alcançados pela saída padrão de uma oferta,
+ * sem passar por eventos de pagamento. Um "Fim" aqui não encerra a conversa (a oferta segue aberta).
+ */
+export function followUpNodeIds(graph: FlowGraph): Set<string> {
+  const out = new Set<string>();
+  const stack = graph.nodes
+    .filter((n) => n.type === "offer")
+    .flatMap((n) => outgoingEdges(graph, n.id).filter((e) => (e.condition || "default") === "default").map((e) => e.target));
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (out.has(id)) continue;
+    out.add(id);
+    for (const e of outgoingEdges(graph, id)) if (!e.condition?.startsWith("payment:")) stack.push(e.target);
+  }
+  return out;
+}
+
 /** Nós pagos liberados pelos pagamentos aprovados das ofertas informadas. */
 export function unlockedByOffers(graph: FlowGraph, paidOfferNodeIds: string[]): Set<string> {
   const locked = lockedNodeIds(graph);
