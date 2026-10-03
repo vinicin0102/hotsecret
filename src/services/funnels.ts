@@ -180,6 +180,7 @@ async function buildPublicFunnel(
       name: p.name,
       description: p.description,
       imageUrl: p.imageUrl,
+      videoUrl: p.videoUrl,
       originalPrice: p.originalPrice,
       price: p.price,
       externalCheckoutUrl: p.checkoutUrl ?? null,

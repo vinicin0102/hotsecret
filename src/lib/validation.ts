@@ -139,6 +139,7 @@ export const productSchema = z.object({
   name: txt(120).pipe(z.string().min(1, "Informe o nome")),
   description: optTxt(1000).nullable(),
   imageUrl: optUrl.nullable(),
+  videoUrl: optUrl.nullable(),
   originalPrice: z.number().int().min(0).max(100_000_00).nullable().optional(),
   price: z.number().int().min(100, "Preço mínimo R$ 1,00").max(100_000_00),
   checkoutUrl: optUrl.nullable(),

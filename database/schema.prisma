@@ -223,6 +223,8 @@ model Product {
   name          String
   description   String?
   imageUrl      String?
+  /// vídeo de prévia exibido no card da oferta (só com botão de play)
+  videoUrl      String?
   /// valores em centavos
   originalPrice Int?
   price         Int

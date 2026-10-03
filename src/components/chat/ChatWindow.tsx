@@ -105,6 +105,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             offer={(node?.content as OfferContent) ?? { productId: "" }}
             product={productOf(item.nodeId)}
             onCta={() => engine.openCheckout(item.nodeId)}
+            onVideoPlay={() => engine.track("video_started", item.nodeId)}
             disabled={hasPaymentFor(item.nodeId) && Object.values(payments).some((p) => p.offerNodeId === item.nodeId && p.status === "APPROVED")}
           />
         );

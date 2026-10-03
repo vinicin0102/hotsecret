@@ -1,15 +1,18 @@
 import { formatBRL } from "@/lib/format";
 import type { OfferContent, PublicProduct } from "@/types/flow";
+import { VideoMessage } from "./MediaMessages";
 
 export function OfferCard({
   offer,
   product,
   onCta,
+  onVideoPlay,
   disabled,
 }: {
   offer: OfferContent;
   product: PublicProduct | undefined;
   onCta: () => void;
+  onVideoPlay?: () => void;
   disabled?: boolean;
 }) {
   if (!product) {
@@ -18,7 +21,11 @@ export function OfferCard({
   return (
     <div className="msg-row bot">
       <div className="card-msg">
-        {product.imageUrl ? (
+        {product.videoUrl ? (
+          <div className="card-video">
+            <VideoMessage url={product.videoUrl} thumbnailUrl={product.imageUrl ?? undefined} onPlay={onVideoPlay} />
+          </div>
+        ) : product.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="card-img" src={product.imageUrl} alt={product.name} />
         ) : (

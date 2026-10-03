@@ -173,6 +173,8 @@ export interface PublicProduct {
   name: string;
   description: string | null;
   imageUrl: string | null;
+  /** vídeo de prévia do produto */
+  videoUrl?: string | null;
   originalPrice: number | null;
   price: number;
   /** checkout externo opcional (link do produto) */

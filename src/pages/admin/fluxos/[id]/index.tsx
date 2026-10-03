@@ -66,7 +66,7 @@ function Builder() {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [savedJson, setSavedJson] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [products, setProducts] = useState<(SidebarProduct & { description: string | null; imageUrl: string | null; originalPrice: number | null; checkoutUrl: string | null })[]>([]);
+  const [products, setProducts] = useState<(SidebarProduct & { description: string | null; imageUrl: string | null; videoUrl?: string | null; originalPrice: number | null; checkoutUrl: string | null })[]>([]);
   const [tags, setTags] = useState<SidebarTag[]>([]);
   const [characters, setCharacters] = useState<CharacterRow[]>([]);
   const [issues, setIssues] = useState<GraphIssue[]>([]);
@@ -426,7 +426,7 @@ function Builder() {
             products: Object.fromEntries(
               products.map((p) => [
                 p.id,
-                { id: p.id, name: p.name, description: p.description, imageUrl: p.imageUrl, originalPrice: p.originalPrice, price: p.price, externalCheckoutUrl: null },
+                { id: p.id, name: p.name, description: p.description, imageUrl: p.imageUrl, videoUrl: p.videoUrl, originalPrice: p.originalPrice, price: p.price, externalCheckoutUrl: null },
               ]),
             ),
           }}

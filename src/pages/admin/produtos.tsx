@@ -11,6 +11,7 @@ interface Product {
   name: string;
   description: string | null;
   imageUrl: string | null;
+  videoUrl: string | null;
   originalPrice: number | null;
   price: number;
   checkoutUrl: string | null;
@@ -19,8 +20,8 @@ interface Product {
   stats: { sales: number; revenue: number };
 }
 
-type Form = { id?: string; name: string; description: string; imageUrl: string; originalPrice: string; price: string; checkoutUrl: string; deliveryUrl: string; active: boolean };
-const EMPTY: Form = { name: "", description: "", imageUrl: "", originalPrice: "", price: "", checkoutUrl: "", deliveryUrl: "", active: true };
+type Form = { id?: string; name: string; description: string; imageUrl: string; videoUrl: string; originalPrice: string; price: string; checkoutUrl: string; deliveryUrl: string; active: boolean };
+const EMPTY: Form = { name: "", description: "", imageUrl: "", videoUrl: "", originalPrice: "", price: "", checkoutUrl: "", deliveryUrl: "", active: true };
 
 export default function Products() {
   const { data, reload } = useFetch<{ products: Product[] }>("/api/admin/products");
@@ -34,6 +35,7 @@ export default function Products() {
       name: form.name,
       description: form.description || null,
       imageUrl: form.imageUrl || null,
+      videoUrl: form.videoUrl || null,
       originalPrice: form.originalPrice ? parseMoneyToCents(form.originalPrice) : null,
       price: parseMoneyToCents(form.price),
       checkoutUrl: form.checkoutUrl || null,
@@ -72,12 +74,15 @@ export default function Products() {
       <div className="entity-grid">
         {data?.products.map((p) => (
           <div key={p.id} className="card entity-card">
-            {p.imageUrl ? (
+            {p.videoUrl ? (
+              <video className="thumb" src={p.videoUrl} poster={p.imageUrl || undefined} muted playsInline preload="metadata" />
+            ) : p.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img className="thumb" src={p.imageUrl} alt={p.name} />
             ) : (
               <div className="thumb" />
             )}
+            {p.videoUrl && <div className="hint">▶ Com vídeo de prévia</div>}
             <div className="row" style={{ justifyContent: "space-between" }}>
               <div className="serif" style={{ fontSize: 19 }}>
                 {p.name}
@@ -103,6 +108,7 @@ export default function Products() {
                     name: p.name,
                     description: p.description ?? "",
                     imageUrl: p.imageUrl ?? "",
+                    videoUrl: p.videoUrl ?? "",
                     originalPrice: centsToInput(p.originalPrice),
                     price: centsToInput(p.price),
                     checkoutUrl: p.checkoutUrl ?? "",
@@ -134,7 +140,12 @@ export default function Products() {
           </div>
           <div className="field">
             <label>Imagem</label>
-            <UploadInput value={form.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
+            <UploadInput value={form.imageUrl} onChange={(imageUrl) => setForm((f) => (f ? { ...f, imageUrl } : f))} />
+          </div>
+          <div className="field">
+            <label>Vídeo de prévia (opcional)</label>
+            <UploadInput value={form.videoUrl} onChange={(videoUrl) => setForm((f) => (f ? { ...f, videoUrl } : f))} accept="video/mp4,video/webm" />
+            <div className="hint">Aparece no card da oferta no lugar da imagem, só com o botão de play. A imagem vira a capa do vídeo.</div>
           </div>
           <div className="grid-2">
             <div className="field">

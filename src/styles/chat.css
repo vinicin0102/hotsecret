@@ -748,3 +748,15 @@
   transform: scale(1.06);
   background: rgba(217, 79, 125, 0.75);
 }
+
+/* vídeo de prévia no card da oferta */
+.card-msg .card-video .video-msg {
+  border-radius: 0;
+}
+.card-msg .card-video video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  min-height: 180px;
+  object-fit: cover;
+}
