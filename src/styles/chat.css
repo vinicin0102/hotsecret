@@ -849,3 +849,67 @@
   color: rgba(255, 255, 255, 0.6);
   font-size: 12px;
 }
+
+/* ---------- Vídeo de fundo + balões transparentes ---------- */
+.chat-bg-video,
+.chat-bg-dim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.chat-bg-video {
+  object-fit: cover;
+  z-index: 0;
+}
+.chat-bg-dim {
+  z-index: 0;
+}
+.has-bg-video .chat-window {
+  background: #000;
+}
+.has-bg-video .chat-window > :not(.chat-bg-video):not(.chat-bg-dim) {
+  position: relative;
+  z-index: 1;
+}
+.has-bg-video .chat-header {
+  background: rgba(10, 5, 12, 0.35);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.has-bg-video .composer {
+  background: rgba(10, 5, 12, 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+.has-bg-video .bubble.bot,
+.has-bg-video .bubble.user,
+.has-bg-video .typing,
+.has-bg-video .card-msg,
+.has-bg-video .day-sep {
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+.has-bg-video .bubble.bot {
+  background: rgba(122, 27, 68, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.has-bg-video .bubble.user {
+  background: rgba(224, 106, 145, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.has-bg-video .card-msg {
+  background: rgba(20, 8, 18, 0.38);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.has-bg-video .bubble,
+.has-bg-video .secret-note {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.has-bg-video .option-btn {
+  background: rgba(20, 8, 18, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}

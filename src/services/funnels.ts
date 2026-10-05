@@ -98,6 +98,7 @@ export function getFunnelSettings(raw: unknown): Required<FunnelSettings> {
     defaultDelayMs: s.defaultDelayMs ?? 1200,
     delay: { ...DEFAULT_FUNNEL_DELAY, ...(s.delay ?? {}) },
     tracking: s.tracking ?? {},
+    appearance: s.appearance ?? {},
     recovery: { ...DEFAULT_RECOVERY, ...(s.recovery ?? {}) },
   };
 }
@@ -219,6 +220,7 @@ async function buildPublicFunnel(
     graph,
     products: publicProducts,
     delay: getFunnelSettings(funnel.settings).delay,
+    appearance: getFunnelSettings(funnel.settings).appearance,
     tracking: publicTracking(mergeTracking(await getGlobalTracking(), (funnel.settings as FunnelSettings | null)?.tracking)),
   };
 }

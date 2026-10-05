@@ -429,6 +429,7 @@ function Builder() {
             },
             graph,
             delay: meta.settings?.delay,
+            appearance: meta.settings?.appearance,
             products: Object.fromEntries(
               products.map((p) => [
                 p.id,

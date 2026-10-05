@@ -25,6 +25,7 @@ interface Props {
 
 export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, onRestart }: Props) {
   const engine = useChatEngine(funnel, transport, resume);
+  const bgVideo = funnel.appearance?.bgVideoUrl || null;
   const { items, typing, awaiting, payments, ended } = engine;
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -188,9 +189,15 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   };
 
   return (
-    <div className={`chat-shell ${embedded ? "embedded" : ""}`}>
+    <div className={`chat-shell ${embedded ? "embedded" : ""} ${bgVideo ? "has-bg-video" : ""}`}>
       {!embedded && <Particles />}
       <div className="chat-window">
+        {bgVideo && (
+          <>
+            <video className="chat-bg-video" src={bgVideo} autoPlay muted loop playsInline preload="auto" disablePictureInPicture aria-hidden="true" />
+            <div className="chat-bg-dim" style={{ background: `rgba(8, 4, 10, ${(funnel.appearance?.bgDim ?? 35) / 100})` }} />
+          </>
+        )}
         {previewLabel && <div className="preview-banner">{previewLabel}</div>}
         <ChatHeader character={funnel.character} typing={typing} />
         <div className="chat-body" ref={bodyRef} aria-live="polite">

@@ -128,6 +128,9 @@ export const funnelMetaSchema = z.object({
         .optional(),
       recovery: recoverySchema.optional(),
       tracking: trackingIdsSchema.optional(),
+      appearance: z
+        .object({ bgVideoUrl: optUrl, bgDim: z.number().int().min(0).max(90).optional() })
+        .optional(),
     })
     .optional(),
 });

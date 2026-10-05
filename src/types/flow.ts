@@ -174,8 +174,17 @@ export interface TrackingIds {
   googleTagId?: string;
 }
 
+/** Aparência do chat */
+export interface ChatAppearance {
+  /** vídeo em loop (mudo) atrás da conversa; os balões ficam transparentes */
+  bgVideoUrl?: string;
+  /** escurecimento do vídeo de fundo, 0–90 (%) */
+  bgDim?: number;
+}
+
 export interface FunnelSettings {
   defaultDelayMs?: number;
+  appearance?: ChatAppearance;
   /** pixels deste fluxo (vazio = usa os pixels padrão de Configurações) */
   tracking?: TrackingIds;
   delay?: FunnelDelay;
@@ -216,6 +225,7 @@ export interface PublicFunnel {
   variantId?: string | null;
   delay?: FunnelDelay;
   tracking?: TrackingIds;
+  appearance?: ChatAppearance;
 }
 
 export const DEFAULT_RECOVERY: RecoverySettings = {

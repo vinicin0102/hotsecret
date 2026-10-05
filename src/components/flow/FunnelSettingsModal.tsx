@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { slugify } from "@/lib/format";
 import { withBase } from "@/lib/paths";
-import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, type FunnelDelay, type FunnelSettings, type RecoverySettings, type TrackingIds } from "@/types/flow";
+import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, type FunnelDelay, type ChatAppearance, type FunnelSettings, type RecoverySettings, type TrackingIds } from "@/types/flow";
 import { DelayEditor } from "./DelayEditor";
+import { UploadInput } from "@/components/admin/UploadInput";
 
 export interface FunnelMeta {
   id: string;
@@ -35,6 +36,7 @@ export function FunnelSettingsModal({
   const [applied, setApplied] = useState<number | null>(null);
   const [tracking, setTracking] = useState<TrackingIds>({ ...(meta.settings?.tracking ?? {}) });
   const [recovery, setRecovery] = useState<RecoverySettings>({ ...DEFAULT_RECOVERY, ...(meta.settings?.recovery ?? {}) });
+  const [appearance, setAppearance] = useState<ChatAppearance>({ bgDim: 35, ...(meta.settings?.appearance ?? {}) });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -42,7 +44,7 @@ export function FunnelSettingsModal({
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking } });
+      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking, appearance } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -109,6 +111,29 @@ export function FunnelSettingsModal({
             Usar este padrão em todas as mensagens existentes
           </button>
           {applied != null && <span className="hint">✓ {applied} bloco(s) atualizados — salve o fluxo para manter.</span>}
+        </div>
+      )}
+
+      <div className="section-title">Vídeo de fundo</div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        Toca em loop, sem som, atrás da conversa. Com vídeo, os balões ficam transparentes (efeito vidro). Use MP4 leve (até ~10 MB) para carregar
+        rápido no celular.
+      </p>
+      <div className="field">
+        <UploadInput value={appearance.bgVideoUrl ?? ""} onChange={(url) => setAppearance((a) => ({ ...a, bgVideoUrl: url }))} accept="video/mp4,video/webm" />
+      </div>
+      {appearance.bgVideoUrl && (
+        <div className="field">
+          <label htmlFor="fp-dim">Escurecer o vídeo: {appearance.bgDim ?? 35}%</label>
+          <input
+            id="fp-dim"
+            type="range"
+            min={0}
+            max={90}
+            step={5}
+            value={appearance.bgDim ?? 35}
+            onChange={(e) => setAppearance((a) => ({ ...a, bgDim: Number(e.target.value) }))}
+          />
         </div>
       )}
 
