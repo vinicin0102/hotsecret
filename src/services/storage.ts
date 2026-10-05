@@ -49,24 +49,51 @@ function supabaseConfig() {
   return url && key ? { url, key } : null;
 }
 
-let bucketReady = false;
-async function ensureBucket(cfg: { url: string; key: string }) {
-  if (bucketReady) return;
-  const res = await fetch(`${cfg.url}/storage/v1/bucket`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key, "Content-Type": "application/json" },
-    body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true, file_size_limit: MAX_UPLOAD_BYTES }),
-  });
-  // 200 = criado; 400/409 = já existe → atualiza o limite de tamanho (buckets antigos tinham 25 MB)
-  if (res.ok) bucketReady = true;
-  else if (res.status === 400 || res.status === 409) {
-    await fetch(`${cfg.url}/storage/v1/bucket/${BUCKET}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key, "Content-Type": "application/json" },
-      body: JSON.stringify({ public: true, file_size_limit: MAX_UPLOAD_BYTES }),
-    }).catch(() => undefined);
-    bucketReady = true;
-  } else throw new Error(`Supabase Storage respondeu ${res.status}`);
+const MB = 1024 * 1024;
+/** Limites tentados no bucket: o maior que o plano do Supabase aceitar (grátis = 50 MB por arquivo). */
+const LIMIT_CANDIDATES = [MAX_UPLOAD_BYTES, 50 * MB];
+/** limite efetivo do bucket em bytes (null = ainda não verificado) */
+let bucketLimit: number | null = null;
+
+async function ensureBucket(cfg: { url: string; key: string }): Promise<number> {
+  if (bucketLimit !== null) return bucketLimit;
+  const headers = { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key, "Content-Type": "application/json" };
+  const read = async () => {
+    const r = await fetch(`${cfg.url}/storage/v1/bucket/${BUCKET}`, { headers });
+    if (!r.ok) return null;
+    const b = (await r.json()) as { file_size_limit?: number | null };
+    return b.file_size_limit ?? 0; // 0 = sem limite no bucket (vale o limite do projeto)
+  };
+  let current = await read();
+  if (current === null) {
+    // cria com o maior limite aceito
+    for (const limit of LIMIT_CANDIDATES) {
+      const r = await fetch(`${cfg.url}/storage/v1/bucket`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true, file_size_limit: limit }),
+      });
+      if (r.ok) break;
+      console.warn("[storage] criar bucket com", limit / MB, "MB:", r.status, (await r.text()).slice(0, 200));
+    }
+    current = await read();
+    if (current === null) throw new Error("Não foi possível criar o bucket no Supabase");
+  }
+  if (current > 0 && current < MAX_UPLOAD_BYTES) {
+    // buckets antigos tinham 25 MB: tenta subir o limite até o máximo do plano
+    for (const limit of LIMIT_CANDIDATES.filter((l) => l > current!)) {
+      const r = await fetch(`${cfg.url}/storage/v1/bucket/${BUCKET}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ public: true, file_size_limit: limit }),
+      });
+      if (r.ok) break;
+      console.warn("[storage] limite de", limit / MB, "MB recusado:", r.status, (await r.text()).slice(0, 200));
+    }
+    current = (await read()) ?? current;
+  }
+  bucketLimit = current > 0 ? current : MAX_UPLOAD_BYTES;
+  return bucketLimit;
 }
 
 export interface UploadTicket {
@@ -74,15 +101,31 @@ export interface UploadTicket {
   uploadUrl?: string;
   publicUrl?: string;
   maxServerBytes: number;
+  /** tamanho máximo aceito pelo Supabase neste projeto */
+  maxDirectBytes?: number;
 }
 
+export class UploadTooLargeError extends Error {}
+
 /** Decide como o navegador deve enviar o arquivo. */
-export async function createUploadTicket(mime: string): Promise<UploadTicket> {
+export async function createUploadTicket(mime: string, size = 0): Promise<UploadTicket> {
   const maxServerBytes = process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL ? MAX_SERVER_UPLOAD_BYTES : MAX_UPLOAD_BYTES;
   const cfg = supabaseConfig();
   if (!cfg) return { mode: "server", maxServerBytes };
+  let limit: number;
   try {
-    await ensureBucket(cfg);
+    limit = await ensureBucket(cfg);
+  } catch (err) {
+    console.error("[storage] Supabase indisponível, usando upload pelo servidor", err);
+    return { mode: "server", maxServerBytes };
+  }
+  if (size > limit) {
+    throw new UploadTooLargeError(
+      `Arquivo de ${(size / MB).toFixed(0)} MB: o armazenamento (Supabase) deste projeto aceita até ${(limit / MB).toFixed(0)} MB por arquivo. ` +
+        "No plano grátis do Supabase o máximo é 50 MB — comprima o vídeo (ex.: 720p) ou cole o link de um vídeo hospedado em outro lugar.",
+    );
+  }
+  try {
     const path = `uploads/${Date.now()}-${randomBytes(8).toString("hex")}.${ALLOWED_MIME[mime]}`;
     const res = await fetch(`${cfg.url}/storage/v1/object/upload/sign/${BUCKET}/${path}`, {
       method: "POST",
@@ -98,6 +141,7 @@ export async function createUploadTicket(mime: string): Promise<UploadTicket> {
       uploadUrl: `${cfg.url}/storage/v1${signed.startsWith("/") ? "" : "/"}${signed}`,
       publicUrl: `${cfg.url}/storage/v1/object/public/${BUCKET}/${path}`,
       maxServerBytes,
+      maxDirectBytes: limit,
     };
   } catch (err) {
     console.error("[storage] Supabase indisponível, usando upload pelo servidor", err);

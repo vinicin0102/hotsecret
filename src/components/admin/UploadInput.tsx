@@ -15,6 +15,7 @@ export function UploadInput({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [pct, setPct] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const isImage = accept.startsWith("image");
 
@@ -23,7 +24,8 @@ export function UploadInput({
     setBusy(true);
     setErr(null);
     try {
-      onChange(await uploadFile(file));
+      setPct(null);
+      onChange(await uploadFile(file, setPct));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Falha no upload");
     } finally {
@@ -41,7 +43,7 @@ export function UploadInput({
         )}
         <input className="input" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
         <button type="button" className="btn btn-sm" onClick={() => ref.current?.click()} disabled={busy}>
-          {busy ? "Enviando..." : "Upload"}
+          {busy ? (pct != null ? `${pct}%` : "Enviando...") : "Upload"}
         </button>
         <input ref={ref} type="file" accept={accept} hidden onChange={(e) => pick(e.target.files?.[0])} />
       </div>

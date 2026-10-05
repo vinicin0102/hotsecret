@@ -45,8 +45,9 @@ export default function VideosPage() {
     if (!f) return;
     setError(null);
     try {
-      setBusy(`Enviando ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)...`);
-      const url = await uploadFile(f);
+      const label = `Enviando ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`;
+      setBusy(`${label}...`);
+      const url = await uploadFile(f, (pct) => setBusy(`${label}... ${pct}%`));
       await create(f.name, url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha no envio");
