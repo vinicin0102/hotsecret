@@ -114,6 +114,7 @@ export function IncomingCall({ character, onAccept, onDecline }: { character: Pu
 
 export function CallScreen({
   nodeId,
+  productId,
   character,
   transport,
   payments,
@@ -125,6 +126,8 @@ export function CallScreen({
   previewMode,
 }: {
   nodeId: string;
+  /** oferta do Cérebro (IA): produto da chamada */
+  productId?: string;
   character: PublicCharacter;
   transport: ChatTransport | null;
   payments: Record<string, PublicPaymentInfo>;
@@ -158,7 +161,7 @@ export function CallScreen({
   useEffect(() => {
     let alive = true;
     transport
-      ?.callVideo(nodeId)
+      ?.callVideo(nodeId, productId)
       .then((v) => alive && setVideo(v))
       .catch(() => alive && setVideo(null));
     const iv = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -166,7 +169,7 @@ export function CallScreen({
       alive = false;
       clearInterval(iv);
     };
-  }, [transport, nodeId]);
+  }, [transport, nodeId, productId]);
 
   // toca o trecho certo: FREE em loop até pagar; depois VIP (volta ao início do VIP no fim)
   useEffect(() => {

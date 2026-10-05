@@ -17,6 +17,8 @@ interface AiSettings {
 interface Offer {
   id: string;
   productId: string;
+  style?: "card" | "call";
+  videoId?: string;
   when?: string;
   pitch?: string;
   headline?: string;
@@ -173,7 +175,7 @@ function TestChat({ brain }: { brain: Brain }) {
       const r = await api<{
         messages: string[];
         audio: { url: string; when?: string } | null;
-        offer: { name: string; price: number; headline: string } | null;
+        offer: { name: string; price: number; headline: string; style?: string } | null;
         end: boolean;
       }>(`/api/admin/brains/${brain.id}/test`, {
         body: {
@@ -183,7 +185,9 @@ function TestChat({ brain }: { brain: Brain }) {
       const bot = [
         ...r.messages.map((m) => ({ role: "bot" as const, text: m })),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
-        ...(r.offer ? [{ role: "bot" as const, text: "", offer: `${r.offer.headline} · ${formatBRL(r.offer.price)}` }] : []),
+        ...(r.offer
+          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
+          : []),
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
       ];
       setHistory([...next, ...bot]);
@@ -216,7 +220,7 @@ function TestChat({ brain }: { brain: Brain }) {
             {h.audio ? (
               <audio src={h.audio} controls preload="none" />
             ) : h.offer ? (
-              <span className="pill">🛒 Oferta: {h.offer}</span>
+              <span className="pill">{h.offer}</span>
             ) : (
               h.text
             )}
@@ -244,6 +248,8 @@ function TestChat({ brain }: { brain: Brain }) {
 export default function CerebroPage() {
   const { data, reload } = useFetch<{ brains: Brain[] }>("/api/admin/brains");
   const { data: prod } = useFetch<{ products: Product[] }>("/api/admin/products");
+  const { data: vids } = useFetch<{ videos: { id: string; name: string }[] }>("/api/admin/videos");
+  const videos = vids?.videos ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
@@ -431,6 +437,40 @@ export default function CerebroPage() {
                       <input className="input" value={o.headline ?? ""} onChange={(e) => setOffer(i, { headline: e.target.value })} />
                     </div>
                   </div>
+                  <div className="field">
+                    <label>Formato</label>
+                    <div className="segmented">
+                      {(
+                        [
+                          ["card", "Card de compra"],
+                          ["call", "📹 Chamada de vídeo"],
+                        ] as const
+                      ).map(([s, label]) => (
+                        <button key={s} type="button" className={(o.style ?? "card") === s ? "active" : ""} onClick={() => setOffer(i, { style: s })}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {o.style === "call" && (
+                    <div className="field">
+                      <label>Vídeo da chamada</label>
+                      <select className="select" value={o.videoId ?? ""} onChange={(e) => setOffer(i, { videoId: e.target.value })}>
+                        <option value="">— selecione —</option>
+                        {videos.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="hint">
+                        Quando a IA escolher esta oferta, o lead recebe a ligação (foto, toque e vibração). Atender gera o PIX com o FREE em loop; pagou,
+                        toca o VIP com falas e upsells. Se ele recusar, a IA fica sabendo e continua a conversa — cadastre outra oferta (ex.: chamada
+                        mais curta) com “Quando oferecer: quando ele recusar a chamada”.
+                      </p>
+                      {!o.videoId && <p className="error-text">Sem vídeo, a oferta aparece como card normal.</p>}
+                    </div>
+                  )}
                   <div className="field">
                     <label>Quando oferecer</label>
                     <input

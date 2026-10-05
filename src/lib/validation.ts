@@ -165,6 +165,8 @@ const brainOfferSchema = z.object({
   pitch: optTxt(2000),
   headline: optTxt(120),
   ctaLabel: optTxt(60),
+  style: z.enum(["card", "call"]).optional(),
+  videoId: z.string().max(64).optional(),
 });
 const brainAudioSchema = z.object({ id, url: url.pipe(z.string().min(1, "Áudio sem arquivo")), when: optTxt(500) });
 

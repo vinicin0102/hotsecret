@@ -20,6 +20,8 @@ const schema = z.object({
   message: z.string().max(2000).optional(),
   /** a IA puxa a conversa (bloco com "A IA puxa a conversa") */
   start: z.boolean().optional(),
+  /** algo que o lead fez no chat (ex.: recusou a chamada de vídeo) */
+  event: z.enum(["call_declined"]).optional(),
 });
 
 type Msg = { sender: string; type: string; content: unknown };
@@ -47,11 +49,14 @@ function toTurns(messages: Msg[]): ChatTurn[] {
       case "offer":
         turns.push({
           role: "bot",
-          text: `[mostrou o card da oferta ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? formatBRL(c.price) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
+          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? formatBRL(c.price) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
         });
         break;
       case "checkout":
         turns.push({ role: "lead", text: "[tocou no botão para comprar e gerou o PIX]" });
+        break;
+      case "call_declined":
+        turns.push({ role: "lead", text: "[recusou a chamada de vídeo]" });
         break;
       case "payment_update":
         if (text) turns.push({ role: "bot", text: `[sistema: ${text}]` });
@@ -82,7 +87,10 @@ export default apiHandler({
     if (replies >= brain.maxReplies) return { messages: [], offer: null, audio: null, end: true, limit: true };
 
     const text = sanitizeText(body.message, 1000);
-    if (!body.start && !text) throw new HttpError(400, "Mensagem vazia");
+    if (!body.start && !body.event && !text) throw new HttpError(400, "Mensagem vazia");
+    if (body.event === "call_declined") {
+      await addConversationMessage(session.conversationId, "user", "call_declined", { text: "Recusou a chamada de vídeo" }, node.id);
+    }
     if (text) {
       await addConversationMessage(session.conversationId, "user", "text", { text }, node.id);
       await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "ai_message", nodeId: node.id, data: { value: text } });
@@ -120,12 +128,18 @@ export default apiHandler({
     let offer = null;
     if (reply.offer) {
       const p = reply.offer.product;
-      offer = { productId: p.id, headline: reply.offer.headline || p.name, ctaLabel: reply.offer.ctaLabel || undefined, description: undefined as string | undefined };
+      offer = {
+        productId: p.id,
+        headline: reply.offer.headline || p.name,
+        ctaLabel: reply.offer.ctaLabel || undefined,
+        description: undefined as string | undefined,
+        style: reply.offer.style === "call" && reply.offer.videoId ? ("call" as const) : ("card" as const),
+      };
       await addConversationMessage(
         session.conversationId,
         "bot",
         "offer",
-        { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, aiOfferId: reply.offer.id } as Prisma.InputJsonValue,
+        { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, aiOfferId: reply.offer.id, style: offer.style } as Prisma.InputJsonValue,
         node.id,
       );
       await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "offer_viewed", nodeId: node.id, data: { productId: p.id, ai: true } });

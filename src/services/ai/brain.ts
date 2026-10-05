@@ -22,6 +22,9 @@ export interface BrainOffer {
   pitch?: string;
   headline?: string;
   ctaLabel?: string;
+  /** card: card de compra · call: chamada de vídeo recebida (vídeo da aba Vídeos) */
+  style?: "card" | "call";
+  videoId?: string;
 }
 export interface BrainAudio {
   id: string;
@@ -104,6 +107,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>): string {
         p.description ? `  Descrição: ${p.description}` : "",
         o.when ? `  Quando oferecer: ${o.when}` : "",
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
+        o.style === "call" ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa." : "",
       ]
         .filter(Boolean)
         .join("\n");
@@ -134,7 +138,7 @@ ${brain.knowledge || "(sem conteúdo cadastrado)"}
 ${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}
 # Ofertas disponíveis
 ${offers || "(nenhuma oferta cadastrada — não ofereça produtos)"}
-Para mostrar o card de compra, coloque o offer_id em "offer_id" (no máximo uma oferta por resposta) e diga uma frase chamando para o botão. Use "" quando não for oferecer. Não repita a mesma oferta se ela já foi mostrada e o lead não demonstrou interesse novo.
+Para mostrar o card de compra (ou ligar, nas ofertas em formato de chamada), coloque o offer_id em "offer_id" (no máximo uma oferta por resposta) e diga uma frase chamando para o botão ou avisando que vai ligar. Se o histórico mostrar que o lead recusou a chamada, não ligue de novo na mesma hora: acolha e, se houver, ofereça uma opção mais curta ou mais barata. Use "" quando não for oferecer. Não repita a mesma oferta se ela já foi mostrada e o lead não demonstrou interesse novo.
 
 # Áudios gravados
 ${audios || "(nenhum áudio cadastrado)"}

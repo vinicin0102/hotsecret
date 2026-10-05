@@ -54,7 +54,7 @@ export interface CallVideo {
 export interface AiReply {
   messages: string[];
   audio: { url: string } | null;
-  offer: { productId: string; headline?: string; description?: string; ctaLabel?: string } | null;
+  offer: { productId: string; headline?: string; description?: string; ctaLabel?: string; style?: "card" | "call" } | null;
   end: boolean;
   limit?: boolean;
 }
@@ -71,9 +71,9 @@ export interface ChatTransport {
   /** link do vídeo de visualização única (null = já visualizado) */
   viewOnce(nodeId: string): Promise<string | null>;
   /** Cérebro: a IA responde (message null = a IA puxa a conversa) */
-  ai(nodeId: string, message: string | null): Promise<AiReply>;
-  /** chamada de vídeo: vídeo + linha do tempo da oferta */
-  callVideo(nodeId: string): Promise<CallVideo | null>;
+  ai(nodeId: string, message: string | null, event?: "call_declined"): Promise<AiReply>;
+  /** chamada de vídeo: vídeo + linha do tempo da oferta (productId: oferta do Cérebro) */
+  callVideo(nodeId: string, productId?: string): Promise<CallVideo | null>;
   simulatePayment?(paymentId: string, status: "APPROVED" | "FAILED"): Promise<PublicPaymentInfo | null>;
 }
 
@@ -127,13 +127,14 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
       return r.nodes;
     },
-    async callVideo(nodeId) {
-      const r = await post<{ video: CallVideo | null }>("/api/public/call", { token: getToken(), nodeId });
+    async callVideo(nodeId, productId) {
+      const r = await post<{ video: CallVideo | null }>("/api/public/call", { token: getToken(), nodeId, productId });
       return r.video;
     },
-    async ai(nodeId, message) {
+    async ai(nodeId, message, event) {
       await chain;
-      return post<AiReply>("/api/public/ai", message === null ? { token: getToken(), nodeId, start: true } : { token: getToken(), nodeId, message });
+      const body = event ? { token: getToken(), nodeId, event } : message === null ? { token: getToken(), nodeId, start: true } : { token: getToken(), nodeId, message };
+      return post<AiReply>("/api/public/ai", body);
     },
     async viewOnce(nodeId) {
       try {
@@ -199,15 +200,20 @@ export function createPreviewTransport(
     async unlock() {
       return []; // o preview já recebe o fluxo completo
     },
-    async callVideo(nodeId) {
+    async callVideo(nodeId, productId) {
       // preview (admin): lê o vídeo e os produtos pelo painel
-      const videoId = aiNode(nodeId)?.videoId;
-      if (!videoId) return null;
       const get = async <T,>(path: string) => {
         const res = await fetch(withBase(path));
         if (!res.ok) throw new ApiError(res.status, "Erro ao carregar o vídeo");
         return (await res.json()) as T;
       };
+      const cfg = aiNode(nodeId);
+      let videoId = cfg?.videoId;
+      if (!videoId && cfg?.brainId) {
+        const { brain } = await get<{ brain: { offers: { productId: string; style?: string; videoId?: string }[] } }>(`/api/admin/brains/${cfg.brainId}`);
+        videoId = brain.offers.find((o) => o.productId === productId && o.style === "call")?.videoId;
+      }
+      if (!videoId) return null;
       const [{ video }, { products: list }] = await Promise.all([
         get<{ video: { url: string; posterUrl: string | null; durationMs: number; timeline: VideoTimeline } }>(`/api/admin/videos/${videoId}`),
         get<{ products: { id: string; name: string; price: number; originalPrice: number | null; active: boolean }[] }>("/api/admin/products"),
@@ -229,11 +235,12 @@ export function createPreviewTransport(
           }),
       };
     },
-    async ai(nodeId, message) {
+    async ai(nodeId, message, event) {
       const cfg = aiNode(nodeId);
       const history = aiHistory.get(nodeId) ?? [];
       aiHistory.set(nodeId, history);
-      if (message !== null) history.push({ role: "lead", text: message });
+      if (event === "call_declined") history.push({ role: "lead", text: "[recusou a chamada de vídeo]" });
+      else if (message !== null) history.push({ role: "lead", text: message });
       if (!cfg?.brainId) return { messages: ["(preview) Selecione um cérebro neste bloco."], audio: null, offer: null, end: false };
       try {
         const r = await post<{ messages: string[]; audio: { url: string } | null; offer: AiReply["offer"]; end: boolean }>(
@@ -242,7 +249,7 @@ export function createPreviewTransport(
         );
         for (const m of r.messages) history.push({ role: "bot", text: m });
         if (r.audio) history.push({ role: "bot", text: "[enviou um áudio]" });
-        if (r.offer) history.push({ role: "bot", text: `[mostrou o card da oferta ${r.offer.headline ?? ""}]` });
+        if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
         return { messages: r.messages, audio: r.audio ? { url: r.audio.url } : null, offer: r.offer, end: r.end };
       } catch (e) {
         return { messages: [`(preview) ${e instanceof Error ? e.message : "Falha na IA"}`], audio: null, offer: null, end: false };

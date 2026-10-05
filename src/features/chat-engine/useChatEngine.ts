@@ -57,7 +57,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const [ended, setEnded] = useState(false);
   const [checkoutOpened, setCheckoutOpened] = useState(false);
   /** chamada de vídeo: tocando (ringing) ou em andamento (active) */
-  const [call, setCall] = useState<{ nodeId: string; phase: "ringing" | "active" } | null>(null);
+  /** productId/offer: chamada de uma oferta do Cérebro (IA) */
+  const [call, setCall] = useState<{ nodeId: string; phase: "ringing" | "active"; productId?: string; offer?: OfferContent } | null>(null);
+  /** produtos comprados como upsell dentro da chamada (não seguem o ramo da oferta principal) */
+  const upsellProducts = useRef(new Set<string>());
 
   const runId = useRef(0);
   /** ofertas exibidas com mensagens de apoio rodando (param no clique em comprar ou na aprovação) */
@@ -115,7 +118,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     return runId.current === token;
   }, []);
 
-  const aiTurnRef = useRef<(nodeId: string, text: string | null) => Promise<void>>(async () => undefined);
+  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined") => Promise<void>>(async () => undefined);
 
   /** Percorre o fluxo a partir de um nó até encontrar um ponto de espera. */
   const run = useCallback(
@@ -249,7 +252,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   /** Uma rodada do Cérebro: envia a mensagem do lead e mostra a resposta como se alguém estivesse digitando. */
   const aiTurn = useCallback(
-    async (nodeId: string, text: string | null) => {
+    async (nodeId: string, text: string | null, event?: "call_declined") => {
       const t = transportRef.current;
       if (!t) return;
       const token = ++runId.current;
@@ -261,7 +264,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       setTyping(true);
       let r;
       try {
-        r = await t.ai(nodeId, text);
+        r = await t.ai(nodeId, text, event);
       } catch {
         r = { messages: ["Ops, minha internet falhou aqui 😅 me manda de novo?"], audio: null, offer: null, end: false };
       }
@@ -285,7 +288,15 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       if (r.offer) {
         await sleep(700);
         if (runId.current !== token) return;
-        push({ kind: "offer", id: lid(), nodeId, productId: r.offer.productId, offer: { ...r.offer, productId: r.offer.productId }, at: now() });
+        const offer: OfferContent = { productId: r.offer.productId, headline: r.offer.headline, ctaLabel: r.offer.ctaLabel, description: r.offer.description };
+        if (r.offer.style === "call") {
+          // oferta do Cérebro em formato de chamada: toca a ligação
+          setTyping(false);
+          push({ kind: "call", id: lid(), nodeId, at: now() });
+          setCall({ nodeId, phase: "ringing", productId: r.offer.productId, offer });
+        } else {
+          push({ kind: "offer", id: lid(), nodeId, productId: r.offer.productId, offer, at: now() });
+        }
       }
       setTyping(false);
       const after = r.end ? nextNodeId(graphRef.current, nodeId, "default") : null;
@@ -448,6 +459,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         }
         // upsell comprado durante a chamada de vídeo: não segue o ramo da oferta principal
         const offerNode = getNode(graphRef.current, p.offerNodeId);
+        if (upsellProducts.current.has(p.productId)) continue;
         if (offerNode?.type === "offer" && (offerNode.content as OfferContent).productId !== p.productId) continue;
         const target = nextNodeId(graphRef.current, p.offerNodeId, p.status === "APPROVED" ? "payment:approved" : "payment:failed");
         if (target) {
@@ -607,19 +619,20 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const answerCall = useCallback(async () => {
     if (!call) return;
     const nodeId = call.nodeId;
-    setCall({ nodeId, phase: "active" });
+    setCall({ ...call, phase: "active" });
     setCallError(null);
     const node = getNode(graphRef.current, nodeId);
-    const product = funnel.products[(node?.content as OfferContent | undefined)?.productId ?? ""];
-    track("offer_clicked", nodeId, { call: "answered" });
-    track("checkout_started", nodeId);
+    const productId = call.productId ?? (node?.content as OfferContent | undefined)?.productId ?? "";
+    const product = funnel.products[productId];
+    track("offer_clicked", nodeId, { call: "answered", ...(call.productId ? { productId } : {}) });
+    track("checkout_started", nodeId, call.productId ? { productId } : undefined);
     if (product && transportRef.current?.mode === "live") {
       pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, eventId: `ic_${nodeId}_${Date.now()}` });
     }
     setCheckoutOpened(true);
     // atender já gera o PIX
     try {
-      await submitCheckout(nodeId, { method: "PIX" });
+      await submitCheckout(nodeId, { method: "PIX", ...(call.productId ? { productId: call.productId } : {}) });
     } catch (e) {
       setCallError(e instanceof Error ? e.message : "Não foi possível gerar o pagamento");
     }
@@ -630,6 +643,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     const nodeId = call.nodeId;
     setCall(null);
     track("offer_clicked", nodeId, { call: "declined" });
+    if (call.productId) {
+      // oferta do Cérebro: a IA fica sabendo da recusa e continua (ex.: oferece uma chamada mais curta)
+      void aiTurnRef.current(nodeId, null, "call_declined");
+      return;
+    }
     const decline = graphRef.current.edges.find((e) => e.source === nodeId && e.condition === "btn:decline");
     if (decline) void run(decline.target);
     else push({ kind: "offer", id: lid(), nodeId, at: now() }); // sem caminho de recusa: card normal no chat
@@ -639,11 +657,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     if (!call) return;
     const nodeId = call.nodeId;
     const node = getNode(graphRef.current, nodeId);
-    const mainProduct = (node?.content as OfferContent | undefined)?.productId;
+    const mainProduct = call.productId ?? (node?.content as OfferContent | undefined)?.productId;
     const paid = Object.values(payments).some((p) => p.offerNodeId === nodeId && p.productId === mainProduct && p.status === "APPROVED");
     setCall(null);
     // desligou antes de pagar: deixa o card no chat para comprar depois
-    if (!paid) push({ kind: "offer", id: lid(), nodeId, at: now() });
+    if (!paid) push({ kind: "offer", id: lid(), nodeId, ...(call.productId ? { productId: call.productId, offer: call.offer } : {}), at: now() });
   }, [call, payments, push]);
 
   /** upsell marcado no vídeo da chamada */
@@ -651,6 +669,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     async (productId: string) => {
       if (!call) return;
       setCallError(null);
+      upsellProducts.current.add(productId);
       track("checkout_started", call.nodeId, { productId, upsell: true });
       try {
         await submitCheckout(call.nodeId, { method: "PIX", productId });

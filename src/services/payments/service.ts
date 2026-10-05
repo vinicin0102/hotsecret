@@ -95,7 +95,15 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     // só produtos cadastrados como oferta no cérebro deste bloco
     const brainId = (node.content as { brainId?: string }).brainId;
     const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
-    productId = brain && input.productId && brainOffers(brain).some((o) => o.productId === input.productId) ? input.productId : undefined;
+    const offers = brain ? brainOffers(brain) : [];
+    let allowed = !!input.productId && offers.some((o) => o.productId === input.productId);
+    if (!allowed && input.productId) {
+      // upsells marcados nos vídeos das ofertas em chamada
+      const videoIds = offers.filter((o) => o.style === "call" && o.videoId).map((o) => o.videoId!);
+      const videos = videoIds.length ? await prisma.video.findMany({ where: { id: { in: videoIds } } }) : [];
+      allowed = videos.some((v) => ((v.timeline as { markers?: { productId?: string }[] } | null)?.markers ?? []).some((m) => m.productId === input.productId));
+    }
+    productId = allowed ? input.productId : undefined;
   }
   const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
   if (!product || !product.active) throw new HttpError(400, "Produto indisponível");

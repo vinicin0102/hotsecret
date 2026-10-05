@@ -213,7 +213,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             character={funnel.character}
             transport={transport}
             payments={payments}
-            mainProduct={productOf(engine.call.nodeId)}
+            productId={engine.call.productId}
+            mainProduct={engine.call.productId ? funnel.products[engine.call.productId] : productOf(engine.call.nodeId)}
             error={engine.callError}
             onHangUp={engine.hangUp}
             onBuyUpsell={engine.buyUpsell}
