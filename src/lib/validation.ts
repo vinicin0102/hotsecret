@@ -42,6 +42,8 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
     headline: optTxt(120),
     description: optTxt(600),
     ctaLabel: optTxt(60),
+    style: z.enum(["card", "call"]).optional(),
+    videoId: z.string().max(64).optional(),
   }),
   delivery: z.object({ text: optTxt(1000), productId: z.string().max(64).optional(), buttonLabel: optTxt(60) }),
   link: z.object({ text: optTxt(1000), url, buttonLabel: optTxt(60) }),
@@ -176,6 +178,34 @@ export const brainSchema = z.object({
   audios: z.array(brainAudioSchema).max(40).default([]),
   maxReplies: z.number().int().min(1).max(200).default(30),
   fallbackMessage: txt(300).default(""),
+});
+
+const msRange = z.object({ start: z.number().int().min(0).max(36_000_000), end: z.number().int().min(0).max(36_000_000) });
+export const videoSchema = z.object({
+  name: txt(160).pipe(z.string().min(1, "Informe o nome")),
+  url: url.pipe(z.string().min(1, "Envie o vídeo")),
+  posterUrl: optUrl.nullable(),
+  durationMs: z.number().int().min(0).max(36_000_000).default(0),
+  timeline: z
+    .object({
+      free: msRange,
+      vip: msRange,
+      chat: z.array(msRange.extend({ id, text: txt(500) })).max(200),
+      markers: z
+        .array(
+          z.object({
+            id,
+            at: z.number().int().min(0).max(36_000_000),
+            label: txt(40),
+            productId: z.string().max(64),
+            text: optTxt(300),
+            ctaLabel: optTxt(60),
+            pause: z.boolean().optional(),
+          }),
+        )
+        .max(50),
+    })
+    .optional(),
 });
 
 export const tagSchema = z.object({

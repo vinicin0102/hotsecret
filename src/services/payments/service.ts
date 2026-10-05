@@ -84,6 +84,13 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
   });
   if (!node || (node.type !== "offer" && node.type !== "ai")) throw new HttpError(400, "Oferta inválida");
   let productId = (node.content as { productId?: string }).productId;
+  if (node.type === "offer" && input.productId && input.productId !== productId) {
+    // chamada de vídeo: upsells marcados no vídeo
+    const videoId = (node.content as { videoId?: string }).videoId;
+    const video = videoId ? await prisma.video.findUnique({ where: { id: videoId } }) : null;
+    const markers = ((video?.timeline as { markers?: { productId?: string }[] } | null)?.markers ?? []) as { productId?: string }[];
+    productId = markers.some((m) => m.productId === input.productId) ? input.productId : undefined;
+  }
   if (node.type === "ai") {
     // só produtos cadastrados como oferta no cérebro deste bloco
     const brainId = (node.content as { brainId?: string }).brainId;

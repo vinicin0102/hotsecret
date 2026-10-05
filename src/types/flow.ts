@@ -84,6 +84,10 @@ export interface OfferContent {
   headline?: string;
   description?: string;
   ctaLabel?: string;
+  /** card: card de compra · call: chamada de vídeo recebida (Atender gera o PIX, Recusar segue "Recusou a chamada") */
+  style?: "card" | "call";
+  /** vídeo da chamada (aba Vídeos) */
+  videoId?: string;
 }
 export interface DeliveryContent {
   text?: string;

@@ -14,6 +14,7 @@ export type ChatItem =
   | { kind: "payment"; id: string; paymentId: string; at: string }
   | { kind: "delivery"; id: string; nodeId: string; at: string; productId?: string }
   | { kind: "link"; id: string; nodeId: string; at: string }
+  | { kind: "call"; id: string; nodeId: string; at: string }
   | { kind: "recovery"; id: string; text: string; buttonLabel: string; offerNodeId: string | null; at: string };
 
 export type Awaiting =
@@ -55,6 +56,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const [payments, setPayments] = useState<Record<string, PublicPaymentInfo>>({});
   const [ended, setEnded] = useState(false);
   const [checkoutOpened, setCheckoutOpened] = useState(false);
+  /** chamada de vídeo: tocando (ringing) ou em andamento (active) */
+  const [call, setCall] = useState<{ nodeId: string; phase: "ringing" | "active" } | null>(null);
 
   const runId = useRef(0);
   /** ofertas exibidas com mensagens de apoio rodando (param no clique em comprar ou na aprovação) */
@@ -173,6 +176,14 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
           case "offer": {
             if (!(await wait(node, token))) return;
+            if ((c as unknown as OfferContent).style === "call") {
+              // chamada de vídeo recebida: a tela de ligação aparece por cima do chat
+              push({ kind: "call", id: lid(), nodeId: node.id, at: now() });
+              setCall({ nodeId: node.id, phase: "ringing" });
+              track("offer_viewed", node.id);
+              markChatStarted();
+              return;
+            }
             push({ kind: "offer", id: lid(), nodeId: node.id, at: now() });
             track("offer_viewed", node.id);
             markChatStarted();
@@ -435,6 +446,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           const product = funnel.products[p.productId];
           pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id });
         }
+        // upsell comprado durante a chamada de vídeo: não segue o ramo da oferta principal
+        const offerNode = getNode(graphRef.current, p.offerNodeId);
+        if (offerNode?.type === "offer" && (offerNode.content as OfferContent).productId !== p.productId) continue;
         const target = nextNodeId(graphRef.current, p.offerNodeId, p.status === "APPROVED" ? "payment:approved" : "payment:failed");
         if (target) {
           // interrompe as mensagens de apoio que ainda estiverem rodando
@@ -588,7 +602,72 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transport]);
 
+  // ---------- Chamada de vídeo ----------
+  const [callError, setCallError] = useState<string | null>(null);
+  const answerCall = useCallback(async () => {
+    if (!call) return;
+    const nodeId = call.nodeId;
+    setCall({ nodeId, phase: "active" });
+    setCallError(null);
+    const node = getNode(graphRef.current, nodeId);
+    const product = funnel.products[(node?.content as OfferContent | undefined)?.productId ?? ""];
+    track("offer_clicked", nodeId, { call: "answered" });
+    track("checkout_started", nodeId);
+    if (product && transportRef.current?.mode === "live") {
+      pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, eventId: `ic_${nodeId}_${Date.now()}` });
+    }
+    setCheckoutOpened(true);
+    // atender já gera o PIX
+    try {
+      await submitCheckout(nodeId, { method: "PIX" });
+    } catch (e) {
+      setCallError(e instanceof Error ? e.message : "Não foi possível gerar o pagamento");
+    }
+  }, [call, funnel.products, submitCheckout, track]);
+
+  const declineCall = useCallback(() => {
+    if (!call) return;
+    const nodeId = call.nodeId;
+    setCall(null);
+    track("offer_clicked", nodeId, { call: "declined" });
+    const decline = graphRef.current.edges.find((e) => e.source === nodeId && e.condition === "btn:decline");
+    if (decline) void run(decline.target);
+    else push({ kind: "offer", id: lid(), nodeId, at: now() }); // sem caminho de recusa: card normal no chat
+  }, [call, push, run, track]);
+
+  const hangUp = useCallback(() => {
+    if (!call) return;
+    const nodeId = call.nodeId;
+    const node = getNode(graphRef.current, nodeId);
+    const mainProduct = (node?.content as OfferContent | undefined)?.productId;
+    const paid = Object.values(payments).some((p) => p.offerNodeId === nodeId && p.productId === mainProduct && p.status === "APPROVED");
+    setCall(null);
+    // desligou antes de pagar: deixa o card no chat para comprar depois
+    if (!paid) push({ kind: "offer", id: lid(), nodeId, at: now() });
+  }, [call, payments, push]);
+
+  /** upsell marcado no vídeo da chamada */
+  const buyUpsell = useCallback(
+    async (productId: string) => {
+      if (!call) return;
+      setCallError(null);
+      track("checkout_started", call.nodeId, { productId, upsell: true });
+      try {
+        await submitCheckout(call.nodeId, { method: "PIX", productId });
+      } catch (e) {
+        setCallError(e instanceof Error ? e.message : "Não foi possível gerar o pagamento");
+      }
+    },
+    [call, submitCheckout, track],
+  );
+
   return {
+    call,
+    callError,
+    answerCall,
+    declineCall,
+    hangUp,
+    buyUpsell,
     graph,
     items,
     typing,

@@ -92,7 +92,7 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
         return (n?.content as OfferContent | undefined)?.productId;
       },
       (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
-      (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string } | undefined);
+      (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined);
     }
     if (!token) return null;
     return createLiveTransport(() => token, { sandbox });

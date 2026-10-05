@@ -13,6 +13,7 @@ const NAV = [
   { href: "/admin/cerebro", label: "Cérebro", ico: "🧠" },
   { href: "/admin/personagens", label: "Personagens", ico: "☾" },
   { href: "/admin/produtos", label: "Produtos", ico: "◇" },
+  { href: "/admin/videos", label: "Vídeos", ico: "▶" },
   { href: "/admin/pagamentos", label: "Pagamentos", ico: "₿" },
   { href: "/admin/analytics", label: "Analytics", ico: "↗" },
 ];

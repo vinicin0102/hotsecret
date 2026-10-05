@@ -47,6 +47,7 @@ function pruneEdges(nodes: HsFlowNode[], edges: Edge[]): Edge[] {
     const src = byId.get(e.source);
     if (!src || !byId.has(e.target)) return false;
     const h = e.sourceHandle ?? "default";
+    if (h === "btn:decline") return src.type === "offer" && (src.content as { style?: string }).style === "call";
     if (h.startsWith("btn:")) {
       const buttons = ((src.content as { buttons?: { id: string }[] }).buttons ?? []).map((b) => `btn:${b.id}`);
       return buttons.includes(h);
@@ -69,6 +70,7 @@ function Builder() {
   const [products, setProducts] = useState<(SidebarProduct & { description: string | null; imageUrl: string | null; videoUrl?: string | null; originalPrice: number | null; checkoutUrl: string | null })[]>([]);
   const [tags, setTags] = useState<SidebarTag[]>([]);
   const [brains, setBrains] = useState<SidebarBrain[]>([]);
+  const [videos, setVideos] = useState<{ id: string; name: string }[]>([]);
   const [characters, setCharacters] = useState<CharacterRow[]>([]);
   const [issues, setIssues] = useState<GraphIssue[]>([]);
   const [saving, setSaving] = useState(false);
@@ -85,9 +87,11 @@ function Builder() {
       api<{ tags: SidebarTag[] }>("/api/admin/tags"),
       api<{ characters: CharacterRow[] }>("/api/admin/characters"),
       api<{ brains: SidebarBrain[] }>("/api/admin/brains").catch(() => ({ brains: [] })),
+      api<{ videos: { id: string; name: string }[] }>("/api/admin/videos").catch(() => ({ videos: [] })),
     ])
-      .then(([f, p, t, c, b]) => {
+      .then(([f, p, t, c, b, v]) => {
         setBrains(b.brains);
+        setVideos(v.videos);
         setMeta(f.funnel);
         const g = toRF(f.graph);
         setNodes(g.nodes);
@@ -131,12 +135,13 @@ function Builder() {
   const productNames = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p.name])), [products]);
   const tagNames = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t.name])), [tags]);
   const brainNames = useMemo(() => Object.fromEntries(brains.map((b) => [b.id, b.name])), [brains]);
+  const videoNames = useMemo(() => Object.fromEntries(videos.map((v) => [v.id, v.name])), [videos]);
   const paidNodes = useMemo(() => lockedNodeIds(graph), [graph]);
 
   const displayNodes = useMemo(
     () =>
       nodes.map((n) => {
-        const c = n.data.node.content as { productId?: string; tagId?: string; brainId?: string };
+        const c = n.data.node.content as { productId?: string; tagId?: string; brainId?: string; videoId?: string };
         return {
           ...n,
           selected: n.id === selectedId,
@@ -147,11 +152,12 @@ function Builder() {
             productName: c.productId ? productNames[c.productId] : undefined,
             tagName: c.tagId ? tagNames[c.tagId] : undefined,
             brainName: c.brainId ? brainNames[c.brainId] : undefined,
+            videoName: c.videoId ? videoNames[c.videoId] : undefined,
             onToggleMinimize: toggleMinimize,
           },
         };
       }),
-    [nodes, selectedId, errorNodes, paidNodes, productNames, tagNames, brainNames, toggleMinimize],
+    [nodes, selectedId, errorNodes, paidNodes, productNames, tagNames, brainNames, videoNames, toggleMinimize],
   );
 
   const onNodesChange = useCallback((changes: NodeChange<HsFlowNode>[]) => {
@@ -377,6 +383,7 @@ function Builder() {
               products={products}
               tags={tags}
               brains={brains}
+              videos={videos}
               onChange={updateNode}
               onDelete={deleteNode}
               onDuplicate={duplicateNode}

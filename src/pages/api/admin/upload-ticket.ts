@@ -4,7 +4,7 @@ import { ALLOWED_MIME, MAX_UPLOAD_BYTES, createUploadTicket } from "@/services/s
 
 const schema = z.object({
   mime: z.string().refine((m) => !!ALLOWED_MIME[m], "Tipo de arquivo não permitido"),
-  size: z.number().int().min(1).max(MAX_UPLOAD_BYTES, "Arquivo maior que 25MB"),
+  size: z.number().int().min(1).max(MAX_UPLOAD_BYTES, "Arquivo maior que 500MB"),
 });
 
 export default apiHandler({

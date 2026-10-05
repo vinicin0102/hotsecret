@@ -2,6 +2,8 @@
 import { withBase } from "@/lib/paths";
 import type { FlowNode } from "@/types/flow";
 import { metaCookies } from "./pixels";
+import type { ChatCue, TimeRange, UpsellMarker, VideoTimeline } from "@/types/video";
+import { normalizeTimeline } from "@/types/video";
 
 export interface ClientEvent {
   type: string;
@@ -37,6 +39,17 @@ export interface CheckoutForm {
   productId?: string;
 }
 
+/** Vídeo da chamada (só é pedido quando o lead atende). */
+export interface CallVideo {
+  url: string;
+  posterUrl: string | null;
+  durationMs: number;
+  free: TimeRange;
+  vip: TimeRange;
+  chat: ChatCue[];
+  markers: (UpsellMarker & { product: { id: string; name: string; price: number; originalPrice: number | null } })[];
+}
+
 /** Resposta do Cérebro (IA). */
 export interface AiReply {
   messages: string[];
@@ -59,6 +72,8 @@ export interface ChatTransport {
   viewOnce(nodeId: string): Promise<string | null>;
   /** Cérebro: a IA responde (message null = a IA puxa a conversa) */
   ai(nodeId: string, message: string | null): Promise<AiReply>;
+  /** chamada de vídeo: vídeo + linha do tempo da oferta */
+  callVideo(nodeId: string): Promise<CallVideo | null>;
   simulatePayment?(paymentId: string, status: "APPROVED" | "FAILED"): Promise<PublicPaymentInfo | null>;
 }
 
@@ -112,6 +127,10 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
       return r.nodes;
     },
+    async callVideo(nodeId) {
+      const r = await post<{ video: CallVideo | null }>("/api/public/call", { token: getToken(), nodeId });
+      return r.video;
+    },
     async ai(nodeId, message) {
       await chain;
       return post<AiReply>("/api/public/ai", message === null ? { token: getToken(), nodeId, start: true } : { token: getToken(), nodeId, message });
@@ -144,7 +163,7 @@ export function createPreviewTransport(
   graphOfferProduct: (nodeId: string) => string | undefined,
   nodeUrl: (nodeId: string) => string | undefined = () => undefined,
   /** preview do Cérebro: cérebro e objetivo do bloco (conversa de teste pelo painel, nada é gravado) */
-  aiNode: (nodeId: string) => { brainId?: string; goal?: string } | undefined = () => undefined,
+  aiNode: (nodeId: string) => { brainId?: string; goal?: string; videoId?: string } | undefined = () => undefined,
 ): ChatTransport {
   const opened = new Set<string>();
   const aiHistory = new Map<string, { role: "lead" | "bot"; text: string }[]>();
@@ -179,6 +198,36 @@ export function createPreviewTransport(
     },
     async unlock() {
       return []; // o preview já recebe o fluxo completo
+    },
+    async callVideo(nodeId) {
+      // preview (admin): lê o vídeo e os produtos pelo painel
+      const videoId = aiNode(nodeId)?.videoId;
+      if (!videoId) return null;
+      const get = async <T,>(path: string) => {
+        const res = await fetch(withBase(path));
+        if (!res.ok) throw new ApiError(res.status, "Erro ao carregar o vídeo");
+        return (await res.json()) as T;
+      };
+      const [{ video }, { products: list }] = await Promise.all([
+        get<{ video: { url: string; posterUrl: string | null; durationMs: number; timeline: VideoTimeline } }>(`/api/admin/videos/${videoId}`),
+        get<{ products: { id: string; name: string; price: number; originalPrice: number | null; active: boolean }[] }>("/api/admin/products"),
+      ]);
+      const tl = normalizeTimeline(video.timeline, video.durationMs);
+      const byId = new Map(list.filter((p) => p.active).map((p) => [p.id, p]));
+      return {
+        url: video.url,
+        posterUrl: video.posterUrl,
+        durationMs: video.durationMs,
+        free: tl.free,
+        vip: tl.vip,
+        chat: tl.chat,
+        markers: tl.markers
+          .filter((m) => byId.has(m.productId))
+          .map((m) => {
+            const p = byId.get(m.productId)!;
+            return { ...m, product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice } };
+          }),
+      };
     },
     async ai(nodeId, message) {
       const cfg = aiNode(nodeId);

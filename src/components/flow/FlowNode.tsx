@@ -11,6 +11,7 @@ export type HsNodeData = {
   productName?: string;
   tagName?: string;
   brainName?: string;
+  videoName?: string;
   onToggleMinimize?: (id: string) => void;
 };
 export type HsFlowNode = Node<HsNodeData, "hs">;
@@ -67,6 +68,7 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
     case "offer":
       body = (
         <>
+          {c.style === "call" && <div style={{ color: "#4ade80", fontWeight: 700 }}>📹 Chamada de vídeo{data.videoName ? ` · ${data.videoName}` : ""}</div>}
           <b style={{ color: "#fff" }}>{data.productName ?? "Selecione um produto"}</b>
           {(c as unknown as OfferContent).headline ? <div>{String(c.headline)}</div> : null}
           <div className="dim" style={{ marginTop: 4 }}>CTA: {String(c.ctaLabel || "QUERO ACESSAR ❤️")}</div>
@@ -176,10 +178,17 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
             ✕ Pagamento recusado
             <Handle type="source" id="payment:failed" position={Position.Right} />
           </div>
-          <div className="out other" title="Mensagens, áudios e vídeos enviados logo após a oferta. Param quando o lead clica em comprar.">
-            💬 Enquanto não compra
-            <Handle type="source" id="default" position={Position.Right} />
-          </div>
+          {c.style === "call" ? (
+            <div className="out failed" title="O lead tocou em Recusar na chamada (ex.: oferecer uma chamada mais curta e mais barata)">
+              📵 Recusou a chamada
+              <Handle type="source" id="btn:decline" position={Position.Right} />
+            </div>
+          ) : (
+            <div className="out other" title="Mensagens, áudios e vídeos enviados logo após a oferta. Param quando o lead clica em comprar.">
+              💬 Enquanto não compra
+              <Handle type="source" id="default" position={Position.Right} />
+            </div>
+          )}
         </div>
       )}
       {hasDefaultOut && <Handle type="source" id="default" position={Position.Bottom} />}

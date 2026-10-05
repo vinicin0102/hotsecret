@@ -12,6 +12,7 @@ import { OfferCard } from "./OfferCard";
 import { CheckoutCard } from "./CheckoutCard";
 import { PaymentStatus } from "./PaymentStatus";
 import { DeliveryCard } from "./DeliveryCard";
+import { CallScreen, IncomingCall } from "./VideoCall";
 import { Particles } from "./Particles";
 
 interface Props {
@@ -170,6 +171,12 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           </div>
         );
       }
+      case "call":
+        return (
+          <div key={item.id} className="msg-row system">
+            <div className="bubble system">📹 Chamada de vídeo de {funnel.character.name}</div>
+          </div>
+        );
       case "recovery":
         return (
           <div key={item.id}>
@@ -199,6 +206,21 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           </>
         )}
         {previewLabel && <div className="preview-banner">{previewLabel}</div>}
+        {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}
+        {engine.call?.phase === "active" && (
+          <CallScreen
+            nodeId={engine.call.nodeId}
+            character={funnel.character}
+            transport={transport}
+            payments={payments}
+            mainProduct={productOf(engine.call.nodeId)}
+            error={engine.callError}
+            onHangUp={engine.hangUp}
+            onBuyUpsell={engine.buyUpsell}
+            onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
+            previewMode={transport?.mode === "preview"}
+          />
+        )}
         <ChatHeader character={funnel.character} typing={typing} />
         <div className="chat-body" ref={bodyRef} aria-live="polite">
           <div className="day-sep">Hoje</div>

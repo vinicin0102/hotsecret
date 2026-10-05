@@ -441,3 +441,18 @@ model Brain {
   @@map("brains")
 }
 
+
+/// Vídeo da chamada/sala: linha do tempo com trecho FREE (antes de pagar), VIP (depois), falas no chat e upsells
+model Video {
+  id         String   @id @default(cuid())
+  name       String
+  url        String
+  posterUrl  String?
+  durationMs Int      @default(0)
+  /// { free: {start,end}, vip: {start,end}, chat: [{id,start,end,text}], markers: [{id,at,label,productId,text,ctaLabel,pause}] } (ms)
+  timeline   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("videos")
+}

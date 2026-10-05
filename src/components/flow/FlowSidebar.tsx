@@ -28,6 +28,7 @@ interface Props {
   products: SidebarProduct[];
   tags: SidebarTag[];
   brains?: SidebarBrain[];
+  videos?: { id: string; name: string }[];
   onChange: (node: FlowNode) => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -43,7 +44,7 @@ const VARIABLES = [
   ["resposta", "Variável livre: resposta"],
 ];
 
-export function FlowSidebar({ node, products, tags, brains = [], onChange, onDelete, onDuplicate, onClose, readOnly }: Props) {
+export function FlowSidebar({ node, products, tags, brains = [], videos = [], onChange, onDelete, onDuplicate, onClose, readOnly }: Props) {
   const meta = NODE_META[node.type];
   const c = node.content as unknown as Record<string, unknown>;
   const s = node.settings ?? {};
@@ -322,6 +323,50 @@ export function FlowSidebar({ node, products, tags, brains = [], onChange, onDel
 
         {node.type === "offer" && (
           <>
+            <div className="field">
+              <label>Formato da oferta</label>
+              <div className="segmented">
+                {(
+                  [
+                    ["card", "Card de compra"],
+                    ["call", "📹 Chamada de vídeo"],
+                  ] as const
+                ).map(([s, label]) => (
+                  <button key={s} type="button" className={((c.style as string) ?? "card") === s ? "active" : ""} onClick={() => setContent({ style: s })}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {c.style === "call" && (
+              <>
+                <div className="field">
+                  <label htmlFor="of-video">Vídeo da chamada</label>
+                  <select id="of-video" className="select" value={String(c.videoId ?? "")} onChange={(e) => setContent({ videoId: e.target.value })}>
+                    <option value="">— selecione —</option>
+                    {videos.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                  {c.videoId ? (
+                    <a className="hint" href={withBase(`/admin/videos/${String(c.videoId)}`)} target="_blank" rel="noreferrer">
+                      Editar trechos FREE/VIP, falas e upsells ↗
+                    </a>
+                  ) : (
+                    <p className="hint">
+                      Envie e edite o vídeo na aba <a href={withBase("/admin/videos")}>▶ Vídeos</a>.
+                    </p>
+                  )}
+                </div>
+                <p className="hint">
+                  Aparece uma ligação de vídeo com a foto do personagem, toque de chamada e vibração. <b>Atender</b> gera o PIX na hora com o
+                  trecho FREE em loop; pagou, toca o VIP com as falas e os upsells marcados. <b>Recusar</b> segue a saída “Recusou a chamada” (ex.:
+                  uma chamada mais curta e mais barata).
+                </p>
+              </>
+            )}
             <div className="field">
               <label>Produto</label>
               <select className="select" value={String(c.productId ?? "")} onChange={(e) => setContent({ productId: e.target.value })}>

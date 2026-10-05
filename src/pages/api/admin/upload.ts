@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let size = 0;
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > MAX_UPLOAD_BYTES) throw new HttpError(413, "Arquivo maior que 25MB");
+      if (size > MAX_UPLOAD_BYTES) throw new HttpError(413, "Arquivo grande demais");
       chunks.push(Buffer.from(chunk));
     }
     const buf = Buffer.concat(chunks);

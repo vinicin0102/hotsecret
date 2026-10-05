@@ -20,7 +20,8 @@ export const ALLOWED_MIME: Record<string, string> = {
   "audio/wav": "wav",
 };
 
-export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+/** Limite do upload direto (Supabase Storage). No plano grátis do Supabase o máximo por arquivo é 50 MB. */
+export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 /** Corpo máximo aceito pelas funções da Vercel (~4,5 MB). */
 export const MAX_SERVER_UPLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -56,9 +57,16 @@ async function ensureBucket(cfg: { url: string; key: string }) {
     headers: { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key, "Content-Type": "application/json" },
     body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true, file_size_limit: MAX_UPLOAD_BYTES }),
   });
-  // 200 = criado; 400/409 = já existe
-  if (res.ok || res.status === 400 || res.status === 409) bucketReady = true;
-  else throw new Error(`Supabase Storage respondeu ${res.status}`);
+  // 200 = criado; 400/409 = já existe → atualiza o limite de tamanho (buckets antigos tinham 25 MB)
+  if (res.ok) bucketReady = true;
+  else if (res.status === 400 || res.status === 409) {
+    await fetch(`${cfg.url}/storage/v1/bucket/${BUCKET}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key, "Content-Type": "application/json" },
+      body: JSON.stringify({ public: true, file_size_limit: MAX_UPLOAD_BYTES }),
+    }).catch(() => undefined);
+    bucketReady = true;
+  } else throw new Error(`Supabase Storage respondeu ${res.status}`);
 }
 
 export interface UploadTicket {
