@@ -54,7 +54,15 @@ export interface CallVideo {
 export interface AiReply {
   messages: string[];
   audio: { url: string } | null;
-  offer: { productId: string; headline?: string; description?: string; ctaLabel?: string; style?: "card" | "call" } | null;
+  offer: {
+    productId: string;
+    headline?: string;
+    description?: string;
+    ctaLabel?: string;
+    style?: "card" | "call";
+    downsellProductId?: string;
+    downsellText?: string;
+  } | null;
   end: boolean;
   limit?: boolean;
 }
@@ -211,7 +219,7 @@ export function createPreviewTransport(
       let videoId = cfg?.videoId;
       if (!videoId && cfg?.brainId) {
         const { brain } = await get<{ brain: { offers: { productId: string; style?: string; videoId?: string }[] } }>(`/api/admin/brains/${cfg.brainId}`);
-        videoId = brain.offers.find((o) => o.productId === productId && o.style === "call")?.videoId;
+        videoId = brain.offers.find((o) => (o.productId === productId || (o as { downsellProductId?: string }).downsellProductId === productId) && o.style === "call")?.videoId;
       }
       if (!videoId) return null;
       const [{ video }, { products: list }] = await Promise.all([

@@ -12,7 +12,7 @@ import { OfferCard } from "./OfferCard";
 import { CheckoutCard } from "./CheckoutCard";
 import { PaymentStatus } from "./PaymentStatus";
 import { DeliveryCard } from "./DeliveryCard";
-import { CallScreen, IncomingCall } from "./VideoCall";
+import { CallScreen, IncomingCall, PixPopup } from "./VideoCall";
 import { Particles } from "./Particles";
 
 interface Props {
@@ -207,14 +207,28 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         )}
         {previewLabel && <div className="preview-banner">{previewLabel}</div>}
         {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}
+        {engine.call?.phase === "pix" && (
+          <PixPopup
+            character={funnel.character}
+            product={funnel.products[engine.call.payProductId ?? ""]}
+            payment={Object.values(payments)
+              .filter((p) => p.offerNodeId === engine.call!.nodeId && p.productId === engine.call!.payProductId)
+              .sort((a, b) => (a.status === "FAILED" ? 1 : 0) - (b.status === "FAILED" ? 1 : 0))[0]}
+            downsell={engine.call.downsell}
+            downsellText={(engine.call.offer ?? (getNode(engine.graph, engine.call.nodeId)?.content as OfferContent | undefined))?.downsellText}
+            error={engine.callError}
+            onClose={engine.hangUp}
+            onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
+          />
+        )}
         {engine.call?.phase === "active" && (
           <CallScreen
             nodeId={engine.call.nodeId}
             character={funnel.character}
             transport={transport}
             payments={payments}
-            productId={engine.call.productId}
-            mainProduct={engine.call.productId ? funnel.products[engine.call.productId] : productOf(engine.call.nodeId)}
+            productId={engine.call.payProductId ?? engine.call.productId}
+            mainProduct={funnel.products[engine.call.payProductId ?? engine.call.productId ?? ""] ?? productOf(engine.call.nodeId)}
             error={engine.callError}
             onHangUp={engine.hangUp}
             onBuyUpsell={engine.buyUpsell}

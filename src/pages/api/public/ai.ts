@@ -134,6 +134,8 @@ export default apiHandler({
         ctaLabel: reply.offer.ctaLabel || undefined,
         description: undefined as string | undefined,
         style: reply.offer.style === "call" && reply.offer.videoId ? ("call" as const) : ("card" as const),
+        downsellProductId: reply.offer.downsellProductId || undefined,
+        downsellText: reply.offer.downsellText || undefined,
       };
       await addConversationMessage(
         session.conversationId,

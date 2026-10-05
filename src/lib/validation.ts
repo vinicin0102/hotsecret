@@ -44,6 +44,8 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
     ctaLabel: optTxt(60),
     style: z.enum(["card", "call"]).optional(),
     videoId: z.string().max(64).optional(),
+    downsellProductId: z.string().max(64).optional(),
+    downsellText: optTxt(200),
   }),
   delivery: z.object({ text: optTxt(1000), productId: z.string().max(64).optional(), buttonLabel: optTxt(60) }),
   link: z.object({ text: optTxt(1000), url, buttonLabel: optTxt(60) }),
@@ -167,6 +169,8 @@ const brainOfferSchema = z.object({
   ctaLabel: optTxt(60),
   style: z.enum(["card", "call"]).optional(),
   videoId: z.string().max(64).optional(),
+  downsellProductId: z.string().max(64).optional(),
+  downsellText: optTxt(200),
 });
 const brainAudioSchema = z.object({ id, url: url.pipe(z.string().min(1, "Áudio sem arquivo")), when: optTxt(500) });
 

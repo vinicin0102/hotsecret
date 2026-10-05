@@ -181,13 +181,13 @@ async function buildPublicFunnel(
   };
   const productIds = fullGraph.nodes
     .filter((n) => n.type === "offer")
-    .map((n) => (n.content as { productId?: string }).productId)
+    .flatMap((n) => [(n.content as { productId?: string }).productId, (n.content as { downsellProductId?: string }).downsellProductId])
     .filter((v): v is string => !!v);
   // ofertas dos cérebros usados nos blocos de IA
   const brainIds = fullGraph.nodes.filter((n) => n.type === "ai").map((n) => (n.content as { brainId?: string }).brainId).filter((v): v is string => !!v);
   if (brainIds.length) {
     for (const b of await prisma.brain.findMany({ where: { id: { in: brainIds } }, select: { offers: true } })) {
-      productIds.push(...brainOffers(b).map((o) => o.productId));
+      productIds.push(...brainOffers(b).flatMap((o) => [o.productId, o.downsellProductId].filter((v): v is string => !!v)));
     }
   }
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, active: true } });

@@ -28,7 +28,9 @@ export default apiHandler({
     if (node.type === "ai") {
       const brainId = (node.content as AiContent).brainId;
       const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
-      videoId = brain ? brainOffers(brain).find((o) => o.productId === productId && o.style === "call")?.videoId : undefined;
+      videoId = brain
+        ? brainOffers(brain).find((o) => (o.productId === productId || o.downsellProductId === productId) && o.style === "call")?.videoId
+        : undefined;
     }
     const video = videoId ? await prisma.video.findUnique({ where: { id: videoId } }) : null;
     if (!video) return { video: null };

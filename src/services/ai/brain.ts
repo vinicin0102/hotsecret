@@ -25,6 +25,9 @@ export interface BrainOffer {
   /** card: card de compra · call: chamada de vídeo recebida (vídeo da aba Vídeos) */
   style?: "card" | "call";
   videoId?: string;
+  /** chamada: produto do pop-up quando o lead recusa */
+  downsellProductId?: string;
+  downsellText?: string;
 }
 export interface BrainAudio {
   id: string;

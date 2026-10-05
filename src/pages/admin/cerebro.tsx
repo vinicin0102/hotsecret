@@ -19,6 +19,8 @@ interface Offer {
   productId: string;
   style?: "card" | "call";
   videoId?: string;
+  downsellProductId?: string;
+  downsellText?: string;
   when?: string;
   pitch?: string;
   headline?: string;
@@ -464,11 +466,32 @@ export default function CerebroPage() {
                         ))}
                       </select>
                       <p className="hint">
-                        Quando a IA escolher esta oferta, o lead recebe a ligação (foto, toque e vibração). Atender gera o PIX com o FREE em loop; pagou,
-                        toca o VIP com falas e upsells. Se ele recusar, a IA fica sabendo e continua a conversa — cadastre outra oferta (ex.: chamada
-                        mais curta) com “Quando oferecer: quando ele recusar a chamada”.
+                        Quando a IA escolher esta oferta, o lead recebe a ligação (foto, toque e vibração). Atender abre um pop-up só com o código PIX;
+                        Recusar abre o mesmo pop-up com o downsell. O vídeo só começa depois do pagamento aprovado.
                       </p>
                       {!o.videoId && <p className="error-text">Sem vídeo, a oferta aparece como card normal.</p>}
+                      <div className="grid-2" style={{ marginTop: 10 }}>
+                        <div className="field">
+                          <label>Downsell ao recusar (opcional)</label>
+                          <select className="select" value={o.downsellProductId ?? ""} onChange={(e) => setOffer(i, { downsellProductId: e.target.value })}>
+                            <option value="">— nenhum (a IA continua a conversa) —</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} · {formatBRL(p.price)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label>Texto do pop-up do downsell</label>
+                          <input
+                            className="input"
+                            placeholder="Tudo bem 🥺 que tal uma chamada mais curtinha?"
+                            value={o.downsellText ?? ""}
+                            onChange={(e) => setOffer(i, { downsellText: e.target.value })}
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                   <div className="field">

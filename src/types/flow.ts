@@ -88,6 +88,10 @@ export interface OfferContent {
   style?: "card" | "call";
   /** vídeo da chamada (aba Vídeos) */
   videoId?: string;
+  /** chamada: produto oferecido quando o lead recusa (ex.: chamada mais curta e mais barata) */
+  downsellProductId?: string;
+  /** chamada: texto do pop-up do downsell */
+  downsellText?: string;
 }
 export interface DeliveryContent {
   text?: string;

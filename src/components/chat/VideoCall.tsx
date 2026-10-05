@@ -112,6 +112,104 @@ export function IncomingCall({ character, onAccept, onDecline }: { character: Pu
   );
 }
 
+/** Pop-up só com o código PIX (copia e cola), ao atender ou ao recusar (downsell). */
+export function PixPopup({
+  character,
+  product,
+  payment,
+  downsell,
+  downsellText,
+  error,
+  onClose,
+  onSimulate,
+}: {
+  character: PublicCharacter;
+  product: PublicProduct | undefined;
+  payment: PublicPaymentInfo | undefined;
+  downsell?: boolean;
+  downsellText?: string;
+  error: string | null;
+  onClose: () => void;
+  onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const code = payment?.pixQrCode ?? "";
+  const failed = payment?.status === "FAILED";
+  const copy = async () => {
+    if (!code) return;
+    setCopied(true);
+    try {
+      await Promise.race([navigator.clipboard.writeText(code), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 1500))]);
+    } catch {
+      // navegadores sem permissão de clipboard: seleciona o texto para copiar manualmente
+      const el = document.getElementById("pix-code-text");
+      if (el) window.getSelection()?.selectAllChildren(el);
+    }
+    setTimeout(() => setCopied(false), 2500);
+  };
+  return (
+    <div className="call-overlay pix" role="dialog" aria-label="Pagamento PIX">
+      {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
+      <button className="pix-close" onClick={onClose} aria-label="Fechar">
+        ✕
+      </button>
+      <div className="pix-box">
+        {character.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="pix-avatar" src={character.avatarUrl} alt="" />
+        ) : (
+          <div className="pix-avatar">{character.name.slice(0, 1)}</div>
+        )}
+        <div className="pix-title">
+          {downsell ? downsellText || "Tudo bem 🥺 que tal uma chamada mais curtinha?" : `${character.name} está te esperando na chamada 📹`}
+        </div>
+        {product && (
+          <div className="pix-product">
+            {product.name}
+            <b>
+              {product.originalPrice && product.originalPrice > product.price ? <s>{formatBRL(product.originalPrice)}</s> : null} {formatBRL(product.price)}
+            </b>
+          </div>
+        )}
+        {error ? (
+          <div className="error-text">{error}</div>
+        ) : !payment ? (
+          <div className="pix-wait">
+            <span className="once-spin" /> Gerando o PIX...
+          </div>
+        ) : failed ? (
+          <div className="error-text">Pagamento não aprovado. Feche e tente de novo.</div>
+        ) : (
+          <>
+            <div className="pix-label">PIX copia e cola</div>
+            <div className="pix-code-box" id="pix-code-text" onClick={copy}>
+              {code}
+            </div>
+            <button className="btn btn-primary btn-block cta-glow pix-copy" onClick={copy} disabled={!code}>
+              {copied ? "CÓDIGO COPIADO ✓" : "COPIAR CÓDIGO PIX"}
+            </button>
+            <ol className="pix-steps">
+              <li>Abra o app do seu banco e escolha PIX → Copia e cola</li>
+              <li>Cole o código e confirme o pagamento</li>
+              <li>A chamada começa sozinha assim que o PIX for confirmado</li>
+            </ol>
+            <div className="pix-wait">
+              <span className="once-spin" /> Aguardando o pagamento...
+            </div>
+            {onSimulate && payment && (
+              <div className="row" style={{ justifyContent: "center", marginTop: 8 }}>
+                <button className="btn btn-sm" onClick={() => onSimulate(payment.id, "APPROVED")}>
+                  Simular aprovação
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function CallScreen({
   nodeId,
   productId,
@@ -171,12 +269,11 @@ export function CallScreen({
     };
   }, [transport, nodeId, productId]);
 
-  // toca o trecho certo: FREE em loop até pagar; depois VIP (volta ao início do VIP no fim)
+  // o vídeo só abre depois do pagamento: toca do começo e, no fim do VIP, volta ao início do VIP
   useEffect(() => {
     const v = vRef.current;
-    if (!v || !video) return;
-    const range = paid ? video.vip : video.free;
-    v.currentTime = range.start / 1000;
+    if (!v || !video || !paid) return;
+    v.currentTime = Math.min(video.free.start, video.vip.start) / 1000;
     v.muted = false;
     v.play().catch(() => {
       v.muted = true;
@@ -193,8 +290,9 @@ export function CallScreen({
       const { paid, upsell, boughtUpsell } = live.current;
       if (v && video) {
         const ms = v.currentTime * 1000;
-        const range = paid ? video.vip : video.free;
-        if (ms >= range.end || ms < range.start - 300) v.currentTime = range.start / 1000;
+        if (!paid) {
+          if (!v.paused) v.pause();
+        } else if (ms >= video.vip.end) v.currentTime = video.vip.start / 1000;
         // atualiza a tela ~10x por segundo (falas na tela)
         if (Math.abs(ms - lastT) >= 100) {
           lastT = ms;
@@ -289,31 +387,6 @@ export function CallScreen({
               <b>{character.name}</b> {c.text}
             </div>
           ))}
-        </div>
-      )}
-
-      {!paid && (
-        <div className="call-panel">
-          <div className="call-panel-title">
-            Para continuar a chamada
-            {mainProduct && (
-              <b>
-                {" "}
-                · {mainProduct.name} · {formatBRL(mainProduct.price)}
-              </b>
-            )}
-          </div>
-          {error && <div className="error-text">{error}</div>}
-          {mainPayment ? (
-            <PaymentStatus
-              payment={mainPayment}
-              productName={mainProduct?.name}
-              onSimulate={onSimulate ? (s) => onSimulate(mainPayment.id, s) : undefined}
-              previewMode={previewMode}
-            />
-          ) : (
-            !error && <div className="hint">Gerando o PIX...</div>
-          )}
         </div>
       )}
 

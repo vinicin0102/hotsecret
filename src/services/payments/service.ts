@@ -85,18 +85,19 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
   if (!node || (node.type !== "offer" && node.type !== "ai")) throw new HttpError(400, "Oferta inválida");
   let productId = (node.content as { productId?: string }).productId;
   if (node.type === "offer" && input.productId && input.productId !== productId) {
-    // chamada de vídeo: upsells marcados no vídeo
+    // chamada de vídeo: downsell ao recusar ou upsells marcados no vídeo
     const videoId = (node.content as { videoId?: string }).videoId;
+    const downsell = (node.content as { downsellProductId?: string }).downsellProductId;
     const video = videoId ? await prisma.video.findUnique({ where: { id: videoId } }) : null;
     const markers = ((video?.timeline as { markers?: { productId?: string }[] } | null)?.markers ?? []) as { productId?: string }[];
-    productId = markers.some((m) => m.productId === input.productId) ? input.productId : undefined;
+    productId = downsell === input.productId || markers.some((m) => m.productId === input.productId) ? input.productId : undefined;
   }
   if (node.type === "ai") {
     // só produtos cadastrados como oferta no cérebro deste bloco
     const brainId = (node.content as { brainId?: string }).brainId;
     const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
     const offers = brain ? brainOffers(brain) : [];
-    let allowed = !!input.productId && offers.some((o) => o.productId === input.productId);
+    let allowed = !!input.productId && offers.some((o) => o.productId === input.productId || o.downsellProductId === input.productId);
     if (!allowed && input.productId) {
       // upsells marcados nos vídeos das ofertas em chamada
       const videoIds = offers.filter((o) => o.style === "call" && o.videoId).map((o) => o.videoId!);

@@ -360,10 +360,33 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                     </p>
                   )}
                 </div>
+                <div className="field">
+                  <label htmlFor="of-down">Downsell ao recusar (opcional)</label>
+                  <select id="of-down" className="select" value={String(c.downsellProductId ?? "")} onChange={(e) => setContent({ downsellProductId: e.target.value })}>
+                    <option value="">— nenhum (segue a saída “Recusou a chamada”) —</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} · {formatBRL(p.price)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {!!c.downsellProductId && (
+                  <div className="field">
+                    <label htmlFor="of-down-text">Texto do pop-up do downsell</label>
+                    <input
+                      id="of-down-text"
+                      className="input"
+                      placeholder="Tudo bem 🥺 que tal uma chamada mais curtinha?"
+                      value={String(c.downsellText ?? "")}
+                      onChange={(e) => setContent({ downsellText: e.target.value })}
+                    />
+                  </div>
+                )}
                 <p className="hint">
-                  Aparece uma ligação de vídeo com a foto do personagem, toque de chamada e vibração. <b>Atender</b> gera o PIX na hora com o
-                  trecho FREE em loop; pagou, toca o VIP com as falas e os upsells marcados. <b>Recusar</b> segue a saída “Recusou a chamada” (ex.:
-                  uma chamada mais curta e mais barata).
+                  Toca uma ligação com a foto do personagem, toque e vibração. <b>Atender</b> abre um pop-up só com o código PIX (copia e cola).{" "}
+                  <b>Recusar</b> abre o mesmo pop-up com o downsell (se escolhido). O vídeo só começa depois do pagamento aprovado, com as falas e
+                  os upsells marcados.
                 </p>
               </>
             )}

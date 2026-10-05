@@ -32,6 +32,8 @@ export default apiHandler({
           headline: r.offer.headline || r.offer.product.name,
           ctaLabel: r.offer.ctaLabel,
           style: r.offer.style === "call" && r.offer.videoId ? "call" : "card",
+          downsellProductId: r.offer.downsellProductId || undefined,
+          downsellText: r.offer.downsellText || undefined,
         },
         usage: r.usage,
       };
