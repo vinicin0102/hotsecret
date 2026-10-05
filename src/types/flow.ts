@@ -188,6 +188,10 @@ export interface ChatAppearance {
   bgVideoUrl?: string;
   /** escurecimento do vídeo de fundo, 0–90 (%) */
   bgDim?: number;
+  /** com vídeo de fundo: mensagens antigas vão sumindo (padrão: sim) */
+  fadeOld?: boolean;
+  /** quantas mensagens ficam na tela quando as antigas somem (padrão 5) */
+  visibleCount?: number;
 }
 
 export interface FunnelSettings {

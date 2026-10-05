@@ -1350,3 +1350,16 @@
   height: 14px;
   border-width: 2px;
 }
+
+/* vídeo de fundo: conversa de baixo para cima, deixando o vídeo livre em cima */
+.has-bg-video .chat-body > :first-child {
+  margin-top: auto;
+}
+/* mensagens antigas vão sumindo em direção ao topo */
+.has-bg-video .chat-body.fade-old {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.25) 18%, #000 42%);
+  mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.25) 18%, #000 42%);
+}
+.has-bg-video .chat-body.fade-old .msg-row {
+  animation: msgIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}

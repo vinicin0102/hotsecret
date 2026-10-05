@@ -136,6 +136,29 @@ export function FunnelSettingsModal({
           />
         </div>
       )}
+      {appearance.bgVideoUrl && (
+        <>
+          <p className="hint">Com vídeo de fundo, a conversa começa de baixo para cima e deixa a parte de cima livre para o vídeo.</p>
+          <label className="checkbox">
+            <input type="checkbox" checked={appearance.fadeOld !== false} onChange={(e) => setAppearance((a) => ({ ...a, fadeOld: e.target.checked }))} />
+            Mensagens antigas vão sumindo
+          </label>
+          {appearance.fadeOld !== false && (
+            <div className="field">
+              <label htmlFor="fp-visible">Mensagens que ficam na tela: {appearance.visibleCount ?? 5}</label>
+              <input
+                id="fp-visible"
+                type="range"
+                min={2}
+                max={12}
+                value={appearance.visibleCount ?? 5}
+                onChange={(e) => setAppearance((a) => ({ ...a, visibleCount: Number(e.target.value) }))}
+              />
+              <p className="hint">A oferta ainda não comprada e o PIX pendente não somem.</p>
+            </div>
+          )}
+        </>
+      )}
 
       <div className="section-title">Pixels deste fluxo</div>
       <p className="hint" style={{ marginTop: -4 }}>

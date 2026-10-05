@@ -24,9 +24,28 @@ interface Props {
   onRestart?: () => void;
 }
 
+/**
+ * Últimas mensagens na tela; a oferta ainda não comprada e o pagamento pendente mais recentes
+ * continuam visíveis (o lead precisa conseguir comprar).
+ */
+function visibleItems(items: ChatItem[], count: number, isOpen: (i: ChatItem) => boolean): ChatItem[] {
+  if (items.length <= count) return items;
+  const tail = items.slice(-count);
+  const pinned: ChatItem[] = [];
+  for (const kind of ["offer", "checkout", "payment"] as const) {
+    const last = [...items].reverse().find((i) => i.kind === kind);
+    if (last && !tail.includes(last) && isOpen(last)) pinned.push(last);
+  }
+  pinned.sort((a, b) => items.indexOf(a) - items.indexOf(b));
+  return [...pinned, ...tail];
+}
+
 export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, onRestart }: Props) {
   const engine = useChatEngine(funnel, transport, resume);
   const bgVideo = funnel.appearance?.bgVideoUrl || null;
+  // com vídeo de fundo: só as últimas mensagens ficam na tela (as antigas vão sumindo)
+  const fadeOld = !!bgVideo && funnel.appearance?.fadeOld !== false;
+  const visibleCount = funnel.appearance?.visibleCount ?? 5;
   const { items, typing, awaiting, payments, ended } = engine;
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -62,6 +81,16 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
     return pid ? funnel.products[pid] : undefined;
   };
 
+
+  const isOpenItem = (i: ChatItem) => {
+    if (i.kind === "checkout") return true;
+    if (i.kind === "payment") return ["CREATED", "PENDING"].includes(payments[i.paymentId]?.status ?? "");
+    if (i.kind === "offer")
+      return !Object.values(payments).some(
+        (p) => p.offerNodeId === i.nodeId && p.status === "APPROVED" && (!i.productId || p.productId === i.productId),
+      );
+    return false;
+  };
 
   const renderItem = (item: ChatItem) => {
     switch (item.kind) {
@@ -237,12 +266,14 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           />
         )}
         <ChatHeader character={funnel.character} typing={typing} />
-        <div className="chat-body" ref={bodyRef} aria-live="polite">
-          <div className="day-sep">Hoje</div>
+        <div className={`chat-body ${fadeOld ? "fade-old" : ""}`} ref={bodyRef} aria-live="polite">
+          {!bgVideo && <div className="day-sep">Hoje</div>}
+          {!bgVideo && (
           <div className="secret-note">
             🔒 Esta conversa é <b>privada</b>. Só você está vendo.
           </div>
-          {items.map(renderItem)}
+          )}
+          {(fadeOld ? visibleItems(items, visibleCount, isOpenItem) : items).map(renderItem)}
           {typing && <TypingIndicator />}
           {awaiting?.kind === "buttons" && awaiting.inputMode !== "type" && (
             <OptionButtons buttons={awaiting.buttons} onChoose={engine.chooseButton} />
