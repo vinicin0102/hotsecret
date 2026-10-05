@@ -869,7 +869,11 @@
 .has-bg-video .chat-window {
   background: #000;
 }
-.has-bg-video .chat-window > :not(.chat-bg-video):not(.chat-bg-dim) {
+/* só o conteúdo do chat fica sobre o vídeo; telas da chamada continuam cobrindo tudo */
+.has-bg-video .chat-window > .chat-header,
+.has-bg-video .chat-window > .chat-body,
+.has-bg-video .chat-window > .composer,
+.has-bg-video .chat-window > .preview-banner {
   position: relative;
   z-index: 1;
 }
@@ -918,7 +922,7 @@
 .call-overlay {
   position: absolute;
   inset: 0;
-  z-index: 40;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1226,10 +1230,11 @@
 
 /* pop-up só com o código PIX (chamada) */
 .call-overlay.pix {
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  padding: 18px;
-  background: rgba(7, 4, 10, 0.92);
+  overflow-y: auto;
+  padding: 64px 16px 20px;
+  background: rgba(7, 4, 10, 0.94);
 }
 .pix-close {
   position: absolute;
@@ -1249,6 +1254,8 @@
   z-index: 2;
   width: 100%;
   max-width: 380px;
+  margin: auto 0; /* centraliza quando cabe; rola quando a tela é baixa */
+  flex-shrink: 0;
   padding: 22px 18px 18px;
   border-radius: 24px;
   background: rgba(20, 8, 18, 0.75);
@@ -1273,7 +1280,7 @@
 }
 .pix-title {
   font-family: var(--font-serif);
-  font-size: 20px;
+  font-size: 19px;
   line-height: 1.3;
   margin-bottom: 10px;
 }
@@ -1296,9 +1303,8 @@
   margin-right: 4px;
 }
 .pix-label {
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--gold);
   margin-bottom: 6px;
 }
@@ -1325,11 +1331,11 @@
 }
 .pix-steps {
   text-align: left;
-  font-size: 12.5px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
-  margin: 14px 0 10px;
+  margin: 12px 0 8px;
   padding-left: 18px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 .pix-wait {
   display: flex;

@@ -181,16 +181,16 @@ export function PixPopup({
           <div className="error-text">Pagamento não aprovado. Feche e tente de novo.</div>
         ) : (
           <>
-            <div className="pix-label">PIX copia e cola</div>
+            <div className="pix-label">Chave PIX de {character.name.trim().split(/\s+/)[0]}</div>
             <div className="pix-code-box" id="pix-code-text" onClick={copy}>
               {code}
             </div>
             <button className="btn btn-primary btn-block cta-glow pix-copy" onClick={copy} disabled={!code}>
-              {copied ? "CÓDIGO COPIADO ✓" : "COPIAR CÓDIGO PIX"}
+              {copied ? "CHAVE COPIADA ✓" : "COPIAR CHAVE PIX"}
             </button>
             <ol className="pix-steps">
               <li>Abra o app do seu banco e escolha PIX → Copia e cola</li>
-              <li>Cole o código e confirme o pagamento</li>
+              <li>Cole a chave e confirme o pagamento</li>
               <li>A chamada começa sozinha assim que o PIX for confirmado</li>
             </ol>
             <div className="pix-wait">

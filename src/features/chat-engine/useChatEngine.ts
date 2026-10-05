@@ -73,6 +73,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   } | null>(null);
   /** produtos comprados como upsell dentro da chamada (não seguem o ramo da oferta principal) */
   const upsellProducts = useRef(new Set<string>());
+  /** produtos pagos pelo pop-up da chamada: a entrega é o próprio vídeo (sem botão de acesso no chat) */
+  const callProducts = useRef(new Set<string>());
 
   const runId = useRef(0);
   /** ofertas exibidas com mensagens de apoio rodando (param no clique em comprar ou na aprovação) */
@@ -501,7 +503,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             addServerMessages(r.messages);
           }
           if (target) void run(target);
-          else if (p.status === "APPROVED" && getNode(graphRef.current, p.offerNodeId)?.type === "ai") {
+          else if (p.status === "APPROVED" && getNode(graphRef.current, p.offerNodeId)?.type === "ai" && !callProducts.current.has(p.productId)) {
             // oferta da IA sem ramo "Comprou": botão de acesso do produto e a conversa com a IA continua
             push({ kind: "delivery", id: lid(), nodeId: p.offerNodeId!, productId: p.productId, at: now() });
           }
@@ -647,6 +649,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     async (c: NonNullable<typeof call>, productId: string, downsell: boolean) => {
       const nodeId = c.nodeId;
       setCall({ ...c, phase: "pix", payProductId: productId, downsell });
+      callProducts.current.add(productId);
       setCallError(null);
       const product = funnel.products[productId];
       track("offer_clicked", nodeId, { call: downsell ? "declined" : "answered", productId });
