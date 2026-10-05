@@ -115,6 +115,7 @@ export function validateGraph(graph: FlowGraph): GraphIssue[] {
       issues.push({ nodeId: n.id, level: "error", message: "Arquivo de mídia não definido." });
     }
     if (n.type === "tag" && !c.tagId) issues.push({ nodeId: n.id, level: "error", message: "Selecione uma tag." });
+    if (n.type === "ai" && !c.brainId) issues.push({ nodeId: n.id, level: "error", message: "Selecione um cérebro para a IA." });
   }
   return issues;
 }

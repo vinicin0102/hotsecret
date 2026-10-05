@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/conversas", label: "Conversas", ico: "💬" },
   { href: "/admin/leads", label: "Leads", ico: "♡" },
   { href: "/admin/fluxos", label: "Fluxos", ico: "⟡" },
+  { href: "/admin/cerebro", label: "Cérebro", ico: "🧠" },
   { href: "/admin/personagens", label: "Personagens", ico: "☾" },
   { href: "/admin/produtos", label: "Produtos", ico: "◇" },
   { href: "/admin/pagamentos", label: "Pagamentos", ico: "₿" },

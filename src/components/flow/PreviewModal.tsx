@@ -13,7 +13,8 @@ export function PreviewModal({ funnel, onClose }: { funnel: PublicFunnel; onClos
         const n = funnel.graph.nodes.find((x) => x.id === id);
         return (n?.content as OfferContent | undefined)?.productId;
       },
-      (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined),
+      (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
+      (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string } | undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [round],
   );

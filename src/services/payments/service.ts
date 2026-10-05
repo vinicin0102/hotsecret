@@ -11,6 +11,7 @@ import { trackEvent } from "../tracking";
 import { addTagToLead, ensureTag } from "../tags";
 import { getProvider } from "./index";
 import { sendMetaPurchase } from "../meta-capi";
+import { brainOffers } from "../ai/brain";
 
 const ALLOWED_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
   CREATED: ["PENDING", "APPROVED", "FAILED"],
@@ -56,6 +57,8 @@ export async function addConversationMessage(
 interface CheckoutInput {
   offerNodeId: string;
   method: PaymentMethod;
+  /** bloco Cérebro: produto da oferta que a IA mostrou */
+  productId?: string;
 }
 
 /**
@@ -79,8 +82,14 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
   const node = await prisma.funnelNode.findUnique({
     where: { funnelId_id: { funnelId: session.funnelId, id: input.offerNodeId } },
   });
-  if (!node || node.type !== "offer") throw new HttpError(400, "Oferta inválida");
-  const productId = (node.content as { productId?: string }).productId;
+  if (!node || (node.type !== "offer" && node.type !== "ai")) throw new HttpError(400, "Oferta inválida");
+  let productId = (node.content as { productId?: string }).productId;
+  if (node.type === "ai") {
+    // só produtos cadastrados como oferta no cérebro deste bloco
+    const brainId = (node.content as { brainId?: string }).brainId;
+    const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
+    productId = brain && input.productId && brainOffers(brain).some((o) => o.productId === input.productId) ? input.productId : undefined;
+  }
   const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
   if (!product || !product.active) throw new HttpError(400, "Produto indisponível");
 

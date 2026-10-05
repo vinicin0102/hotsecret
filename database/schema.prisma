@@ -417,3 +417,27 @@ model AppSetting {
 
   @@map("app_settings")
 }
+
+/// Cérebro: personalidade, conteúdo e ofertas que a IA usa para responder os leads
+model Brain {
+  id              String   @id @default(cuid())
+  name            String
+  active          Boolean  @default(true)
+  /// personalidade e jeito de falar
+  persona         String   @default("")
+  /// base de conhecimento (produto, dúvidas, objeções...)
+  knowledge       String   @default("")
+  /// regras extras (o que nunca dizer, limites...)
+  rules           String   @default("")
+  /// [{ id, productId, when, pitch, headline, ctaLabel }]
+  offers          Json     @default("[]")
+  /// áudios gravados que a IA pode enviar: [{ id, url, when }]
+  audios          Json     @default("[]")
+  maxReplies      Int      @default(30)
+  fallbackMessage String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("brains")
+}
+

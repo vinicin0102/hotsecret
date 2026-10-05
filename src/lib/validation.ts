@@ -47,6 +47,12 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
   link: z.object({ text: optTxt(1000), url, buttonLabel: optTxt(60) }),
   tag: z.object({ tagId: z.string().max(64) }),
   end: z.object({ text: optTxt(1000) }),
+  ai: z.object({
+    brainId: z.string().max(64),
+    goal: optTxt(2000),
+    startMode: z.enum(["wait", "ai"]).optional(),
+    placeholder: optTxt(120),
+  }),
 };
 
 export const NODE_TYPES = Object.keys(contentSchemas) as NodeType[];
@@ -147,6 +153,28 @@ export const productSchema = z.object({
   active: z.boolean().default(true),
 });
 
+const brainOfferSchema = z.object({
+  id,
+  productId: z.string().min(1).max(64),
+  when: optTxt(1000),
+  pitch: optTxt(2000),
+  headline: optTxt(120),
+  ctaLabel: optTxt(60),
+});
+const brainAudioSchema = z.object({ id, url: url.pipe(z.string().min(1, "Áudio sem arquivo")), when: optTxt(500) });
+
+export const brainSchema = z.object({
+  name: txt(80).pipe(z.string().min(1, "Informe o nome")),
+  active: z.boolean().default(true),
+  persona: txt(6000).default(""),
+  knowledge: txt(60000).default(""),
+  rules: txt(6000).default(""),
+  offers: z.array(brainOfferSchema).max(20).default([]),
+  audios: z.array(brainAudioSchema).max(40).default([]),
+  maxReplies: z.number().int().min(1).max(200).default(30),
+  fallbackMessage: txt(300).default(""),
+});
+
 export const tagSchema = z.object({
   name: txt(40).pipe(z.string().min(1)).transform((v) => v.toUpperCase()),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#D94F7D"),
@@ -174,6 +202,8 @@ export const experimentSchema = z.object({
 export const checkoutSchema = z.object({
   token: z.string().min(10).max(2000),
   offerNodeId: id,
+  /** ofertas do Cérebro: produto escolhido pela IA */
+  productId: z.string().max(64).optional(),
   method: z.enum(["PIX", "CARD"]).default("PIX"),
   // cookies do pixel da Meta (para a API de Conversões)
   fbp: z.string().max(200).regex(/^fb\.\d\.\d+\.\d+$/).optional().catch(undefined),

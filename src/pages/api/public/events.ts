@@ -161,12 +161,12 @@ export default apiHandler({
           break;
         }
         case "checkout_started": {
-          if (!node || node.type !== "offer") continue;
+          if (!node || (node.type !== "offer" && node.type !== "ai")) continue;
           await prisma.conversation.update({
             where: { id: conversationId },
             data: { checkoutStartedAt: conversation.checkoutStartedAt ?? new Date(), checkoutNodeId: node.id },
           });
-          data.productId = String(content.productId ?? "");
+          data.productId = String(content.productId ?? ev.data?.productId ?? "");
           break;
         }
         case "link_clicked":

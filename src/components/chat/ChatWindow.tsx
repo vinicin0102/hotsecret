@@ -36,7 +36,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   }, [items.length, typing, awaiting]);
 
   // o lead digita nas perguntas abertas e nas opções configuradas para digitação
-  const canType = awaiting?.kind === "open" || (awaiting?.kind === "buttons" && awaiting.inputMode !== "click");
+  const canType = awaiting?.kind === "open" || awaiting?.kind === "ai" || (awaiting?.kind === "buttons" && awaiting.inputMode !== "click");
 
   useEffect(() => {
     if (canType) inputRef.current?.focus({ preventScroll: true });
@@ -60,8 +60,6 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
     return pid ? funnel.products[pid] : undefined;
   };
 
-  const hasPaymentFor = (nodeId: string) =>
-    Object.values(payments).some((p) => p.offerNodeId === nodeId && p.status !== "FAILED");
 
   const renderItem = (item: ChatItem) => {
     switch (item.kind) {
@@ -103,21 +101,28 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
       }
       case "offer": {
         const node = getNode(engine.graph, item.nodeId);
+        // ofertas do Cérebro trazem o produto escolhido pela IA
+        const product = item.productId ? funnel.products[item.productId] : productOf(item.nodeId);
+        const bought = Object.values(payments).some(
+          (p) => p.offerNodeId === item.nodeId && p.status === "APPROVED" && (!item.productId || p.productId === item.productId),
+        );
         return (
           <OfferCard
             key={item.id}
-            offer={(node?.content as OfferContent) ?? { productId: "" }}
-            product={productOf(item.nodeId)}
-            onCta={() => engine.openCheckout(item.nodeId)}
+            offer={item.offer ?? (node?.content as OfferContent) ?? { productId: "" }}
+            product={product}
+            onCta={() => engine.openCheckout(item.nodeId, item.productId)}
             onVideoPlay={() => engine.track("video_started", item.nodeId)}
-            disabled={hasPaymentFor(item.nodeId) && Object.values(payments).some((p) => p.offerNodeId === item.nodeId && p.status === "APPROVED")}
+            disabled={bought}
           />
         );
       }
       case "checkout": {
-        const product = productOf(item.nodeId);
+        const product = item.productId ? funnel.products[item.productId] : productOf(item.nodeId);
         if (!product) return null;
-        return <CheckoutCard key={item.id} product={product} onSubmit={(form) => engine.submitCheckout(item.nodeId, form)} />;
+        return (
+          <CheckoutCard key={item.id} product={product} onSubmit={(form) => engine.submitCheckout(item.nodeId, { ...form, productId: item.productId })} />
+        );
       }
       case "payment": {
         const p = payments[item.paymentId];
@@ -125,8 +130,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           <PaymentStatus
             key={item.id}
             payment={p}
-            productName={productOf(p?.offerNodeId)?.name}
-            onRetry={p?.offerNodeId ? () => engine.openCheckout(p.offerNodeId!) : undefined}
+            productName={(p && funnel.products[p.productId]?.name) ?? productOf(p?.offerNodeId)?.name}
+            onRetry={p?.offerNodeId ? () => engine.openCheckout(p.offerNodeId!, getNode(engine.graph, p.offerNodeId)?.type === "ai" ? p.productId : undefined) : undefined}
             onSimulate={transport?.simulatePayment && (p?.provider === "sandbox" || p?.provider === "preview") ? (s) => engine.simulatePayment(item.paymentId, s) : undefined}
             previewMode={transport?.mode === "preview"}
           />
@@ -142,7 +147,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onOpen={async () => {
               engine.track("delivery_viewed", item.nodeId);
               if (!transport) throw new Error("Sem conexão");
-              return transport.delivery(c.productId);
+              return transport.delivery(item.productId ?? c.productId);
             }}
           />
         );

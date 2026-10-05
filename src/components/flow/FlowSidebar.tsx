@@ -3,6 +3,7 @@ import type { ChoiceButton, FlowNode, NodeType } from "@/types/flow";
 import { shortId } from "@/features/chat-engine/engine";
 import { UploadInput } from "@/components/admin/UploadInput";
 import { formatBRL } from "@/lib/format";
+import { withBase } from "@/lib/paths";
 import { NODE_META, nodeTypeLabel } from "./nodeMeta";
 import { DelayEditor } from "./DelayEditor";
 
@@ -10,6 +11,11 @@ export interface SidebarProduct {
   id: string;
   name: string;
   price: number;
+  active: boolean;
+}
+export interface SidebarBrain {
+  id: string;
+  name: string;
   active: boolean;
 }
 export interface SidebarTag {
@@ -21,6 +27,7 @@ interface Props {
   node: FlowNode;
   products: SidebarProduct[];
   tags: SidebarTag[];
+  brains?: SidebarBrain[];
   onChange: (node: FlowNode) => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -36,7 +43,7 @@ const VARIABLES = [
   ["resposta", "Variável livre: resposta"],
 ];
 
-export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplicate, onClose, readOnly }: Props) {
+export function FlowSidebar({ node, products, tags, brains = [], onChange, onDelete, onDuplicate, onClose, readOnly }: Props) {
   const meta = NODE_META[node.type];
   const c = node.content as unknown as Record<string, unknown>;
   const s = node.settings ?? {};
@@ -254,6 +261,62 @@ export function FlowSidebar({ node, products, tags, onChange, onDelete, onDuplic
                   : "O lead digita o que quiser. Se a resposta contiver o nome do caminho ou uma das palavras, segue por ele (sem diferenciar acentos/maiúsculas). Se nada bater, segue por “Qualquer outra resposta” — ou pelo 1º caminho, se essa saída não estiver conectada."}
               </span>
             </div>
+          </>
+        )}
+
+        {node.type === "ai" && (
+          <>
+            <div className="field">
+              <label htmlFor="ai-brain">Cérebro</label>
+              <select id="ai-brain" className="select" value={String(c.brainId ?? "")} onChange={(e) => setContent({ brainId: e.target.value })}>
+                <option value="">— selecione —</option>
+                {brains.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} {b.active ? "" : "(inativo)"}
+                  </option>
+                ))}
+              </select>
+              {brains.length === 0 && (
+                <p className="hint">
+                  Crie um cérebro na aba <a href={withBase("/admin/cerebro")}>🧠 Cérebro</a> (chave da API, personalidade, conteúdo e ofertas).
+                </p>
+              )}
+            </div>
+            <div className="field">
+              <label htmlFor="ai-goal">Objetivo neste ponto (opcional)</label>
+              <textarea
+                id="ai-goal"
+                className="textarea"
+                rows={3}
+                placeholder="Ex.: descubra o que ela mais quer melhorar no relacionamento e ofereça o Guia quando fizer sentido."
+                value={String(c.goal ?? "")}
+                onChange={(e) => setContent({ goal: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>Quem começa</label>
+              <div className="segmented">
+                {(
+                  [
+                    ["wait", "Espera o lead escrever"],
+                    ["ai", "A IA puxa a conversa"],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button key={m} type="button" className={(c.startMode ?? "wait") === m ? "active" : ""} onClick={() => setContent({ startMode: m })}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="ai-ph">Texto do campo de mensagem</label>
+              <input id="ai-ph" className="input" value={String(c.placeholder ?? "")} placeholder="Digite sua mensagem..." onChange={(e) => setContent({ placeholder: e.target.value })} />
+            </div>
+            <p className="hint">
+              A IA responde tudo o que o lead escrever, usando a personalidade, o conteúdo e as regras do cérebro. Ela pode mandar os áudios e
+              mostrar as ofertas cadastradas lá; o pagamento segue o PIX normal. Saídas: <b>Comprou</b> (conteúdo pago, 🔒), <b>Pagamento
+              recusado</b> e <b>Quando a IA encerrar</b>. Sem a saída Comprou, o chat mostra o botão de acesso do produto e a IA continua.
+            </p>
           </>
         )}
 

@@ -14,6 +14,7 @@ export const NODE_META: Record<NodeType, { label: string; icon: string; color: s
   link: { label: "Link", icon: "↗", color: "#B9AAB3", hint: "Botão para um link externo" },
   tag: { label: "Tag", icon: "#", color: "#B9AAB3", hint: "Aplica uma tag ao lead" },
   end: { label: "Fim", icon: "■", color: "#7F6E79", hint: "Encerra a conversa" },
+  ai: { label: "Cérebro (IA)", icon: "🧠", color: "#9B7BFF", hint: "A IA conversa com o lead, tira dúvidas, manda áudios e mostra as ofertas do Cérebro" },
 };
 
 export interface PaletteItem {
@@ -51,6 +52,7 @@ export const PALETTE: PaletteItem[] = [
     }),
   }),
   item("offer"),
+  item("ai"),
   item("delivery"),
   item("link"),
   item("tag"),
@@ -89,6 +91,7 @@ export function defaultContent<T extends NodeType>(type: T): NodeContentMap[T] {
     link: { text: "", url: "https://", buttonLabel: "Abrir" },
     tag: { tagId: "" },
     end: { text: "" },
+    ai: { brainId: "", goal: "", startMode: "wait", placeholder: "Digite sua mensagem..." },
   };
   return structuredClone(map[type]);
 }

@@ -11,6 +11,7 @@ import type {
 import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY } from "@/types/flow";
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
+import { brainOffers } from "./ai/brain";
 
 type NodeRow = { id: string; type: string; content: unknown; settings: unknown; positionX: number; positionY: number };
 type EdgeRow = { id: string; sourceNode: string; targetNode: string; condition: string };
@@ -181,6 +182,13 @@ async function buildPublicFunnel(
     .filter((n) => n.type === "offer")
     .map((n) => (n.content as { productId?: string }).productId)
     .filter((v): v is string => !!v);
+  // ofertas dos cérebros usados nos blocos de IA
+  const brainIds = fullGraph.nodes.filter((n) => n.type === "ai").map((n) => (n.content as { brainId?: string }).brainId).filter((v): v is string => !!v);
+  if (brainIds.length) {
+    for (const b of await prisma.brain.findMany({ where: { id: { in: brainIds } }, select: { offers: true } })) {
+      productIds.push(...brainOffers(b).map((o) => o.productId));
+    }
+  }
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, active: true } });
   const publicProducts: Record<string, PublicProduct> = {};
   for (const p of products) {

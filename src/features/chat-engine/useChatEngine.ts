@@ -1,24 +1,26 @@
 // Executa o fluxo no navegador: percorre os nós em sequência, mostra "digitando", aguarda
 // respostas/cliques, abre o checkout e avança somente quando o servidor confirma o pagamento.
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, PublicFunnel } from "@/types/flow";
-import { getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
+import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, OfferContent, PublicFunnel } from "@/types/flow";
+import { autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
 
 export type ChatItem =
   | { kind: "message"; id: string; sender: "bot" | "user" | "system"; type: "text" | "image" | "video" | "audio"; content: Record<string, unknown>; nodeId?: string | null; at: string }
-  | { kind: "offer"; id: string; nodeId: string; at: string }
-  | { kind: "checkout"; id: string; nodeId: string; at: string }
+  // productId/offer: ofertas mostradas pelo Cérebro (IA)
+  | { kind: "offer"; id: string; nodeId: string; at: string; productId?: string; offer?: OfferContent }
+  | { kind: "checkout"; id: string; nodeId: string; at: string; productId?: string }
   | { kind: "payment"; id: string; paymentId: string; at: string }
-  | { kind: "delivery"; id: string; nodeId: string; at: string }
+  | { kind: "delivery"; id: string; nodeId: string; at: string; productId?: string }
   | { kind: "link"; id: string; nodeId: string; at: string }
   | { kind: "recovery"; id: string; text: string; buttonLabel: string; offerNodeId: string | null; at: string };
 
 export type Awaiting =
   | null
   | { kind: "buttons"; nodeId: string; buttons: ChoiceButton[]; inputMode: AnswerInputMode; placeholder?: string }
-  | { kind: "open"; nodeId: string; placeholder?: string };
+  | { kind: "open"; nodeId: string; placeholder?: string }
+  | { kind: "ai"; nodeId: string; placeholder?: string };
 
 export interface ResumeState {
   resumed: boolean;
@@ -110,6 +112,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     return runId.current === token;
   }, []);
 
+  const aiTurnRef = useRef<(nodeId: string, text: string | null) => Promise<void>>(async () => undefined);
+
   /** Percorre o fluxo a partir de um nó até encontrar um ponto de espera. */
   const run = useCallback(
     async (startId: string | null) => {
@@ -196,6 +200,15 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             id = nextNodeId(graphRef.current, node.id); // aplicada no servidor (node_entered)
             continue;
 
+          case "ai": {
+            // Cérebro: a partir daqui a IA conversa com o lead
+            markChatStarted();
+            const ai = c as unknown as AiContent;
+            if (ai.startMode === "ai") void aiTurnRef.current(node.id, null);
+            else setAwaiting({ kind: "ai", nodeId: node.id, placeholder: ai.placeholder || undefined });
+            return;
+          }
+
           case "end": {
             if (followUpOffers.current.size > 0) {
               // dentro das mensagens de apoio, "Fim" só encerra a sequência; a oferta segue aberta
@@ -223,6 +236,55 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     [ensureUnlocked, markChatStarted, push, track, wait],
   );
 
+  /** Uma rodada do Cérebro: envia a mensagem do lead e mostra a resposta como se alguém estivesse digitando. */
+  const aiTurn = useCallback(
+    async (nodeId: string, text: string | null) => {
+      const t = transportRef.current;
+      if (!t) return;
+      const token = ++runId.current;
+      const node = getNode(graphRef.current, nodeId);
+      const placeholder = ((node?.content as AiContent | undefined)?.placeholder as string) || undefined;
+      setAwaiting(null);
+      await sleep(text === null ? 600 : 900); // "leu" a mensagem
+      if (runId.current !== token) return;
+      setTyping(true);
+      let r;
+      try {
+        r = await t.ai(nodeId, text);
+      } catch {
+        r = { messages: ["Ops, minha internet falhou aqui 😅 me manda de novo?"], audio: null, offer: null, end: false };
+      }
+      if (runId.current !== token) return;
+      for (let i = 0; i < r.messages.length; i++) {
+        if (i > 0) {
+          setTyping(true);
+          await sleep(Math.min(autoDelay(r.messages[i].length), 3500));
+          if (runId.current !== token) return;
+        }
+        setTyping(false);
+        push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.messages[i] }, nodeId, at: now() });
+      }
+      if (r.audio) {
+        setTyping(true);
+        await sleep(1400);
+        if (runId.current !== token) return;
+        setTyping(false);
+        push({ kind: "message", id: lid(), sender: "bot", type: "audio", content: { url: r.audio.url }, nodeId, at: now() });
+      }
+      if (r.offer) {
+        await sleep(700);
+        if (runId.current !== token) return;
+        push({ kind: "offer", id: lid(), nodeId, productId: r.offer.productId, offer: { ...r.offer, productId: r.offer.productId }, at: now() });
+      }
+      setTyping(false);
+      const after = r.end ? nextNodeId(graphRef.current, nodeId, "default") : null;
+      if (after) void run(after);
+      else setAwaiting({ kind: "ai", nodeId, placeholder });
+    },
+    [push, run],
+  );
+  aiTurnRef.current = aiTurn;
+
   // ---------- Ações do visitante ----------
   const chooseButton = useCallback(
     (button: ChoiceButton) => {
@@ -242,6 +304,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const text = value.trim();
       if (!text || !awaiting) return;
       const nodeId = awaiting.nodeId;
+      if (awaiting.kind === "ai") {
+        markChatStarted();
+        push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text }, nodeId, at: now() });
+        void aiTurn(nodeId, text); // a mensagem é gravada pelo servidor junto com a resposta
+        return;
+      }
       if (awaiting.kind === "buttons") {
         if (awaiting.inputMode === "click") return;
         // resposta livre: identifica o caminho pelas opções/palavras-chave; sem acerto → "qualquer outra resposta"
@@ -267,16 +335,16 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       track("question_answered", nodeId, { value: text });
       void run(nextNodeId(graphRef.current, nodeId));
     },
-    [awaiting, markChatStarted, push, run, track],
+    [awaiting, markChatStarted, push, run, track, aiTurn],
   );
 
   const openCheckout = useCallback(
-    (offerNodeId: string) => {
+    (offerNodeId: string, aiProductId?: string) => {
       const node = getNode(graphRef.current, offerNodeId);
-      const productId = (node?.content as { productId?: string } | undefined)?.productId;
+      const productId = aiProductId ?? (node?.content as { productId?: string } | undefined)?.productId;
       const product = productId ? funnel.products[productId] : undefined;
-      track("offer_clicked", offerNodeId);
-      track("checkout_started", offerNodeId);
+      track("offer_clicked", offerNodeId, aiProductId ? { productId: aiProductId } : undefined);
+      track("checkout_started", offerNodeId, aiProductId ? { productId: aiProductId } : undefined);
       // quem clicou em comprar não recebe mais as mensagens de apoio
       if (followUpOffers.current.size > 0) {
         followUpOffers.current.clear();
@@ -293,9 +361,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         return;
       }
       setItems((prev) => {
-        const open = prev.some((i) => i.kind === "checkout" && i.nodeId === offerNodeId) &&
+        const open = prev.some((i) => i.kind === "checkout" && i.nodeId === offerNodeId && i.productId === aiProductId) &&
           !prev.some((i) => i.kind === "payment");
-        return open ? prev : [...prev, { kind: "checkout", id: lid(), nodeId: offerNodeId, at: now() }];
+        return open ? prev : [...prev, { kind: "checkout", id: lid(), nodeId: offerNodeId, productId: aiProductId, at: now() }];
       });
     },
     [funnel.products, track],
@@ -308,7 +376,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const payment = await t.checkout(offerNodeId, form);
       setPayments((p) => ({ ...p, [payment.id]: payment }));
       setItems((prev) => {
-        const withoutForm = prev.filter((i) => !(i.kind === "checkout" && i.nodeId === offerNodeId));
+        const withoutForm = prev.filter((i) => !(i.kind === "checkout" && i.nodeId === offerNodeId && i.productId === form.productId));
         if (withoutForm.some((i) => i.kind === "payment" && i.paymentId === payment.id)) return withoutForm;
         return [...withoutForm, { kind: "payment", id: lid(), paymentId: payment.id, at: now() }];
       });
@@ -383,10 +451,14 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             addServerMessages(r.messages);
           }
           if (target) void run(target);
+          else if (p.status === "APPROVED" && getNode(graphRef.current, p.offerNodeId)?.type === "ai") {
+            // oferta da IA sem ramo "Comprou": botão de acesso do produto e a conversa com a IA continua
+            push({ kind: "delivery", id: lid(), nodeId: p.offerNodeId!, productId: p.productId, at: now() });
+          }
         });
       }
     }
-  }, [payments, run, addServerMessages, funnel.products]);
+  }, [payments, run, addServerMessages, funnel.products, push]);
 
   // ---------- Polling: status do pagamento + mensagens do servidor (recuperação) ----------
   const hasPending = Object.values(payments).some((p) => p.status === "PENDING" || p.status === "CREATED");
@@ -434,7 +506,21 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     for (const m of resume.messages) {
       seenServerMsgs.current.add(m.id);
       const c = m.content ?? {};
-      if (m.type === "offer" && m.nodeId) restored.push({ kind: "offer", id: m.id, nodeId: m.nodeId, at: m.createdAt });
+      if (m.type === "offer" && m.nodeId) {
+        const isAi = getNode(graphRef.current, m.nodeId)?.type === "ai";
+        restored.push(
+          isAi && typeof c.productId === "string"
+            ? {
+                kind: "offer",
+                id: m.id,
+                nodeId: m.nodeId,
+                productId: c.productId,
+                offer: { productId: c.productId, headline: (c.headline as string) || undefined, ctaLabel: (c.ctaLabel as string) || undefined },
+                at: m.createdAt,
+              }
+            : { kind: "offer", id: m.id, nodeId: m.nodeId, at: m.createdAt },
+        );
+      }
       else if (m.type === "checkout" && typeof c.paymentId === "string" && paymentMap[c.paymentId])
         restored.push({ kind: "payment", id: m.id, paymentId: c.paymentId, at: m.createdAt });
       else if (m.type === "recovery")
@@ -456,7 +542,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     const branchPending = (offerNodeId: string) =>
       ![...unlockedByOffers(graphRef.current, [offerNodeId])].some((nid) => seenNodes.has(nid));
     for (const p of resume.payments) {
-      const atOffer = savedCurrent?.type === "offer" && p.offerNodeId === savedCurrent.id;
+      const atOffer = (savedCurrent?.type === "offer" || savedCurrent?.type === "ai") && p.offerNodeId === savedCurrent.id;
       const followUp = !!p.offerNodeId && shownOffers.has(p.offerNodeId) && p.status === "APPROVED" && branchPending(p.offerNodeId);
       if (!atOffer && !followUp) advancedPayments.current.add(p.id);
     }
@@ -488,6 +574,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         setAwaiting(buttonsAwaiting(current.id, c));
       } else if (current.type === "question") {
         setAwaiting({ kind: "open", nodeId: current.id, placeholder: (c.placeholder as string) || undefined });
+      } else if (current.type === "ai") {
+        setAwaiting({ kind: "ai", nodeId: current.id, placeholder: (c.placeholder as string) || undefined });
       } else if (current.type === "offer") {
         // pagamentos já decididos e ainda não avançados são tratados pelo efeito de pagamentos
         if (!restored.some((i) => i.kind === "offer" && i.nodeId === current.id)) {

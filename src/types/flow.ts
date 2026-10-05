@@ -12,7 +12,8 @@ export type NodeType =
   | "delivery"
   | "link"
   | "tag"
-  | "end";
+  | "end"
+  | "ai";
 
 /**
  * inherit: usa o atraso padrão do fluxo · fixed: delayMs · random: entre delayMinMs e delayMaxMs ·
@@ -100,6 +101,15 @@ export interface TagContent {
 export interface EndContent {
   text?: string;
 }
+/** Cérebro: a IA conversa com o lead (texto livre) e pode mostrar ofertas e mandar áudios do cérebro. */
+export interface AiContent {
+  brainId: string;
+  /** objetivo deste ponto da conversa */
+  goal?: string;
+  /** wait: espera o lead escrever · ai: a IA puxa a conversa */
+  startMode?: "wait" | "ai";
+  placeholder?: string;
+}
 
 export interface NodeContentMap {
   start: Record<string, never>;
@@ -114,6 +124,7 @@ export interface NodeContentMap {
   link: LinkContent;
   tag: TagContent;
   end: EndContent;
+  ai: AiContent;
 }
 
 export interface FlowNode<T extends NodeType = NodeType> {

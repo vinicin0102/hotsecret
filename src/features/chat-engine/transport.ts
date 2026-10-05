@@ -33,6 +33,17 @@ export interface ServerMessage {
 
 export interface CheckoutForm {
   method: "PIX" | "CARD";
+  /** ofertas do Cérebro (IA): produto escolhido */
+  productId?: string;
+}
+
+/** Resposta do Cérebro (IA). */
+export interface AiReply {
+  messages: string[];
+  audio: { url: string } | null;
+  offer: { productId: string; headline?: string; description?: string; ctaLabel?: string } | null;
+  end: boolean;
+  limit?: boolean;
 }
 
 export interface ChatTransport {
@@ -46,6 +57,8 @@ export interface ChatTransport {
   unlock(): Promise<FlowNode[]>;
   /** link do vídeo de visualização única (null = já visualizado) */
   viewOnce(nodeId: string): Promise<string | null>;
+  /** Cérebro: a IA responde (message null = a IA puxa a conversa) */
+  ai(nodeId: string, message: string | null): Promise<AiReply>;
   simulatePayment?(paymentId: string, status: "APPROVED" | "FAILED"): Promise<PublicPaymentInfo | null>;
 }
 
@@ -99,6 +112,10 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
       return r.nodes;
     },
+    async ai(nodeId, message) {
+      await chain;
+      return post<AiReply>("/api/public/ai", message === null ? { token: getToken(), nodeId, start: true } : { token: getToken(), nodeId, message });
+    },
     async viewOnce(nodeId) {
       try {
         const r = await post<{ url: string }>("/api/public/view-once", { token: getToken(), nodeId });
@@ -126,8 +143,11 @@ export function createPreviewTransport(
   products: Record<string, { price: number }>,
   graphOfferProduct: (nodeId: string) => string | undefined,
   nodeUrl: (nodeId: string) => string | undefined = () => undefined,
+  /** preview do Cérebro: cérebro e objetivo do bloco (conversa de teste pelo painel, nada é gravado) */
+  aiNode: (nodeId: string) => { brainId?: string; goal?: string } | undefined = () => undefined,
 ): ChatTransport {
   const opened = new Set<string>();
+  const aiHistory = new Map<string, { role: "lead" | "bot"; text: string }[]>();
   const payments = new Map<string, PublicPaymentInfo>();
   let seq = 0;
   return {
@@ -135,7 +155,7 @@ export function createPreviewTransport(
     track() {},
     async flush() {},
     async checkout(offerNodeId, form) {
-      const productId = graphOfferProduct(offerNodeId) ?? "";
+      const productId = form.productId ?? graphOfferProduct(offerNodeId) ?? "";
       const p: PublicPaymentInfo = {
         id: `preview_${++seq}`,
         status: "PENDING",
@@ -159,6 +179,25 @@ export function createPreviewTransport(
     },
     async unlock() {
       return []; // o preview já recebe o fluxo completo
+    },
+    async ai(nodeId, message) {
+      const cfg = aiNode(nodeId);
+      const history = aiHistory.get(nodeId) ?? [];
+      aiHistory.set(nodeId, history);
+      if (message !== null) history.push({ role: "lead", text: message });
+      if (!cfg?.brainId) return { messages: ["(preview) Selecione um cérebro neste bloco."], audio: null, offer: null, end: false };
+      try {
+        const r = await post<{ messages: string[]; audio: { url: string } | null; offer: AiReply["offer"]; end: boolean }>(
+          `/api/admin/brains/${cfg.brainId}/test`,
+          { history, goal: cfg.goal },
+        );
+        for (const m of r.messages) history.push({ role: "bot", text: m });
+        if (r.audio) history.push({ role: "bot", text: "[enviou um áudio]" });
+        if (r.offer) history.push({ role: "bot", text: `[mostrou o card da oferta ${r.offer.headline ?? ""}]` });
+        return { messages: r.messages, audio: r.audio ? { url: r.audio.url } : null, offer: r.offer, end: r.end };
+      } catch (e) {
+        return { messages: [`(preview) ${e instanceof Error ? e.message : "Falha na IA"}`], audio: null, offer: null, end: false };
+      }
     },
     async viewOnce(nodeId) {
       if (opened.has(nodeId)) return null;

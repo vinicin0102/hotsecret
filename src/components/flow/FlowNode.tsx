@@ -10,6 +10,7 @@ export type HsNodeData = {
   paid?: boolean;
   productName?: string;
   tagName?: string;
+  brainName?: string;
   onToggleMinimize?: (id: string) => void;
 };
 export type HsFlowNode = Node<HsNodeData, "hs">;
@@ -89,9 +90,18 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
     case "end":
       body = c.text ? String(c.text) : <i>Conversa encerrada</i>;
       break;
+    case "ai":
+      body = (
+        <>
+          <b style={{ color: "#fff" }}>{data.brainName ?? "Selecione um cérebro"}</b>
+          {c.goal ? <div>{String(c.goal)}</div> : null}
+          <div className="dim" style={{ marginTop: 4 }}>{c.startMode === "ai" ? "A IA puxa a conversa" : "Espera o lead escrever"}</div>
+        </>
+      );
+      break;
   }
 
-  const hasDefaultOut = !["end", "offer", "buttons"].includes(n.type) && !(n.type === "question" && c.mode === "buttons");
+  const hasDefaultOut = !["end", "offer", "buttons", "ai"].includes(n.type) && !(n.type === "question" && c.mode === "buttons");
 
   return (
     <div className={`hs-node t-${n.type} ${selected ? "selected" : ""} ${data.hasError ? "has-error" : ""} ${minimized ? "minimized" : ""}`}>
@@ -138,6 +148,22 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
               <Handle type="source" id="default" position={Position.Right} />
             </div>
           )}
+        </div>
+      )}
+      {n.type === "ai" && (
+        <div className="outs">
+          <div className="out approved" title="Quando o lead pagar uma das ofertas que a IA mostrou">
+            ✓ Comprou (oferta da IA)
+            <Handle type="source" id="payment:approved" position={Position.Right} />
+          </div>
+          <div className="out failed">
+            ✕ Pagamento recusado
+            <Handle type="source" id="payment:failed" position={Position.Right} />
+          </div>
+          <div className="out other" title="Quando a IA encerrar a conversa">
+            ↳ Quando a IA encerrar
+            <Handle type="source" id="default" position={Position.Right} />
+          </div>
         </div>
       )}
       {n.type === "offer" && (

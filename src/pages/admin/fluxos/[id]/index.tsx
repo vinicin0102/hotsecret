@@ -6,7 +6,7 @@ import { ReactFlowProvider, addEdge, applyEdgeChanges, applyNodeChanges, useReac
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { FlowCanvas, edgeStyle } from "@/components/flow/FlowCanvas";
 import type { HsFlowNode } from "@/components/flow/FlowNode";
-import { FlowSidebar, type SidebarProduct, type SidebarTag } from "@/components/flow/FlowSidebar";
+import { FlowSidebar, type SidebarBrain, type SidebarProduct, type SidebarTag } from "@/components/flow/FlowSidebar";
 import { PALETTE, makeNode, type PaletteItem } from "@/components/flow/nodeMeta";
 import { FunnelSettingsModal, type FunnelMeta } from "@/components/flow/FunnelSettingsModal";
 import { PreviewModal } from "@/components/flow/PreviewModal";
@@ -68,6 +68,7 @@ function Builder() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [products, setProducts] = useState<(SidebarProduct & { description: string | null; imageUrl: string | null; videoUrl?: string | null; originalPrice: number | null; checkoutUrl: string | null })[]>([]);
   const [tags, setTags] = useState<SidebarTag[]>([]);
+  const [brains, setBrains] = useState<SidebarBrain[]>([]);
   const [characters, setCharacters] = useState<CharacterRow[]>([]);
   const [issues, setIssues] = useState<GraphIssue[]>([]);
   const [saving, setSaving] = useState(false);
@@ -83,8 +84,10 @@ function Builder() {
       api<{ products: typeof products }>("/api/admin/products"),
       api<{ tags: SidebarTag[] }>("/api/admin/tags"),
       api<{ characters: CharacterRow[] }>("/api/admin/characters"),
+      api<{ brains: SidebarBrain[] }>("/api/admin/brains").catch(() => ({ brains: [] })),
     ])
-      .then(([f, p, t, c]) => {
+      .then(([f, p, t, c, b]) => {
+        setBrains(b.brains);
         setMeta(f.funnel);
         const g = toRF(f.graph);
         setNodes(g.nodes);
@@ -127,12 +130,13 @@ function Builder() {
   const errorNodes = useMemo(() => new Set(issues.filter((i) => i.level === "error" && i.nodeId).map((i) => i.nodeId!)), [issues]);
   const productNames = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p.name])), [products]);
   const tagNames = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t.name])), [tags]);
+  const brainNames = useMemo(() => Object.fromEntries(brains.map((b) => [b.id, b.name])), [brains]);
   const paidNodes = useMemo(() => lockedNodeIds(graph), [graph]);
 
   const displayNodes = useMemo(
     () =>
       nodes.map((n) => {
-        const c = n.data.node.content as { productId?: string; tagId?: string };
+        const c = n.data.node.content as { productId?: string; tagId?: string; brainId?: string };
         return {
           ...n,
           selected: n.id === selectedId,
@@ -142,11 +146,12 @@ function Builder() {
             paid: paidNodes.has(n.id),
             productName: c.productId ? productNames[c.productId] : undefined,
             tagName: c.tagId ? tagNames[c.tagId] : undefined,
+            brainName: c.brainId ? brainNames[c.brainId] : undefined,
             onToggleMinimize: toggleMinimize,
           },
         };
       }),
-    [nodes, selectedId, errorNodes, paidNodes, productNames, tagNames, toggleMinimize],
+    [nodes, selectedId, errorNodes, paidNodes, productNames, tagNames, brainNames, toggleMinimize],
   );
 
   const onNodesChange = useCallback((changes: NodeChange<HsFlowNode>[]) => {
@@ -371,6 +376,7 @@ function Builder() {
               node={selectedNode}
               products={products}
               tags={tags}
+              brains={brains}
               onChange={updateNode}
               onDelete={deleteNode}
               onDuplicate={duplicateNode}
