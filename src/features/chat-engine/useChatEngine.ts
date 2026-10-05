@@ -15,6 +15,8 @@ export type ChatItem =
   | { kind: "delivery"; id: string; nodeId: string; at: string; productId?: string }
   | { kind: "link"; id: string; nodeId: string; at: string }
   | { kind: "call"; id: string; nodeId: string; at: string }
+  /** chamada paga: botão para entrar (ou voltar) na chamada */
+  | { kind: "callAccess"; id: string; nodeId: string; productId: string; at: string }
   | { kind: "recovery"; id: string; text: string; buttonLabel: string; offerNodeId: string | null; at: string };
 
 export type Awaiting =
@@ -476,6 +478,36 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     ]);
   }, []);
 
+  /**
+   * Pagamento aprovado de uma chamada de vídeo (principal ou downsell) → botão "Entrar na chamada" no chat.
+   * Cobre quem recarregou a página, saiu e voltou, ou fechou o pop-up e pagou pelo card.
+   */
+  const grantedCalls = useRef(new Set<string>());
+  const grantCallAccess = useCallback(
+    async (nodeId: string, productId: string): Promise<boolean> => {
+      const node = getNode(graphRef.current, nodeId);
+      let isCall = false;
+      if (node?.type === "offer") {
+        const oc = node.content as OfferContent;
+        isCall = oc.style === "call" && (productId === oc.productId || productId === oc.downsellProductId);
+      } else if (node?.type === "ai") {
+        isCall = callProducts.current.has(productId);
+        if (!isCall && !upsellProducts.current.has(productId)) {
+          // oferta do Cérebro: o servidor diz se o produto é de uma chamada
+          isCall = !!(await transportRef.current?.callVideo(nodeId, productId).catch(() => null));
+          if (isCall) callProducts.current.add(productId);
+        }
+      }
+      const key = `${nodeId}:${productId}`;
+      if (isCall && !grantedCalls.current.has(key)) {
+        grantedCalls.current.add(key);
+        push({ kind: "callAccess", id: lid(), nodeId, productId, at: now() });
+      }
+      return isCall;
+    },
+    [push],
+  );
+
   // ---------- Avanço do fluxo após eventos de pagamento ----------
   useEffect(() => {
     for (const p of Object.values(payments)) {
@@ -509,15 +541,18 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             lastPoll.current = r.serverTime;
             addServerMessages(r.messages);
           }
-          if (target) void run(target);
-          else if (p.status === "APPROVED" && getNode(graphRef.current, p.offerNodeId)?.type === "ai" && !callProducts.current.has(p.productId)) {
-            // oferta da IA sem ramo "Comprou": botão de acesso do produto e a conversa com a IA continua
-            push({ kind: "delivery", id: lid(), nodeId: p.offerNodeId!, productId: p.productId, at: now() });
-          }
+          void (async () => {
+            const isCall = p.status === "APPROVED" ? await grantCallAccess(p.offerNodeId!, p.productId) : false;
+            if (target) void run(target);
+            else if (p.status === "APPROVED" && !isCall && getNode(graphRef.current, p.offerNodeId)?.type === "ai") {
+              // oferta da IA sem ramo "Comprou": botão de acesso do produto e a conversa com a IA continua
+              push({ kind: "delivery", id: lid(), nodeId: p.offerNodeId!, productId: p.productId, at: now() });
+            }
+          })();
         });
       }
     }
-  }, [payments, run, addServerMessages, funnel.products, push]);
+  }, [payments, run, addServerMessages, funnel.products, push, grantCallAccess]);
 
   // ---------- Polling: status do pagamento + mensagens do servidor (recuperação) ----------
   const hasPending = Object.values(payments).some((p) => p.status === "PENDING" || p.status === "CREATED");
@@ -613,6 +648,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     setItems(restored);
     setPayments(paymentMap);
     if (resume.payments.length) setCheckoutOpened(true);
+    // chamadas já pagas: o botão para entrar na chamada volta para o chat
+    for (const p of resume.payments) {
+      if (p.status === "APPROVED" && p.offerNodeId && advancedPayments.current.has(p.id)) void grantCallAccess(p.offerNodeId, p.productId);
+    }
 
     if (resume.conversation.status === "completed") {
       if (resume.payments.some((p) => p.status === "APPROVED")) void ensureUnlocked();
@@ -719,6 +758,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     if (!paid) push({ kind: "offer", id: lid(), nodeId, ...(call.productId ? { productId: call.productId, offer: call.offer } : {}), at: now() });
   }, [call, payments, push]);
 
+  /** entra (ou volta) na chamada já paga */
+  const enterCall = useCallback((nodeId: string, productId: string) => {
+    const node = getNode(graphRef.current, nodeId);
+    setCall({ nodeId, phase: "active", payProductId: productId, ...(node?.type === "ai" ? { productId } : {}) });
+  }, []);
+
   /** upsell marcado no vídeo da chamada */
   const buyUpsell = useCallback(
     async (productId: string) => {
@@ -740,6 +785,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     callError,
     answerCall,
     declineCall,
+    enterCall,
     hangUp,
     buyUpsell,
     graph,

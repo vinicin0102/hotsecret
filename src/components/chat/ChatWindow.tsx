@@ -32,7 +32,7 @@ function visibleItems(items: ChatItem[], count: number, isOpen: (i: ChatItem) =>
   if (items.length <= count) return items;
   const tail = items.slice(-count);
   const pinned: ChatItem[] = [];
-  for (const kind of ["offer", "checkout", "payment"] as const) {
+  for (const kind of ["offer", "checkout", "payment", "callAccess"] as const) {
     const last = [...items].reverse().find((i) => i.kind === kind);
     if (last && !tail.includes(last) && isOpen(last)) pinned.push(last);
   }
@@ -83,7 +83,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
 
 
   const isOpenItem = (i: ChatItem) => {
-    if (i.kind === "checkout") return true;
+    if (i.kind === "checkout" || i.kind === "callAccess") return true;
     if (i.kind === "payment") return ["CREATED", "PENDING"].includes(payments[i.paymentId]?.status ?? "");
     if (i.kind === "offer")
       return !Object.values(payments).some(
@@ -200,6 +200,17 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           </div>
         );
       }
+      case "callAccess":
+        return (
+          <div key={item.id} className="msg-row bot">
+            <div className="link-card call-access">
+              <div className="hint">📹 Sua chamada com {funnel.character.name} está liberada</div>
+              <button className="btn btn-gold cta-glow" style={{ marginTop: 6, minWidth: 240 }} onClick={() => engine.enterCall(item.nodeId, item.productId)}>
+                ENTRAR NA CHAMADA
+              </button>
+            </div>
+          </div>
+        );
       case "call":
         return (
           <div key={item.id} className="msg-row system">
