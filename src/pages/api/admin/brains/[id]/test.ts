@@ -23,6 +23,7 @@ export default apiHandler({
       return {
         messages: r.messages,
         audio: r.audio,
+        image: r.image,
         end: r.end,
         offer: r.offer && {
           id: r.offer.id,

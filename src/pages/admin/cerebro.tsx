@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { UploadInput } from "@/components/admin/UploadInput";
 import { useFetch } from "@/hooks/useFetch";
-import { api } from "@/lib/client";
+import { api, uploadFile } from "@/lib/client";
 import { formatBRL } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 
@@ -40,6 +40,7 @@ interface Brain {
   rules: string;
   offers: Offer[];
   audios: Audio[];
+  images: Audio[];
   maxReplies: number;
   fallbackMessage: string;
 }
@@ -59,6 +60,7 @@ const EMPTY: Draft = {
   rules: "",
   offers: [],
   audios: [],
+  images: [],
   maxReplies: 30,
   fallbackMessage: "",
 };
@@ -158,7 +160,7 @@ function ConnectionCard() {
 }
 
 function TestChat({ brain }: { brain: Brain }) {
-  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; offer?: string }[]>([]);
+  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; offer?: string }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,15 +179,20 @@ function TestChat({ brain }: { brain: Brain }) {
       const r = await api<{
         messages: string[];
         audio: { url: string; when?: string } | null;
+        image: { url: string; when?: string } | null;
         offer: { name: string; price: number; headline: string; style?: string } | null;
         end: boolean;
       }>(`/api/admin/brains/${brain.id}/test`, {
         body: {
-          history: next.map((h) => ({ role: h.role, text: h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text })),
+          history: next.map((h) => ({
+            role: h.role,
+            text: h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
+          })),
         },
       });
       const bot = [
         ...r.messages.map((m) => ({ role: "bot" as const, text: m })),
+        ...(r.image ? [{ role: "bot" as const, text: r.image.when ?? "", image: r.image.url }] : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
         ...(r.offer
           ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
@@ -219,7 +226,10 @@ function TestChat({ brain }: { brain: Brain }) {
         )}
         {history.map((h, i) => (
           <div key={i} className={`bt-msg ${h.role}`}>
-            {h.audio ? (
+            {h.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={h.image} alt="" style={{ maxWidth: 180, borderRadius: 10, display: "block" }} />
+            ) : h.audio ? (
               <audio src={h.audio} controls preload="none" />
             ) : h.offer ? (
               <span className="pill">{h.offer}</span>
@@ -269,6 +279,26 @@ export default function CerebroPage() {
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d));
   const setOffer = (i: number, patch: Partial<Offer>) => set("offers", draft!.offers.map((o, j) => (j === i ? { ...o, ...patch } : o)));
+  const setImage = (i: number, patch: Partial<Audio>) =>
+    setDraft((d) => (d ? { ...d, images: (d.images ?? []).map((a, j) => (j === i ? { ...a, ...patch } : a)) } : d));
+  const imagesRef = useRef<HTMLInputElement>(null);
+  const [imgBusy, setImgBusy] = useState<string | null>(null);
+  const addImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const list = [...files];
+    for (let k = 0; k < list.length; k++) {
+      setImgBusy(`Enviando ${k + 1} de ${list.length}...`);
+      try {
+        const url = await uploadFile(list[k]);
+        setDraft((d) => (d ? { ...d, images: [...(d.images ?? []), { id: shortId("im"), url, when: "" }] } : d));
+      } catch (e) {
+        setImgBusy(e instanceof Error ? e.message : "Falha no envio");
+        return;
+      }
+    }
+    setImgBusy(null);
+    if (imagesRef.current) imagesRef.current.value = "";
+  };
   const setAudio = (i: number, patch: Partial<Audio>) =>
     setDraft((d) => (d ? { ...d, audios: d.audios.map((a, j) => (j === i ? { ...a, ...patch } : a)) } : d));
 
@@ -309,7 +339,7 @@ export default function CerebroPage() {
           className="btn btn-primary"
           onClick={() => {
             setSelected(null);
-            setDraft({ ...EMPTY, offers: [], audios: [] });
+            setDraft({ ...EMPTY, offers: [], audios: [], images: [] });
           }}
         >
           + Novo cérebro
@@ -325,7 +355,7 @@ export default function CerebroPage() {
             <button key={b.id} className={`brain-item ${b.id === draft?.id ? "active" : ""}`} onClick={() => setSelected(b.id)}>
               <b>🧠 {b.name}</b>
               <small>
-                {b.active ? "ativo" : "inativo"} · {b.offers.length} oferta(s) · {b.audios.length} áudio(s)
+                {b.active ? "ativo" : "inativo"} · {b.offers.length} oferta(s) · {b.audios.length} áudio(s) · {(b.images ?? []).length} imagem(ns)
               </small>
             </button>
           ))}
@@ -546,6 +576,41 @@ export default function CerebroPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="card">
+              <div className="card-head">
+                <h3>Imagens (prévias)</h3>
+                <div className="row">
+                  <button className="btn btn-sm" disabled={!!imgBusy && imgBusy.startsWith("Enviando")} onClick={() => imagesRef.current?.click()}>
+                    + Enviar imagens
+                  </button>
+                  <input ref={imagesRef} type="file" accept="image/*" multiple hidden onChange={(e) => addImages(e.target.files)} />
+                </div>
+              </div>
+              <p className="hint" style={{ marginTop: -6 }}>
+                Fotos que a IA pode mandar quando o lead pedir uma prévia, uma provinha ou uma foto. Descreva cada uma (o que mostra e quando usar):
+                a IA escolhe a certa, manda no máximo uma por resposta, não repete e depois puxa para a oferta. Dá para selecionar várias de uma vez.
+              </p>
+              {imgBusy && <p className={imgBusy.startsWith("Enviando") ? "hint" : "error-text"}>{imgBusy}</p>}
+              <div className="brain-images">
+                {(draft.images ?? []).map((a, i) => (
+                  <div key={a.id} className="brain-image">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {a.url ? <img src={a.url} alt="" /> : <div className="ph">sem imagem</div>}
+                    <textarea
+                      className="textarea"
+                      rows={2}
+                      placeholder="Ex.: prévia de lingerie vermelha — quando pedirem uma provinha"
+                      value={a.when ?? ""}
+                      onChange={(e) => setImage(i, { when: e.target.value })}
+                    />
+                    <button className="btn btn-ghost btn-sm" onClick={() => set("images", (draft.images ?? []).filter((_, j) => j !== i))}>
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="row brain-actions">

@@ -54,6 +54,7 @@ export interface CallVideo {
 export interface AiReply {
   messages: string[];
   audio: { url: string } | null;
+  image?: { url: string } | null;
   offer: {
     productId: string;
     headline?: string;
@@ -251,14 +252,15 @@ export function createPreviewTransport(
       else if (message !== null) history.push({ role: "lead", text: message });
       if (!cfg?.brainId) return { messages: ["(preview) Selecione um cérebro neste bloco."], audio: null, offer: null, end: false };
       try {
-        const r = await post<{ messages: string[]; audio: { url: string } | null; offer: AiReply["offer"]; end: boolean }>(
+        const r = await post<{ messages: string[]; audio: { url: string } | null; image: { url: string } | null; offer: AiReply["offer"]; end: boolean }>(
           `/api/admin/brains/${cfg.brainId}/test`,
           { history, goal: cfg.goal },
         );
         for (const m of r.messages) history.push({ role: "bot", text: m });
+        if (r.image) history.push({ role: "bot", text: "[enviou uma foto]" });
         if (r.audio) history.push({ role: "bot", text: "[enviou um áudio]" });
         if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
-        return { messages: r.messages, audio: r.audio ? { url: r.audio.url } : null, offer: r.offer, end: r.end };
+        return { messages: r.messages, audio: r.audio ? { url: r.audio.url } : null, image: r.image ? { url: r.image.url } : null, offer: r.offer, end: r.end };
       } catch (e) {
         return { messages: [`(preview) ${e instanceof Error ? e.message : "Falha na IA"}`], audio: null, offer: null, end: false };
       }

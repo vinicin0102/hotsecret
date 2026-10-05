@@ -187,6 +187,7 @@ export const brainSchema = z.object({
   rules: txt(6000).default(""),
   offers: z.array(brainOfferSchema).max(20).default([]),
   audios: z.array(brainAudioSchema).max(40).default([]),
+  images: z.array(z.object({ id, url: url.pipe(z.string().min(1, "Imagem sem arquivo")), when: optTxt(500) })).max(60).default([]),
   maxReplies: z.number().int().min(1).max(200).default(30),
   fallbackMessage: txt(300).default(""),
 });

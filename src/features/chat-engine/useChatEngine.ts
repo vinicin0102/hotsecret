@@ -292,6 +292,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         setTyping(false);
         push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.messages[i] }, nodeId, at: now() });
       }
+      if (r.image) {
+        setTyping(true);
+        await sleep(1000);
+        if (runId.current !== token) return;
+        setTyping(false);
+        push({ kind: "message", id: lid(), sender: "bot", type: "image", content: { url: r.image.url }, nodeId, at: now() });
+      }
       if (r.audio) {
         setTyping(true);
         await sleep(1400);

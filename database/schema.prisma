@@ -433,6 +433,8 @@ model Brain {
   offers          Json     @default("[]")
   /// áudios gravados que a IA pode enviar: [{ id, url, when }]
   audios          Json     @default("[]")
+  /// imagens (prévias) que a IA pode enviar: [{ id, url, when }]
+  images          Json     @default("[]")
   maxReplies      Int      @default(30)
   fallbackMessage String   @default("")
   createdAt       DateTime @default(now())

@@ -41,7 +41,10 @@ function toTurns(messages: Msg[]): ChatTurn[] {
         break;
       case "image":
       case "video":
-        turns.push({ role: "bot", text: `[enviou ${m.type === "image" ? "uma foto" : "um vídeo"}${c.caption ? `: ${String(c.caption)}` : ""}]` });
+        turns.push({
+          role: "bot",
+          text: `[enviou ${m.type === "image" ? "uma foto" : "um vídeo"}${c.caption ? `: ${String(c.caption)}` : ""}${c.aiImageId ? ` (image_id "${String(c.aiImageId)}")` : ""}]`,
+        });
         break;
       case "audio":
         turns.push({ role: "bot", text: `[enviou um áudio${c.aiAudioId ? ` (audio_id "${String(c.aiAudioId)}")` : ""}]` });
@@ -83,8 +86,8 @@ export default apiHandler({
 
     const where = { conversationId: session.conversationId, nodeId: node.id, type: "ai_reply" };
     const replies = await prisma.event.count({ where });
-    if (body.start && replies > 0) return { messages: [], offer: null, audio: null, end: false };
-    if (replies >= brain.maxReplies) return { messages: [], offer: null, audio: null, end: true, limit: true };
+    if (body.start && replies > 0) return { messages: [], offer: null, audio: null, image: null, end: false };
+    if (replies >= brain.maxReplies) return { messages: [], offer: null, audio: null, image: null, end: true, limit: true };
 
     const text = sanitizeText(body.message, 1000);
     if (!body.start && !body.event && !text) throw new HttpError(400, "Mensagem vazia");
@@ -118,10 +121,13 @@ export default apiHandler({
       console.error("[ai]", e);
       const msg = brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
       await addConversationMessage(session.conversationId, "bot", "text", { text: msg }, node.id);
-      return { messages: [msg], offer: null, audio: null, end: false, error: describeAiError(e) };
+      return { messages: [msg], offer: null, audio: null, image: null, end: false, error: describeAiError(e) };
     }
 
     for (const m of reply.messages) await addConversationMessage(session.conversationId, "bot", "text", { text: m }, node.id);
+    if (reply.image) {
+      await addConversationMessage(session.conversationId, "bot", "image", { url: reply.image.url, caption: "", aiImageId: reply.image.id }, node.id);
+    }
     if (reply.audio) {
       await addConversationMessage(session.conversationId, "bot", "audio", { url: reply.audio.url, caption: "", aiAudioId: reply.audio.id }, node.id);
     }
@@ -152,11 +158,12 @@ export default apiHandler({
       conversationId: session.conversationId,
       type: "ai_reply",
       nodeId: node.id,
-      data: { offerId: reply.offer?.id ?? null, audioId: reply.audio?.id ?? null, end: reply.end, usage: reply.usage ?? null } as Prisma.InputJsonValue,
+      data: { offerId: reply.offer?.id ?? null, audioId: reply.audio?.id ?? null, imageId: reply.image?.id ?? null, end: reply.end, usage: reply.usage ?? null } as Prisma.InputJsonValue,
     });
     return {
       messages: reply.messages,
       audio: reply.audio ? { url: reply.audio.url } : null,
+      image: reply.image ? { url: reply.image.url } : null,
       offer,
       end: reply.end,
     };
