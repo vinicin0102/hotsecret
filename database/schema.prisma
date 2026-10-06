@@ -429,6 +429,8 @@ model Brain {
   knowledge       String   @default("")
   /// regras extras (o que nunca dizer, limites...)
   rules           String   @default("")
+  /// regras obrigatórias: o que a IA DEVE fazer sempre (uma por linha)
+  mustRules       String   @default("")
   /// [{ id, productId, when, pitch, headline, ctaLabel }]
   offers          Json     @default("[]")
   /// áudios gravados que a IA pode enviar: [{ id, url, when }]

@@ -49,6 +49,7 @@ interface Brain {
   persona: string;
   knowledge: string;
   rules: string;
+  mustRules: string;
   offers: Offer[];
   audios: Audio[];
   images: (Audio & { kind?: "image" | "video" })[];
@@ -69,6 +70,7 @@ const EMPTY: Draft = {
   persona: "",
   knowledge: "",
   rules: "",
+  mustRules: "",
   offers: [],
   audios: [],
   images: [],
@@ -428,6 +430,20 @@ export default function CerebroPage() {
                   onChange={(e) => set("knowledge", e.target.value)}
                 />
                 <div className="hint">{draft.knowledge.length.toLocaleString("pt-BR")} / 60.000 caracteres</div>
+              </div>
+              <div className="field must-rules">
+                <label htmlFor="b-must">Regras obrigatórias (o que a IA DEVE seguir sempre)</label>
+                <textarea
+                  id="b-must"
+                  className="textarea"
+                  rows={5}
+                  placeholder={"Uma regra por linha. Ex.:\nSempre chame o lead de amor\nSempre responda com no máximo 2 mensagens\nSempre pergunte o nome do lead antes de oferecer qualquer coisa"}
+                  value={draft.mustRules ?? ""}
+                  onChange={(e) => set("mustRules", e.target.value)}
+                />
+                <div className="hint">
+                  Têm prioridade sobre a personalidade, o conteúdo e o objetivo do bloco. Escreva uma regra por linha, de forma direta.
+                </div>
               </div>
               <div className="field">
                 <label htmlFor="b-rules">Regras (o que ela nunca deve fazer)</label>

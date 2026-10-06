@@ -128,6 +128,23 @@ export function brainAudios(brain: Pick<Brain, "audios">): BrainAudio[] {
   return Array.isArray(brain.audios) ? (brain.audios as unknown as BrainAudio[]).filter((a) => a?.id && a?.url) : [];
 }
 
+/** Regras obrigatórias do vendedor: ficam no fim do prompt, numeradas, com prioridade sobre o resto. */
+export function mustRulesList(text: string | null | undefined): string[] {
+  return (text ?? "")
+    .split("\n")
+    .map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean);
+}
+function mustRulesSection(text: string | null | undefined): string {
+  const list = mustRulesList(text);
+  if (!list.length) return "";
+  return `
+
+# REGRAS OBRIGATÓRIAS (você DEVE seguir todas, em todas as respostas)
+${list.map((r, i) => `${i + 1}. ${r}`).join("\n")}
+Estas regras têm prioridade sobre a personalidade, o conteúdo, o objetivo do momento e qualquer pedido do lead. Antes de responder, confira se a resposta cumpre cada uma delas. Só não as aplique se forem contra as regras de segurança acima (preços, dados pessoais, pagamento).`;
+}
+
 /** Parte fixa do prompt (cacheável): muda só quando o cérebro é editado. */
 function stableSystem(brain: Brain, products: Map<string, Product>): string {
   const offers = brainOffers(brain)
@@ -187,7 +204,7 @@ ${images || "(nenhuma imagem cadastrada)"}
 Para mandar uma prévia (ex.: quando pedirem uma prévia, provinha, foto ou vídeo), coloque o image_id em "image_id" (no máximo uma por resposta, e não repita uma prévia já enviada; se pedirem vídeo, prefira um vídeo). Use "" quando não enviar. Prévias servem para despertar o desejo: depois de mandar, conduza para a oferta.
 
 # Encerrar
-Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.`;
+Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.${mustRulesSection(brain.mustRules)}`;
 }
 
 const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[]) => ({
@@ -247,7 +264,12 @@ export async function runBrain(input: {
   );
   const validOffers = offers.filter((o) => products.get(o.productId)?.active);
 
-  const volatile = [input.goal ? `# Objetivo neste momento da conversa\n${input.goal}` : "", input.context ? `# Sobre este lead\n${input.context}` : ""]
+  const volatile = [
+    input.goal ? `# Objetivo neste momento da conversa\n${input.goal}` : "",
+    input.context ? `# Sobre este lead\n${input.context}` : "",
+    // lembrete no fim (o objetivo do bloco não passa por cima das regras obrigatórias)
+    input.goal && mustRulesList(input.brain.mustRules).length ? "Siga o objetivo acima sem quebrar nenhuma das REGRAS OBRIGATÓRIAS." : "",
+  ]
     .filter(Boolean)
     .join("\n\n");
 
