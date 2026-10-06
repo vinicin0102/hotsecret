@@ -40,7 +40,7 @@ interface Brain {
   rules: string;
   offers: Offer[];
   audios: Audio[];
-  images: Audio[];
+  images: (Audio & { kind?: "image" | "video" })[];
   maxReplies: number;
   fallbackMessage: string;
 }
@@ -160,7 +160,7 @@ function ConnectionCard() {
 }
 
 function TestChat({ brain }: { brain: Brain }) {
-  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; offer?: string }[]>([]);
+  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; video?: string; offer?: string }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,20 +179,22 @@ function TestChat({ brain }: { brain: Brain }) {
       const r = await api<{
         messages: string[];
         audio: { url: string; when?: string } | null;
-        image: { url: string; when?: string } | null;
+        image: { url: string; when?: string; kind?: string } | null;
         offer: { name: string; price: number; headline: string; style?: string } | null;
         end: boolean;
       }>(`/api/admin/brains/${brain.id}/test`, {
         body: {
           history: next.map((h) => ({
             role: h.role,
-            text: h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
+            text: h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
           })),
         },
       });
       const bot = [
         ...r.messages.map((m) => ({ role: "bot" as const, text: m })),
-        ...(r.image ? [{ role: "bot" as const, text: r.image.when ?? "", image: r.image.url }] : []),
+        ...(r.image
+          ? [{ role: "bot" as const, text: r.image.when ?? "", ...(r.image.kind === "video" ? { video: r.image.url } : { image: r.image.url }) }]
+          : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
         ...(r.offer
           ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
@@ -226,7 +228,9 @@ function TestChat({ brain }: { brain: Brain }) {
         )}
         {history.map((h, i) => (
           <div key={i} className={`bt-msg ${h.role}`}>
-            {h.image ? (
+            {h.video ? (
+              <video src={h.video} controls playsInline style={{ maxWidth: 200, borderRadius: 10, display: "block" }} />
+            ) : h.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={h.image} alt="" style={{ maxWidth: 180, borderRadius: 10, display: "block" }} />
             ) : h.audio ? (
@@ -289,8 +293,10 @@ export default function CerebroPage() {
     for (let k = 0; k < list.length; k++) {
       setImgBusy(`Enviando ${k + 1} de ${list.length}...`);
       try {
-        const url = await uploadFile(list[k]);
-        setDraft((d) => (d ? { ...d, images: [...(d.images ?? []), { id: shortId("im"), url, when: "" }] } : d));
+        const file = list[k];
+        const url = await uploadFile(file);
+        const kind = file.type.startsWith("video/") ? ("video" as const) : ("image" as const);
+        setDraft((d) => (d ? { ...d, images: [...(d.images ?? []), { id: shortId("im"), url, when: "", kind }] } : d));
       } catch (e) {
         setImgBusy(e instanceof Error ? e.message : "Falha no envio");
         return;
@@ -355,7 +361,7 @@ export default function CerebroPage() {
             <button key={b.id} className={`brain-item ${b.id === draft?.id ? "active" : ""}`} onClick={() => setSelected(b.id)}>
               <b>🧠 {b.name}</b>
               <small>
-                {b.active ? "ativo" : "inativo"} · {b.offers.length} oferta(s) · {b.audios.length} áudio(s) · {(b.images ?? []).length} imagem(ns)
+                {b.active ? "ativo" : "inativo"} · {b.offers.length} oferta(s) · {b.audios.length} áudio(s) · {(b.images ?? []).length} prévia(s)
               </small>
             </button>
           ))}
@@ -580,24 +586,34 @@ export default function CerebroPage() {
 
             <div className="card">
               <div className="card-head">
-                <h3>Imagens (prévias)</h3>
+                <h3>Prévias (fotos e vídeos)</h3>
                 <div className="row">
                   <button className="btn btn-sm" disabled={!!imgBusy && imgBusy.startsWith("Enviando")} onClick={() => imagesRef.current?.click()}>
-                    + Enviar imagens
+                    + Enviar fotos ou vídeos
                   </button>
-                  <input ref={imagesRef} type="file" accept="image/*" multiple hidden onChange={(e) => addImages(e.target.files)} />
+                  <input ref={imagesRef} type="file" accept="image/*,video/mp4,video/webm" multiple hidden onChange={(e) => addImages(e.target.files)} />
                 </div>
               </div>
               <p className="hint" style={{ marginTop: -6 }}>
-                Fotos que a IA pode mandar quando o lead pedir uma prévia, uma provinha ou uma foto. Descreva cada uma (o que mostra e quando usar):
-                a IA escolhe a certa, manda no máximo uma por resposta, não repete e depois puxa para a oferta. Dá para selecionar várias de uma vez.
+                Fotos e vídeos curtos que a IA pode mandar quando o lead pedir uma prévia, uma provinha, uma foto ou um vídeo. Descreva cada um (o que
+                mostra e quando usar): a IA escolhe o certo, manda no máximo um por resposta, não repete e depois puxa para a oferta. Dá para selecionar
+                vários de uma vez. Vídeos: MP4, de preferência curtos e leves.
               </p>
               {imgBusy && <p className={imgBusy.startsWith("Enviando") ? "hint" : "error-text"}>{imgBusy}</p>}
               <div className="brain-images">
                 {(draft.images ?? []).map((a, i) => (
                   <div key={a.id} className="brain-image">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {a.url ? <img src={a.url} alt="" /> : <div className="ph">sem imagem</div>}
+                    {!a.url ? (
+                      <div className="ph">sem arquivo</div>
+                    ) : a.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(a.url) ? (
+                      <div className="brain-video">
+                        <video src={a.url} muted playsInline preload="metadata" controls />
+                        <span className="pill">▶ vídeo</span>
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={a.url} alt="" />
+                    )}
                     <textarea
                       className="textarea"
                       rows={2}

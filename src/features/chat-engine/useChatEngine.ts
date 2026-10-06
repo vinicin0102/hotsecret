@@ -299,7 +299,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         await sleep(1000);
         if (runId.current !== token) return;
         setTyping(false);
-        push({ kind: "message", id: lid(), sender: "bot", type: "image", content: { url: r.image.url }, nodeId, at: now() });
+        push({ kind: "message", id: lid(), sender: "bot", type: r.image.kind === "video" ? "video" : "image", content: { url: r.image.url }, nodeId, at: now() });
       }
       if (r.audio) {
         setTyping(true);

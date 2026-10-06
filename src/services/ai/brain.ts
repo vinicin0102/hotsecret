@@ -29,6 +29,16 @@ export interface BrainOffer {
   downsellProductId?: string;
   downsellText?: string;
 }
+/** prévia (foto ou vídeo) */
+export interface BrainMedia {
+  id: string;
+  url: string;
+  when?: string;
+  kind?: "image" | "video";
+}
+export function mediaKind(m: { url: string; kind?: string }): "image" | "video" {
+  return m.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(m.url) ? "video" : "image";
+}
 export interface BrainAudio {
   id: string;
   url: string;
@@ -95,8 +105,10 @@ async function aiClient() {
 export function brainOffers(brain: Pick<Brain, "offers">): BrainOffer[] {
   return Array.isArray(brain.offers) ? (brain.offers as unknown as BrainOffer[]).filter((o) => o?.id && o?.productId) : [];
 }
-export function brainImages(brain: Pick<Brain, "images">): BrainAudio[] {
-  return Array.isArray(brain.images) ? (brain.images as unknown as BrainAudio[]).filter((a) => a?.id && a?.url) : [];
+export function brainImages(brain: Pick<Brain, "images">): BrainMedia[] {
+  return Array.isArray(brain.images)
+    ? (brain.images as unknown as BrainMedia[]).filter((a) => a?.id && a?.url).map((a) => ({ ...a, kind: mediaKind(a) }))
+    : [];
 }
 export function brainAudios(brain: Pick<Brain, "audios">): BrainAudio[] {
   return Array.isArray(brain.audios) ? (brain.audios as unknown as BrainAudio[]).filter((a) => a?.id && a?.url) : [];
@@ -124,7 +136,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>): string {
     .map((a) => `- audio_id "${a.id}": ${a.when || "(sem descrição)"}`)
     .join("\n");
   const images = brainImages(brain)
-    .map((a) => `- image_id "${a.id}": ${a.when || "(sem descrição)"}`)
+    .map((a) => `- image_id "${a.id}" (${a.kind === "video" ? "vídeo" : "foto"}): ${a.when || "(sem descrição)"}`)
     .join("\n");
 
   return `Você conversa com um lead em um chat de vendas, como uma pessoa real conversando pelo celular.
@@ -153,9 +165,9 @@ Para mostrar o card de compra (ou ligar, nas ofertas em formato de chamada), col
 ${audios || "(nenhum áudio cadastrado)"}
 Para enviar um áudio, coloque o audio_id em "audio_id" (no máximo um por resposta, e não repita um áudio já enviado). Use "" quando não enviar.
 
-# Imagens (prévias)
+# Prévias (fotos e vídeos)
 ${images || "(nenhuma imagem cadastrada)"}
-Para mandar uma foto (ex.: quando pedirem uma prévia, provinha ou foto), coloque o image_id em "image_id" (no máximo uma por resposta, e não repita uma imagem já enviada). Use "" quando não enviar. Prévias servem para despertar o desejo: depois de mandar, conduza para a oferta.
+Para mandar uma prévia (ex.: quando pedirem uma prévia, provinha, foto ou vídeo), coloque o image_id em "image_id" (no máximo uma por resposta, e não repita uma prévia já enviada; se pedirem vídeo, prefira um vídeo). Use "" quando não enviar. Prévias servem para despertar o desejo: depois de mandar, conduza para a oferta.
 
 # Encerrar
 Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.`;
@@ -183,7 +195,7 @@ export interface BrainReply {
   messages: string[];
   offer: (BrainOffer & { product: Product }) | null;
   audio: BrainAudio | null;
-  image: BrainAudio | null;
+  image: BrainMedia | null;
   end: boolean;
   usage?: { input: number; output: number; cacheRead: number };
 }

@@ -1071,3 +1071,20 @@ code.inline {
   font-size: 12.5px;
   min-height: 0;
 }
+.brain-video {
+  position: relative;
+}
+.brain-video video {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+  display: block;
+}
+.brain-video .pill {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 10px;
+}

@@ -126,7 +126,8 @@ export default apiHandler({
 
     for (const m of reply.messages) await addConversationMessage(session.conversationId, "bot", "text", { text: m }, node.id);
     if (reply.image) {
-      await addConversationMessage(session.conversationId, "bot", "image", { url: reply.image.url, caption: "", aiImageId: reply.image.id }, node.id);
+      const kind = reply.image.kind === "video" ? "video" : "image";
+      await addConversationMessage(session.conversationId, "bot", kind, { url: reply.image.url, caption: "", aiImageId: reply.image.id }, node.id);
     }
     if (reply.audio) {
       await addConversationMessage(session.conversationId, "bot", "audio", { url: reply.audio.url, caption: "", aiAudioId: reply.audio.id }, node.id);
@@ -163,7 +164,7 @@ export default apiHandler({
     return {
       messages: reply.messages,
       audio: reply.audio ? { url: reply.audio.url } : null,
-      image: reply.image ? { url: reply.image.url } : null,
+      image: reply.image ? { url: reply.image.url, kind: reply.image.kind === "video" ? "video" : "image" } : null,
       offer,
       end: reply.end,
     };
