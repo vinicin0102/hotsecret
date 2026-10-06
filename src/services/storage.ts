@@ -170,3 +170,54 @@ export async function storeFile(buf: Buffer, mime: string): Promise<string> {
   const media = await prisma.media.create({ data: { mime, size: buf.length, data: new Uint8Array(buf) } });
   return withBase(`/api/uploads/${media.id}.${ext}`);
 }
+
+// ---------- Fotos enviadas pelo lead no chat ----------
+export const LEAD_PHOTO_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
+/** a foto já chega comprimida pelo navegador (~1600px); o limite cobre a função da Vercel */
+export const MAX_LEAD_PHOTO_BYTES = 4 * 1024 * 1024;
+
+/** Guarda a foto do lead: Supabase Storage (pasta leads/), senão Blob ou banco. */
+export async function storeLeadPhoto(buf: Buffer, mime: string): Promise<string> {
+  const cfg = supabaseConfig();
+  if (cfg) {
+    try {
+      await ensureBucket(cfg);
+      const path = `leads/${Date.now()}-${randomBytes(12).toString("hex")}.${ALLOWED_MIME[mime]}`;
+      const res = await fetch(`${cfg.url}/storage/v1/object/${BUCKET}/${path}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cfg.key}`, apikey: cfg.key, "Content-Type": mime, "x-upsert": "false" },
+        body: new Uint8Array(buf),
+      });
+      if (!res.ok) throw new Error(`upload ${res.status} ${(await res.text()).slice(0, 200)}`);
+      return `${cfg.url}/storage/v1/object/public/${BUCKET}/${path}`;
+    } catch (err) {
+      console.error("[storage] foto do lead no Supabase falhou, usando o banco", err);
+    }
+  }
+  return storeFile(buf, mime);
+}
+
+/** Lê uma imagem guardada por este sistema (para a IA ver a foto do lead). Links de fora não são buscados. */
+export async function readStoredImage(url: string): Promise<{ data: string; mime: string } | null> {
+  const local = /\/api\/uploads\/([a-z0-9]{10,40})\.\w{2,5}$/.exec(url);
+  if (local && url.startsWith(withBase("/api/uploads/"))) {
+    const media = await prisma.media.findUnique({ where: { id: local[1] } });
+    if (!media || !media.mime.startsWith("image/")) return null;
+    return { data: Buffer.from(media.data).toString("base64"), mime: media.mime };
+  }
+  const cfg = supabaseConfig();
+  const trusted =
+    (cfg && url.startsWith(`${cfg.url}/storage/v1/object/public/${BUCKET}/leads/`)) ||
+    /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/hot-secret\//.test(url);
+  if (!trusted) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!LEAD_PHOTO_MIME.includes(mime as (typeof LEAD_PHOTO_MIME)[number]) || buf.length > MAX_LEAD_PHOTO_BYTES) return null;
+    return { data: buf.toString("base64"), mime };
+  } catch {
+    return null;
+  }
+}

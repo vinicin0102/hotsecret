@@ -5,6 +5,7 @@ import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, Off
 import { autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
+import { compressPhoto } from "./photo";
 
 export type ChatItem =
   | { kind: "message"; id: string; sender: "bot" | "user" | "system"; type: "text" | "image" | "video" | "audio"; content: Record<string, unknown>; nodeId?: string | null; at: string }
@@ -136,7 +137,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     return runId.current === token;
   }, []);
 
-  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined") => Promise<void>>(async () => undefined);
+  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined" | "photo") => Promise<void>>(async () => undefined);
 
   /** Percorre o fluxo a partir de um nó até encontrar um ponto de espera. */
   const run = useCallback(
@@ -270,7 +271,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   /** Uma rodada do Cérebro: envia a mensagem do lead e mostra a resposta como se alguém estivesse digitando. */
   const aiTurn = useCallback(
-    async (nodeId: string, text: string | null, event?: "call_declined") => {
+    async (nodeId: string, text: string | null, event?: "call_declined" | "photo") => {
       const t = transportRef.current;
       if (!t) return;
       const token = ++runId.current;
@@ -392,6 +393,55 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       void run(nextNodeId(graphRef.current, nodeId));
     },
     [awaiting, markChatStarted, push, run, track, aiTurn],
+  );
+
+  /** Foto do lead (câmera ou galeria): aparece no chat na hora, é enviada e segue a conversa. */
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const sendPhoto = useCallback(
+    async (file: File) => {
+      const t = transportRef.current;
+      const a = awaiting;
+      if (!t || !a || photoBusy) return;
+      if (a.kind === "buttons" && a.inputMode === "click") return;
+      const nodeId = a.nodeId;
+      const fail = (text: string) =>
+        push({ kind: "message", id: lid(), sender: "system", type: "text", content: { text }, at: now() });
+      let blob: Blob;
+      try {
+        blob = await compressPhoto(file);
+      } catch {
+        fail("Não consegui abrir essa foto 😕 tenta outra?");
+        return;
+      }
+      const id = lid();
+      const localUrl = URL.createObjectURL(blob);
+      setPhotoBusy(true);
+      markChatStarted();
+      push({ kind: "message", id, sender: "user", type: "image", content: { url: localUrl, sending: true }, nodeId, at: now() });
+      setAwaiting(null);
+      try {
+        await t.sendPhoto(nodeId, blob);
+      } catch (e) {
+        setItems((prev) => prev.filter((i) => i.id !== id));
+        fail(e instanceof Error && e.message ? `Foto não enviada: ${e.message}` : "Foto não enviada, tenta de novo.");
+        setAwaiting(a);
+        return;
+      } finally {
+        setPhotoBusy(false);
+      }
+      setItems((prev) => prev.map((i) => (i.id === id && i.kind === "message" ? { ...i, content: { url: localUrl } } : i)));
+      if (a.kind === "ai") {
+        void aiTurn(nodeId, null, "photo");
+      } else if (a.kind === "buttons") {
+        // foto no lugar de escolher uma opção: segue o caminho de "qualquer outra resposta"
+        const fallback =
+          nextNodeId(graphRef.current, nodeId, "default") ?? (a.buttons[0] ? nextNodeId(graphRef.current, nodeId, `btn:${a.buttons[0].id}`) : null);
+        void run(fallback);
+      } else {
+        void run(nextNodeId(graphRef.current, nodeId));
+      }
+    },
+    [awaiting, photoBusy, push, markChatStarted, aiTurn, run],
   );
 
   const openCheckout = useCallback(
@@ -808,6 +858,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     ended,
     chooseButton,
     submitAnswer,
+    sendPhoto,
+    photoBusy,
     openCheckout,
     submitCheckout,
     simulatePayment,

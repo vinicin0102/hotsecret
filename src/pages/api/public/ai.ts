@@ -21,7 +21,8 @@ const schema = z.object({
   /** a IA puxa a conversa (bloco com "A IA puxa a conversa") */
   start: z.boolean().optional(),
   /** algo que o lead fez no chat (ex.: recusou a chamada de vídeo) */
-  event: z.enum(["call_declined"]).optional(),
+  /** call_declined: recusou a chamada · photo: o lead acabou de mandar uma foto (já gravada por /api/public/photo) */
+  event: z.enum(["call_declined", "photo"]).optional(),
 });
 
 type Msg = { sender: string; type: string; content: unknown };
@@ -41,6 +42,11 @@ function toTurns(messages: Msg[]): ChatTurn[] {
         break;
       case "image":
       case "video":
+        if (m.sender === "user") {
+          // foto enviada pelo lead: a IA vê a imagem (as mais recentes)
+          if (m.type === "image" && typeof c.url === "string") turns.push({ role: "lead", text: "[enviou uma foto]", imageUrl: c.url });
+          break;
+        }
         turns.push({
           role: "bot",
           text: `[enviou ${m.type === "image" ? "uma foto" : "um vídeo"}${c.caption ? `: ${String(c.caption)}` : ""}${c.aiImageId ? ` (image_id "${String(c.aiImageId)}")` : ""}]`,

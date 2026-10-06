@@ -50,6 +50,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   const { items, typing, awaiting, payments, ended } = engine;
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
 
   useEffect(() => {
@@ -103,6 +104,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           return (
             <MessageBubble key={item.id} sender={item.sender} at={item.at} media>
               <ImageMessage url={m.url} caption={m.caption} />
+              {c.sending ? <div className="photo-sending">enviando…</div> : null}
             </MessageBubble>
           );
         }
@@ -314,6 +316,32 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           )}
         </div>
         <div className="composer">
+          <input
+            ref={photoRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void engine.sendPhoto(f);
+            }}
+          />
+          <button
+            type="button"
+            className="photo-btn"
+            aria-label="Enviar foto"
+            title="Tirar ou enviar foto"
+            disabled={!canType || engine.photoBusy}
+            onClick={() => photoRef.current?.click()}
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"
+              />
+            </svg>
+          </button>
           <textarea
             ref={inputRef}
             rows={1}

@@ -53,7 +53,7 @@ export function rateLimit(req: NextApiRequest, scope: string, limit: number, win
 }
 
 /** Bloqueia requisições de mutação vindas de outra origem (proteção CSRF). */
-function assertSameOrigin(req: NextApiRequest) {
+export function assertSameOrigin(req: NextApiRequest) {
   if (req.method === "GET" || req.method === "HEAD") return;
   const origin = req.headers.origin;
   if (!origin) return; // requisições não-browser (sem cookies de terceiros)

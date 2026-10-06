@@ -46,6 +46,7 @@ const EVENT_LABEL: Record<string, string> = {
   button_clicked: "Clicou em botão",
   question_answered: "Respondeu pergunta",
   image_viewed: "Viu imagem",
+  photo_sent: "Enviou foto",
   video_started: "Iniciou vídeo",
   audio_played: "Ouviu áudio",
   offer_viewed: "Viu a oferta",

@@ -82,7 +82,9 @@ export interface ChatTransport {
   /** link do vídeo de visualização única (null = já visualizado) */
   viewOnce(nodeId: string): Promise<string | null>;
   /** Cérebro: a IA responde (message null = a IA puxa a conversa) */
-  ai(nodeId: string, message: string | null, event?: "call_declined"): Promise<AiReply>;
+  ai(nodeId: string, message: string | null, event?: "call_declined" | "photo"): Promise<AiReply>;
+  /** foto do lead (já comprimida) → link da foto gravada na conversa */
+  sendPhoto(nodeId: string, photo: Blob): Promise<string>;
   /** tarot: cartas reveladas (só depois do pagamento aprovado) */
   tarot(nodeId: string, productId?: string): Promise<TarotCard[] | null>;
   /** chamada de vídeo: vídeo + linha do tempo da oferta (productId: oferta do Cérebro) */
@@ -139,6 +141,17 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
     async unlock() {
       const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
       return r.nodes;
+    },
+    async sendPhoto(nodeId, photo) {
+      await chain;
+      const res = await fetch(withBase(`/api/public/photo?nodeId=${encodeURIComponent(nodeId)}`), {
+        method: "POST",
+        headers: { "Content-Type": photo.type || "image/jpeg", "x-lead-token": getToken() ?? "" },
+        body: photo,
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new ApiError(res.status, data.error ?? "Não foi possível enviar a foto");
+      return data.url;
     },
     async tarot(nodeId, productId) {
       const r = await post<{ cards: TarotCard[] | null }>("/api/public/tarot", { token: getToken(), nodeId, productId });
@@ -217,6 +230,9 @@ export function createPreviewTransport(
     async unlock() {
       return []; // o preview já recebe o fluxo completo
     },
+    async sendPhoto(_nodeId, photo) {
+      return URL.createObjectURL(photo); // preview: nada é enviado
+    },
     async tarot(nodeId, productId) {
       const paid = [...payments.values()].some((p) => p.offerNodeId === nodeId && p.status === "APPROVED" && (!productId || p.productId === productId));
       if (!paid) return null;
@@ -267,6 +283,7 @@ export function createPreviewTransport(
       const history = aiHistory.get(nodeId) ?? [];
       aiHistory.set(nodeId, history);
       if (event === "call_declined") history.push({ role: "lead", text: "[recusou a chamada de vídeo]" });
+      else if (event === "photo") history.push({ role: "lead", text: "[enviou uma foto]" });
       else if (message !== null) history.push({ role: "lead", text: message });
       if (!cfg?.brainId) return { messages: ["(preview) Selecione um cérebro neste bloco."], audio: null, offer: null, end: false };
       try {

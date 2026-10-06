@@ -1596,3 +1596,33 @@
     transition-delay: 0s;
   }
 }
+
+/* ---------- Foto enviada pelo lead ---------- */
+.composer .photo-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border-2);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--pink-light);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.composer .photo-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.photo-sending {
+  font-size: 11px;
+  opacity: 0.75;
+  padding: 4px 6px 0;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
