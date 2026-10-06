@@ -4,6 +4,7 @@ import type { Brain, Product } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 import { formatBRL } from "@/lib/format";
+import type { TarotCard } from "@/types/flow";
 
 export const AI_MODELS = [
   { id: "claude-opus-5-5", label: "Claude Opus 5.5 — mais inteligente (recomendado)" },
@@ -23,8 +24,10 @@ export interface BrainOffer {
   headline?: string;
   ctaLabel?: string;
   /** card: card de compra · call: chamada de vídeo recebida (vídeo da aba Vídeos) */
-  style?: "card" | "call";
+  style?: "card" | "call" | "tarot";
   videoId?: string;
+  tarotCards?: TarotCard[];
+  tarotBackUrl?: string;
   /** chamada: produto do pop-up quando o lead recusa */
   downsellProductId?: string;
   downsellText?: string;
@@ -110,6 +113,17 @@ export function brainImages(brain: Pick<Brain, "images">): BrainMedia[] {
     ? (brain.images as unknown as BrainMedia[]).filter((a) => a?.id && a?.url).map((a) => ({ ...a, kind: mediaKind(a) }))
     : [];
 }
+/** cartas da oferta de tarot com conteúdo (as vazias são ignoradas) */
+export function tarotCardsOf(o: { tarotCards?: TarotCard[] }): TarotCard[] {
+  return (o.tarotCards ?? []).filter((c) => c?.id && (c.name || c.imageUrl || c.meaning));
+}
+/** formato da oferta mostrado ao lead + cartas do tarot só com id/posição (a leitura vem depois do pagamento) */
+export function publicOfferFormat(o: BrainOffer): { style: "card" | "call" | "tarot"; tarotCards?: TarotCard[]; tarotBackUrl?: string } {
+  if (o.style === "call" && o.videoId) return { style: "call" };
+  const cards = o.style === "tarot" ? tarotCardsOf(o) : [];
+  if (cards.length) return { style: "tarot", tarotCards: cards.map((c) => ({ id: c.id, label: c.label })), tarotBackUrl: o.tarotBackUrl || undefined };
+  return { style: "card" };
+}
 export function brainAudios(brain: Pick<Brain, "audios">): BrainAudio[] {
   return Array.isArray(brain.audios) ? (brain.audios as unknown as BrainAudio[]).filter((a) => a?.id && a?.url) : [];
 }
@@ -126,6 +140,9 @@ function stableSystem(brain: Brain, products: Map<string, Product>): string {
         o.when ? `  Quando oferecer: ${o.when}` : "",
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
         o.style === "call" ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa." : "",
+        o.style === "tarot"
+          ? `  Formato: aparecem ${tarotCardsOf(o).length || 3} CARTAS DE TAROT viradas no chat; o lead toca nelas para ver o preço e, depois do PIX, as cartas são reveladas com a leitura. Você não sabe quais são as cartas: nunca invente nem antecipe a leitura — crie mistério e curiosidade.`
+          : "",
       ]
         .filter(Boolean)
         .join("\n");

@@ -1,7 +1,7 @@
 // Executa o fluxo no navegador: percorre os nós em sequência, mostra "digitando", aguarda
 // respostas/cliques, abre o checkout e avança somente quando o servidor confirma o pagamento.
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, OfferContent, PublicFunnel } from "@/types/flow";
+import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, OfferContent, PublicFunnel, TarotCard } from "@/types/flow";
 import { autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
@@ -77,6 +77,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const upsellProducts = useRef(new Set<string>());
   /** produtos pagos pelo pop-up da chamada: a entrega é o próprio vídeo (sem botão de acesso no chat) */
   const callProducts = useRef(new Set<string>());
+  /** produtos de ofertas de tarot do Cérebro: o acesso é a revelação das cartas (sem botão "Acessar") */
+  const tarotProducts = useRef(new Set<string>());
 
   const runId = useRef(0);
   /** ofertas exibidas com mensagens de apoio rodando (param no clique em comprar ou na aprovação) */
@@ -318,7 +320,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           description: r.offer.description,
           downsellProductId: r.offer.downsellProductId,
           downsellText: r.offer.downsellText,
+          ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
         };
+        if (r.offer.style === "tarot") tarotProducts.current.add(r.offer.productId);
         if (r.offer.style === "call") {
           // oferta do Cérebro em formato de chamada: toca a ligação
           setTyping(false);
@@ -544,7 +548,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           void (async () => {
             const isCall = p.status === "APPROVED" ? await grantCallAccess(p.offerNodeId!, p.productId) : false;
             if (target) void run(target);
-            else if (p.status === "APPROVED" && !isCall && getNode(graphRef.current, p.offerNodeId)?.type === "ai") {
+            else if (p.status === "APPROVED" && !isCall && !tarotProducts.current.has(p.productId) && getNode(graphRef.current, p.offerNodeId)?.type === "ai") {
               // oferta da IA sem ramo "Comprou": botão de acesso do produto e a conversa com a IA continua
               push({ kind: "delivery", id: lid(), nodeId: p.offerNodeId!, productId: p.productId, at: now() });
             }
@@ -602,6 +606,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const c = m.content ?? {};
       if (m.type === "offer" && m.nodeId) {
         const isAi = getNode(graphRef.current, m.nodeId)?.type === "ai";
+        if (isAi && c.style === "tarot" && typeof c.productId === "string") tarotProducts.current.add(c.productId);
         restored.push(
           isAi && typeof c.productId === "string"
             ? {
@@ -609,7 +614,14 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
                 id: m.id,
                 nodeId: m.nodeId,
                 productId: c.productId,
-                offer: { productId: c.productId, headline: (c.headline as string) || undefined, ctaLabel: (c.ctaLabel as string) || undefined },
+                offer: {
+                  productId: c.productId,
+                  headline: (c.headline as string) || undefined,
+                  ctaLabel: (c.ctaLabel as string) || undefined,
+                  ...(c.style === "tarot" && Array.isArray(c.tarotCards)
+                    ? { style: "tarot" as const, tarotCards: c.tarotCards as TarotCard[], tarotBackUrl: (c.tarotBackUrl as string) || undefined }
+                    : {}),
+                },
                 at: m.createdAt,
               }
             : { kind: "offer", id: m.id, nodeId: m.nodeId, at: m.createdAt },

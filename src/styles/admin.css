@@ -1088,3 +1088,19 @@ code.inline {
   left: 6px;
   font-size: 10px;
 }
+
+/* Cérebro: cartas da oferta de tarot */
+.tarot-edit {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.tarot-edit-card {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(216, 168, 92, 0.25);
+  background: rgba(120, 70, 180, 0.06);
+}
+.tarot-edit-card .field {
+  margin-bottom: 8px;
+}

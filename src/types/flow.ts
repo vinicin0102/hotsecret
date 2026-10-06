@@ -79,13 +79,26 @@ export interface ButtonsContent {
   inputMode?: AnswerInputMode;
   placeholder?: string;
 }
+/** carta da oferta de tarot: o lead vê só o verso; nome, imagem e leitura aparecem depois do pagamento */
+export interface TarotCard {
+  id: string;
+  /** posição (ex.: Passado, Presente, Futuro) — aparece com a carta virada */
+  label?: string;
+  name?: string;
+  imageUrl?: string;
+  meaning?: string;
+}
 export interface OfferContent {
   productId: string;
   headline?: string;
   description?: string;
   ctaLabel?: string;
-  /** card: card de compra · call: chamada de vídeo recebida (Atender gera o PIX, Recusar segue "Recusou a chamada") */
-  style?: "card" | "call";
+  /** card: card de compra · call: chamada de vídeo recebida (Atender gera o PIX, Recusar segue "Recusou a chamada") · tarot: cartas viradas reveladas após o pagamento (só ofertas do Cérebro) */
+  style?: "card" | "call" | "tarot";
+  /** tarot: as cartas (no chat público só vão id e posição até o pagamento) */
+  tarotCards?: TarotCard[];
+  /** tarot: imagem do verso das cartas */
+  tarotBackUrl?: string;
   /** vídeo da chamada (aba Vídeos) */
   videoId?: string;
   /** chamada: produto oferecido quando o lead recusa (ex.: chamada mais curta e mais barata) */

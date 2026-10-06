@@ -14,11 +14,22 @@ interface AiSettings {
   model: string;
   models: { id: string; label: string }[];
 }
+interface TarotCard {
+  id: string;
+  label?: string;
+  name?: string;
+  imageUrl?: string;
+  meaning?: string;
+}
+const defaultTarot = (): TarotCard[] =>
+  ["Passado", "Presente", "Futuro"].map((label) => ({ id: shortId("tc"), label, name: "", imageUrl: "", meaning: "" }));
 interface Offer {
   id: string;
   productId: string;
-  style?: "card" | "call";
+  style?: "card" | "call" | "tarot";
   videoId?: string;
+  tarotCards?: TarotCard[];
+  tarotBackUrl?: string;
   downsellProductId?: string;
   downsellText?: string;
   when?: string;
@@ -197,7 +208,7 @@ function TestChat({ brain }: { brain: Brain }) {
           : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
         ...(r.offer
-          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
+          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
           : []),
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
       ];
@@ -482,9 +493,15 @@ export default function CerebroPage() {
                         [
                           ["card", "Card de compra"],
                           ["call", "📹 Chamada de vídeo"],
+                          ["tarot", "🔮 Cartas de tarot"],
                         ] as const
                       ).map(([s, label]) => (
-                        <button key={s} type="button" className={(o.style ?? "card") === s ? "active" : ""} onClick={() => setOffer(i, { style: s })}>
+                        <button
+                          key={s}
+                          type="button"
+                          className={(o.style ?? "card") === s ? "active" : ""}
+                          onClick={() => setOffer(i, s === "tarot" && !o.tarotCards?.length ? { style: s, tarotCards: defaultTarot() } : { style: s })}
+                        >
                           {label}
                         </button>
                       ))}
@@ -527,6 +544,76 @@ export default function CerebroPage() {
                             onChange={(e) => setOffer(i, { downsellText: e.target.value })}
                           />
                         </div>
+                      </div>
+                    </div>
+                  )}
+                  {o.style === "tarot" && (
+                    <div className="field">
+                      <label>Cartas</label>
+                      <p className="hint">
+                        No chat aparecem as cartas viradas. O lead toca e vê o preço; depois do PIX aprovado elas viram uma a uma com a leitura.
+                        Nome, imagem e leitura só chegam ao lead depois do pagamento (a IA também não vê a leitura, para não entregar antes).
+                      </p>
+                      <div className="tarot-edit">
+                        {(o.tarotCards ?? []).map((c, k) => {
+                          const setCard = (patch: Partial<TarotCard>) =>
+                            setOffer(i, { tarotCards: (o.tarotCards ?? []).map((x, j) => (j === k ? { ...x, ...patch } : x)) });
+                          return (
+                            <div key={c.id} className="tarot-edit-card">
+                              <div className="row" style={{ justifyContent: "space-between" }}>
+                                <strong>Carta {k + 1}</strong>
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => setOffer(i, { tarotCards: (o.tarotCards ?? []).filter((_, j) => j !== k) })}
+                                >
+                                  Remover
+                                </button>
+                              </div>
+                              <div className="grid-2">
+                                <div className="field">
+                                  <label>Posição</label>
+                                  <input className="input" placeholder="Passado" value={c.label ?? ""} onChange={(e) => setCard({ label: e.target.value })} />
+                                </div>
+                                <div className="field">
+                                  <label>Nome da carta</label>
+                                  <input className="input" placeholder="A Estrela" value={c.name ?? ""} onChange={(e) => setCard({ name: e.target.value })} />
+                                </div>
+                              </div>
+                              <div className="field">
+                                <label>Imagem da carta (opcional)</label>
+                                <UploadInput value={c.imageUrl ?? ""} onChange={(url) => setCard({ imageUrl: url })} accept="image/*" />
+                              </div>
+                              <div className="field">
+                                <label>Leitura (revelada após o pagamento)</label>
+                                <textarea
+                                  className="textarea"
+                                  rows={3}
+                                  placeholder="O que esta carta diz para o lead…"
+                                  value={c.meaning ?? ""}
+                                  onChange={(e) => setCard({ meaning: e.target.value })}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {(o.tarotCards?.length ?? 0) < 7 && (
+                        <button
+                          className="btn btn-sm"
+                          style={{ marginTop: 8 }}
+                          onClick={() =>
+                            setOffer(i, { tarotCards: [...(o.tarotCards ?? []), { id: shortId("tc"), label: "", name: "", imageUrl: "", meaning: "" }] })
+                          }
+                        >
+                          + Adicionar carta
+                        </button>
+                      )}
+                      {!(o.tarotCards ?? []).some((c) => c.name || c.imageUrl || c.meaning) && (
+                        <p className="error-text">Preencha as cartas: sem elas, a oferta aparece como card normal.</p>
+                      )}
+                      <div className="field" style={{ marginTop: 10 }}>
+                        <label>Verso das cartas (opcional — sem imagem usa o verso padrão dourado)</label>
+                        <UploadInput value={o.tarotBackUrl ?? ""} onChange={(url) => setOffer(i, { tarotBackUrl: url })} accept="image/*" />
                       </div>
                     </div>
                   )}

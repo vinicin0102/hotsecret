@@ -11,6 +11,9 @@ const id = z.string().regex(/^[a-zA-Z0-9_:-]{1,64}$/);
 
 const button = z.object({ id, label: txt(80), keywords: optTxt(300) });
 const inputMode = z.enum(["type", "both", "click"]).optional();
+const tarotCards = z
+  .array(z.object({ id, label: optTxt(40), name: optTxt(80), imageUrl: optUrl, meaning: optTxt(3000) }))
+  .max(7);
 
 const delaySettings = z.object({
   delayMode: z.enum(["inherit", "fixed", "random", "auto"]).optional(),
@@ -172,10 +175,12 @@ const brainOfferSchema = z.object({
   pitch: optTxt(2000),
   headline: optTxt(120),
   ctaLabel: optTxt(60),
-  style: z.enum(["card", "call"]).optional(),
+  style: z.enum(["card", "call", "tarot"]).optional(),
   videoId: z.string().max(64).optional(),
   downsellProductId: z.string().max(64).optional(),
   downsellText: optTxt(200),
+  tarotCards: tarotCards.optional(),
+  tarotBackUrl: optUrl,
 });
 const brainAudioSchema = z.object({ id, url: url.pipe(z.string().min(1, "Áudio sem arquivo")), when: optTxt(500) });
 

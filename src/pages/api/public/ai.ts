@@ -8,7 +8,7 @@ import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
 import { addConversationMessage } from "@/services/payments/service";
 import { trackEvent } from "@/services/tracking";
-import { describeAiError, runBrain, type ChatTurn } from "@/services/ai/brain";
+import { describeAiError, publicOfferFormat, runBrain, type ChatTurn } from "@/services/ai/brain";
 import { formatBRL } from "@/lib/format";
 import type { AiContent } from "@/types/flow";
 
@@ -52,7 +52,7 @@ function toTurns(messages: Msg[]): ChatTurn[] {
       case "offer":
         turns.push({
           role: "bot",
-          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? formatBRL(c.price) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
+          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? formatBRL(c.price) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
         });
         break;
       case "checkout":
@@ -140,7 +140,7 @@ export default apiHandler({
         headline: reply.offer.headline || p.name,
         ctaLabel: reply.offer.ctaLabel || undefined,
         description: undefined as string | undefined,
-        style: reply.offer.style === "call" && reply.offer.videoId ? ("call" as const) : ("card" as const),
+        ...publicOfferFormat(reply.offer),
         downsellProductId: reply.offer.downsellProductId || undefined,
         downsellText: reply.offer.downsellText || undefined,
       };
@@ -148,7 +148,7 @@ export default apiHandler({
         session.conversationId,
         "bot",
         "offer",
-        { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, aiOfferId: reply.offer.id, style: offer.style } as Prisma.InputJsonValue,
+        { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, aiOfferId: reply.offer.id, style: offer.style, tarotCards: offer.tarotCards ?? null, tarotBackUrl: offer.tarotBackUrl ?? null } as Prisma.InputJsonValue,
         node.id,
       );
       await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "offer_viewed", nodeId: node.id, data: { productId: p.id, ai: true } });

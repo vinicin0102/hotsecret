@@ -9,6 +9,7 @@ import { TypingIndicator } from "./TypingIndicator";
 import { OptionButtons } from "./OptionButtons";
 import { AudioMessage, ImageMessage, VideoMessage } from "./MediaMessages";
 import { OfferCard } from "./OfferCard";
+import { TarotOffer } from "./TarotOffer";
 import { CheckoutCard } from "./CheckoutCard";
 import { PaymentStatus } from "./PaymentStatus";
 import { DeliveryCard } from "./DeliveryCard";
@@ -85,6 +86,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   const isOpenItem = (i: ChatItem) => {
     if (i.kind === "checkout" || i.kind === "callAccess") return true;
     if (i.kind === "payment") return ["CREATED", "PENDING"].includes(payments[i.paymentId]?.status ?? "");
+    if (i.kind === "offer" && i.offer?.style === "tarot") return true; // a leitura do tarot fica sempre visível
     if (i.kind === "offer")
       return !Object.values(payments).some(
         (p) => p.offerNodeId === i.nodeId && p.status === "APPROVED" && (!i.productId || p.productId === i.productId),
@@ -137,6 +139,20 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         const bought = Object.values(payments).some(
           (p) => p.offerNodeId === item.nodeId && p.status === "APPROVED" && (!item.productId || p.productId === item.productId),
         );
+        const offer = item.offer ?? (node?.content as OfferContent) ?? { productId: "" };
+        if (offer.style === "tarot" && item.productId) {
+          const pid = item.productId;
+          return (
+            <TarotOffer
+              key={item.id}
+              offer={offer}
+              product={product}
+              bought={bought}
+              onCta={() => engine.openCheckout(item.nodeId, pid)}
+              loadCards={() => (transport ? transport.tarot(item.nodeId, pid) : Promise.resolve(null))}
+            />
+          );
+        }
         return (
           <OfferCard
             key={item.id}

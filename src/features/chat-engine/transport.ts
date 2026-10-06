@@ -1,6 +1,6 @@
 // Transporte do chat: "live" fala com a API (eventos persistidos), "preview" simula tudo em memória.
 import { withBase } from "@/lib/paths";
-import type { FlowNode } from "@/types/flow";
+import type { FlowNode, TarotCard } from "@/types/flow";
 import { metaCookies } from "./pixels";
 import type { ChatCue, TimeRange, UpsellMarker, VideoTimeline } from "@/types/video";
 import { normalizeTimeline } from "@/types/video";
@@ -60,7 +60,9 @@ export interface AiReply {
     headline?: string;
     description?: string;
     ctaLabel?: string;
-    style?: "card" | "call";
+    style?: "card" | "call" | "tarot";
+    tarotCards?: TarotCard[];
+    tarotBackUrl?: string;
     downsellProductId?: string;
     downsellText?: string;
   } | null;
@@ -81,6 +83,8 @@ export interface ChatTransport {
   viewOnce(nodeId: string): Promise<string | null>;
   /** Cérebro: a IA responde (message null = a IA puxa a conversa) */
   ai(nodeId: string, message: string | null, event?: "call_declined"): Promise<AiReply>;
+  /** tarot: cartas reveladas (só depois do pagamento aprovado) */
+  tarot(nodeId: string, productId?: string): Promise<TarotCard[] | null>;
   /** chamada de vídeo: vídeo + linha do tempo da oferta (productId: oferta do Cérebro) */
   callVideo(nodeId: string, productId?: string): Promise<CallVideo | null>;
   simulatePayment?(paymentId: string, status: "APPROVED" | "FAILED"): Promise<PublicPaymentInfo | null>;
@@ -135,6 +139,10 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
     async unlock() {
       const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
       return r.nodes;
+    },
+    async tarot(nodeId, productId) {
+      const r = await post<{ cards: TarotCard[] | null }>("/api/public/tarot", { token: getToken(), nodeId, productId });
+      return r.cards;
     },
     async callVideo(nodeId, productId) {
       const r = await post<{ video: CallVideo | null }>("/api/public/call", { token: getToken(), nodeId, productId });
@@ -209,6 +217,16 @@ export function createPreviewTransport(
     async unlock() {
       return []; // o preview já recebe o fluxo completo
     },
+    async tarot(nodeId, productId) {
+      const paid = [...payments.values()].some((p) => p.offerNodeId === nodeId && p.status === "APPROVED" && (!productId || p.productId === productId));
+      if (!paid) return null;
+      const brainId = aiNode(nodeId)?.brainId;
+      if (!brainId) return null;
+      const res = await fetch(withBase(`/api/admin/brains/${brainId}`));
+      if (!res.ok) return null;
+      const { brain } = (await res.json()) as { brain: { offers: { productId: string; style?: string; tarotCards?: TarotCard[] }[] } };
+      return brain.offers.find((o) => o.productId === productId && o.style === "tarot")?.tarotCards ?? null;
+    },
     async callVideo(nodeId, productId) {
       // preview (admin): lê o vídeo e os produtos pelo painel
       const get = async <T,>(path: string) => {
@@ -259,7 +277,7 @@ export function createPreviewTransport(
         for (const m of r.messages) history.push({ role: "bot", text: m });
         if (r.image) history.push({ role: "bot", text: r.image.kind === "video" ? "[enviou um vídeo]" : "[enviou uma foto]" });
         if (r.audio) history.push({ role: "bot", text: "[enviou um áudio]" });
-        if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
+        if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : r.offer.style === "tarot" ? "mostrou as cartas de tarot da oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
         return { messages: r.messages, audio: r.audio ? { url: r.audio.url } : null, image: r.image ? { url: r.image.url, kind: r.image.kind } : null, offer: r.offer, end: r.end };
       } catch (e) {
         return { messages: [`(preview) ${e instanceof Error ? e.message : "Falha na IA"}`], audio: null, offer: null, end: false };
