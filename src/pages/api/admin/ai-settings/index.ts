@@ -4,6 +4,8 @@ import { apiHandler, requireAdmin } from "@/lib/api";
 import { getAiSettingsPublic, saveAiSettings } from "@/services/ai/brain";
 
 const schema = z.object({
+  /** IA usada nas conversas; a chave e o modelo abaixo são desta IA */
+  provider: z.enum(["anthropic", "deepseek"]).optional(),
   /** undefined = manter · null = remover · string = nova chave */
   apiKey: z.string().trim().min(20, "Chave muito curta").max(400).nullable().optional(),
   model: z.string().max(60).optional(),

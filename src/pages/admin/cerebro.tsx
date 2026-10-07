@@ -7,13 +7,19 @@ import { api, uploadFile } from "@/lib/client";
 import { formatBRL } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 
-interface AiSettings {
+type Provider = "anthropic" | "deepseek";
+interface ProviderSettings {
   configured: boolean;
   fromEnv: boolean;
   keyHint: string | null;
   model: string;
   models: { id: string; label: string }[];
 }
+interface AiSettings extends ProviderSettings {
+  provider: Provider;
+  providers: Record<Provider, ProviderSettings>;
+}
+const PROVIDER_LABEL: Record<Provider, string> = { anthropic: "Claude (Anthropic)", deepseek: "DeepSeek" };
 interface TarotCard {
   id: string;
   label?: string;
@@ -82,9 +88,12 @@ function ConnectionCard() {
   const { data, reload } = useFetch<{ settings: AiSettings }>("/api/admin/ai-settings");
   const [key, setKey] = useState("");
   const [model, setModel] = useState("");
+  const [tab, setTab] = useState<Provider | null>(null);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
-  const s = data?.settings;
+  const all = data?.settings;
+  const provider: Provider = tab ?? all?.provider ?? "anthropic";
+  const s = all ? (all.providers?.[provider] ?? all) : undefined;
 
   const save = async (body: Record<string, unknown>, okText: string) => {
     setBusy(true);
@@ -113,32 +122,65 @@ function ConnectionCard() {
     }
   };
 
-  if (!s) return <div className="card">Carregando...</div>;
+  if (!all || !s) return <div className="card">Carregando...</div>;
+  const active = all.provider ?? "anthropic";
   return (
     <div className="card">
       <div className="card-head">
         <h3>Conexão com a IA</h3>
-        <span className={`pill ${s.configured ? "status-PUBLISHED" : "status-ARCHIVED"}`}>
-          {s.configured ? `Conectada · ${s.keyHint}` : "Sem chave"}
+        <span className={`pill ${all.configured ? "status-PUBLISHED" : "status-ARCHIVED"}`}>
+          {all.configured ? `Em uso: ${PROVIDER_LABEL[active]} · ${all.keyHint}` : `${PROVIDER_LABEL[active]} sem chave`}
         </span>
       </div>
-      <p className="hint" style={{ marginTop: -6 }}>
-        A IA usa o Claude, da Anthropic. Crie a chave em{" "}
-        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
-          console.anthropic.com → API Keys
-        </a>{" "}
-        (começa com <code className="inline">sk-ant-</code>). Ela fica guardada criptografada no servidor e nunca aparece no chat. O uso é cobrado
-        pela Anthropic na sua conta.
-      </p>
+      <div className="field">
+        <label>Qual IA responde os leads</label>
+        <div className="segmented">
+          {(["anthropic", "deepseek"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={provider === p ? "active" : ""}
+              onClick={() => {
+                setTab(p);
+                setKey("");
+                setModel("");
+                setMsg(null);
+              }}
+            >
+              {PROVIDER_LABEL[p]}
+              {active === p ? " ✓" : ""}
+            </button>
+          ))}
+        </div>
+      </div>
+      {provider === "anthropic" ? (
+        <p className="hint" style={{ marginTop: -6 }}>
+          Crie a chave em{" "}
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
+            console.anthropic.com → API Keys
+          </a>{" "}
+          (começa com <code className="inline">sk-ant-</code>). O Claude vê as fotos que o lead manda. O uso é cobrado pela Anthropic na sua conta.
+        </p>
+      ) : (
+        <p className="hint" style={{ marginTop: -6 }}>
+          Crie a chave em{" "}
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">
+            platform.deepseek.com → API keys
+          </a>{" "}
+          (começa com <code className="inline">sk-</code>) e coloque saldo na conta. A DeepSeek é mais barata, mas não vê as fotos que o lead manda
+          (ela só sabe que chegou uma foto). O uso é cobrado pela DeepSeek na sua conta.
+        </p>
+      )}
+      <p className="hint">A chave fica guardada criptografada no servidor e nunca aparece no chat. Ao salvar, esta IA passa a responder os leads.</p>
       <div className="grid-2">
         <div className="field">
-          <label htmlFor="ai-key">{s.configured ? "Trocar chave da API" : "Chave da API"}</label>
+          <label htmlFor="ai-key">{s.configured ? `Trocar chave da ${PROVIDER_LABEL[provider]}` : `Chave da ${PROVIDER_LABEL[provider]}`}</label>
           <input
             id="ai-key"
             className="input"
             type="password"
             autoComplete="off"
-            placeholder={s.configured ? "Deixe vazio para manter a atual" : "sk-ant-..."}
+            placeholder={s.configured ? `Deixe vazio para manter a atual (${s.keyHint})` : provider === "deepseek" ? "sk-..." : "sk-ant-..."}
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
@@ -155,14 +197,18 @@ function ConnectionCard() {
         </div>
       </div>
       <div className="row">
-        <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => save({ ...(key.trim() ? { apiKey: key.trim() } : {}), model: model || s.model }, "Salvo ✓")}>
-          Salvar
+        <button
+          className="btn btn-primary btn-sm"
+          disabled={busy || (!s.configured && !key.trim())}
+          onClick={() => save({ provider, ...(key.trim() ? { apiKey: key.trim() } : {}), model: model || s.model }, `Salvo ✓ ${PROVIDER_LABEL[provider]} responde os leads`)}
+        >
+          {active === provider ? "Salvar" : `Salvar e usar ${PROVIDER_LABEL[provider]}`}
         </button>
-        <button className="btn btn-sm" disabled={busy || !s.configured} onClick={test}>
+        <button className="btn btn-sm" disabled={busy || !all.configured || active !== provider} onClick={test}>
           Testar conexão
         </button>
         {s.configured && !s.fromEnv && (
-          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => confirm("Remover a chave da API?") && save({ apiKey: null }, "Chave removida")}>
+          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => confirm("Remover a chave desta IA?") && save({ provider, apiKey: null }, "Chave removida")}>
             Remover chave
           </button>
         )}
