@@ -42,9 +42,10 @@ export async function callDeepSeek(input: {
         max_tokens: input.maxTokens ?? 2000,
         stream: false,
         ...(input.json && !reasoner ? { response_format: { type: "json_object" } } : {}),
-        ...(!reasoner ? { temperature: 1.0 } : {}),
+        // 1.3: valor indicado pela DeepSeek para conversa
+        ...(!reasoner ? { temperature: 1.3 } : {}),
       }),
-      signal: AbortSignal.timeout(50_000),
+      signal: AbortSignal.timeout(25_000),
     });
   } catch {
     throw new DeepSeekError(0, "Não foi possível falar com a DeepSeek agora.");

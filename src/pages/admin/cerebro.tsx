@@ -4,7 +4,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { UploadInput } from "@/components/admin/UploadInput";
 import { useFetch } from "@/hooks/useFetch";
 import { api, uploadFile } from "@/lib/client";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatDateTime } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 
 type Provider = "anthropic" | "deepseek";
@@ -85,7 +85,9 @@ const EMPTY: Draft = {
 };
 
 function ConnectionCard() {
-  const { data, reload } = useFetch<{ settings: AiSettings }>("/api/admin/ai-settings");
+  const { data, reload } = useFetch<{ settings: AiSettings; health?: { replies: number; failures: number; recent: { at: string; error: string }[] } }>(
+    "/api/admin/ai-settings",
+  );
   const [key, setKey] = useState("");
   const [model, setModel] = useState("");
   const [tab, setTab] = useState<Provider | null>(null);
@@ -214,6 +216,27 @@ function ConnectionCard() {
         )}
         {msg && <span className={msg.error ? "error-text" : "hint"}>{msg.text}</span>}
       </div>
+      {data?.health && (data.health.replies > 0 || data.health.recent.length > 0) && (
+        <div className="ai-health">
+          <div className="section-title">Saúde da IA (últimas 24h)</div>
+          <p className="hint">
+            {data.health.replies} resposta(s) ·{" "}
+            <b className={data.health.failures ? "error-text" : "check-ok"}>
+              {data.health.failures} falha(s){data.health.replies ? ` (${Math.round((data.health.failures / data.health.replies) * 100)}%)` : ""}
+            </b>{" "}
+            — cada falha manda a "Mensagem se a IA falhar". Antes disso o sistema já tenta de novo sozinho.
+          </p>
+          {data.health.recent.length > 0 && (
+            <ul className="ai-errors">
+              {data.health.recent.map((e, i) => (
+                <li key={i}>
+                  <span className="hint">{formatDateTime(e.at)}</span> {e.error}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1104,3 +1104,17 @@ code.inline {
 .tarot-edit-card .field {
   margin-bottom: 8px;
 }
+
+/* Cérebro: saúde da IA */
+.ai-health {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.ai-errors {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+}

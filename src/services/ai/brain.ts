@@ -157,7 +157,7 @@ async function aiClient(): Promise<AiTarget> {
   const apiKey = providerKey(s, provider);
   if (!apiKey) throw new AiNotConfiguredError();
   if (provider === "deepseek") return { provider, apiKey, model: resolveDeepSeekModel(s.deepseekModel) };
-  return { provider, client: new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 }), model: resolveModel(s.model) };
+  return { provider, client: new Anthropic({ apiKey, timeout: 25_000, maxRetries: 0 }), model: resolveModel(s.model) };
 }
 
 // ---------- Prompt ----------
@@ -327,6 +327,8 @@ export interface BrainReply {
   /** soltar os botões de oferta do fluxo (saída "Mostrar botões de oferta") */
   showOffers?: boolean;
   usage?: { input: number; output: number; cacheRead: number };
+  /** a IA falhou e foi usada a "Mensagem se a IA falhar" (motivo, para o painel) */
+  failure?: string;
 }
 
 /** Converte o histórico em mensagens da API (primeira sempre do usuário; papéis seguidos são agrupados pela API). */
@@ -378,7 +380,7 @@ function jsonInstructions(schema: ReturnType<typeof OUTPUT_SCHEMA>): string {
   const list = (k: string) => (ids(k).length ? ids(k).map((v) => `"${v}"`).join(", ") : "(nenhum — use sempre \"\")");
   const showOffers = "show_offers" in props;
   return `# Formato da resposta (OBRIGATÓRIO)
-Responda SOMENTE com um objeto JSON válido, sem nenhum texto antes ou depois, exatamente com estas chaves:
+Responda SOMENTE com um objeto json válido, sem nenhum texto antes ou depois e sem blocos de código, exatamente com estas chaves:
 {"messages": ["mensagem 1", "mensagem 2"], "offer_id": "", "audio_id": "", "image_id": "", "end": false${showOffers ? ', "show_offers": false' : ""}}
 - messages: 1 a 3 mensagens curtas, na ordem de envio (o que o lead vai ler).
 - offer_id: "" ou um destes: ${list("offer_id")}
@@ -419,24 +421,22 @@ export async function runBrain(input: {
 
   const fallbackText = input.brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
   const schema = OUTPUT_SCHEMA(validOffers.map((o) => o.id), audios.map((a) => a.id), images.map((a) => a.id), !!input.flowOffers);
-  let text: string;
-  let usage: { input: number; output: number; cacheRead: number };
+  const anthropicMessages = target.provider === "anthropic" ? await toApiMessages(input.history, true) : [];
 
-  if (target.provider === "deepseek") {
-    // DeepSeek: sem visão e sem formato com schema → o formato vai nas instruções e o JSON é conferido aqui
-    const system = [stableSystem(input.brain, products, !!input.flowOffers, false), volatile, jsonInstructions(schema)].filter(Boolean).join("\n\n");
-    const r = await callDeepSeek({
-      apiKey: target.apiKey,
-      model: target.model,
-      json: true,
-      messages: mergeRoles([{ role: "system", content: system }, ...toPlainMessages(input.history, true)]),
-    });
-    usage = r.usage;
-    if (r.finish === "length" || r.finish === "content_filter") {
-      return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage };
+  /** Uma chamada à IA. cut = a resposta veio cortada/recusada (tenta de novo). */
+  const callOnce = async (): Promise<{ text: string; usage: BrainReply["usage"] & object; cut?: string }> => {
+    if (target.provider === "deepseek") {
+      // DeepSeek: sem visão e sem formato com schema → o formato vai nas instruções e o JSON é conferido aqui
+      const system = [stableSystem(input.brain, products, !!input.flowOffers, false), volatile, jsonInstructions(schema)].filter(Boolean).join("\n\n");
+      const r = await callDeepSeek({
+        apiKey: target.apiKey,
+        model: target.model,
+        json: true,
+        messages: mergeRoles([{ role: "system", content: system }, ...toPlainMessages(input.history, true)]),
+      });
+      const cut = r.finish === "length" ? "resposta cortada (longa demais)" : r.finish === "content_filter" ? "resposta bloqueada pelo filtro da DeepSeek" : undefined;
+      return { text: r.text, usage: r.usage, cut };
     }
-    text = r.text;
-  } else {
     const { client, model } = target;
     const supportsFallback = model !== "claude-haiku-4-5";
     const response = await client.beta.messages.create({
@@ -452,43 +452,93 @@ export async function runBrain(input: {
         { type: "text", text: stableSystem(input.brain, products, !!input.flowOffers), cache_control: { type: "ephemeral" } },
         ...(volatile ? [{ type: "text" as const, text: volatile }] : []),
       ],
-      messages: await toApiMessages(input.history, true),
+      messages: anthropicMessages,
     });
-    usage = {
+    const usage = {
       input: response.usage.input_tokens,
       output: response.usage.output_tokens,
       cacheRead: response.usage.cache_read_input_tokens ?? 0,
     };
-    if (response.stop_reason === "refusal" || response.stop_reason === "max_tokens") {
-      return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage };
-    }
-    text = response.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")?.text ?? "";
-  }
-
-  let parsed: { messages?: unknown; offer_id?: unknown; audio_id?: unknown; image_id?: unknown; end?: unknown; show_offers?: unknown };
-  try {
-    const v = target.provider === "deepseek" ? extractJson(text) : JSON.parse(text);
-    if (!v || typeof v !== "object") throw new Error("JSON inválido");
-    parsed = v as typeof parsed;
-  } catch {
-    return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage };
-  }
-  const messages = (Array.isArray(parsed.messages) ? parsed.messages : [])
-    .filter((m): m is string => typeof m === "string" && m.trim() !== "")
-    .slice(0, 4)
-    .map((m) => m.trim().slice(0, 1200));
-  const offer = validOffers.find((o) => o.id === parsed.offer_id);
-  const audio = audios.find((a) => a.id === parsed.audio_id) ?? null;
-  const image = images.find((a) => a.id === parsed.image_id) ?? null;
-  return {
-    messages: messages.length || offer || audio || image ? messages : [fallbackText],
-    offer: offer ? { ...offer, product: products.get(offer.productId)! } : null,
-    audio,
-    image,
-    end: parsed.end === true,
-    showOffers: !!input.flowOffers && parsed.show_offers === true,
-    usage,
+    const cut = response.stop_reason === "refusal" ? "a IA recusou responder" : response.stop_reason === "max_tokens" ? "resposta cortada (longa demais)" : undefined;
+    const text = response.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")?.text ?? "";
+    return { text, usage, cut };
   };
+
+  /** Lê a resposta. Aceita pequenas variações de formato e, se vier texto puro, usa o texto. */
+  const interpret = (text: string): Omit<BrainReply, "usage"> | null => {
+    let parsed: Record<string, unknown> | null = null;
+    try {
+      const v = extractJson(text);
+      if (v && typeof v === "object" && !Array.isArray(v)) parsed = v as Record<string, unknown>;
+    } catch {
+      parsed = null;
+    }
+    if (!parsed) {
+      // texto puro (a IA esqueceu o formato): aproveita como mensagens
+      const plain = text.trim();
+      if (!plain || plain.startsWith("{") || plain.startsWith("[")) return null;
+      const parts = plain
+        .split(/\n\s*\n|\n/)
+        .map((m) => m.trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .map((m) => m.slice(0, 1200));
+      return parts.length ? { messages: parts, offer: null, audio: null, image: null, end: false } : null;
+    }
+    const rawMessages = parsed.messages ?? parsed.mensagens ?? parsed.message ?? parsed.mensagem ?? parsed.resposta;
+    const list = Array.isArray(rawMessages) ? rawMessages : typeof rawMessages === "string" ? [rawMessages] : [];
+    const messages = list
+      .filter((m): m is string => typeof m === "string" && m.trim() !== "")
+      .slice(0, 4)
+      .map((m) => m.trim().slice(0, 1200));
+    const offer = validOffers.find((o) => o.id === parsed!.offer_id);
+    const audio = audios.find((a) => a.id === parsed!.audio_id) ?? null;
+    const image = images.find((a) => a.id === parsed!.image_id) ?? null;
+    if (!messages.length && !offer && !audio && !image) return null;
+    return {
+      messages,
+      offer: offer ? { ...offer, product: products.get(offer.productId)! } : null,
+      audio,
+      image,
+      end: parsed.end === true,
+      showOffers: !!input.flowOffers && parsed.show_offers === true,
+    };
+  };
+
+  // até 2 tentativas: falha de rede/limite/servidor, resposta vazia, cortada ou fora do formato
+  const usage = { input: 0, output: 0, cacheRead: 0 };
+  let problem = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let r: Awaited<ReturnType<typeof callOnce>>;
+    try {
+      r = await callOnce();
+    } catch (e) {
+      if (attempt === 0 && isRetryableAiError(e)) {
+        problem = describeAiError(e);
+        continue;
+      }
+      throw e;
+    }
+    usage.input += r.usage.input;
+    usage.output += r.usage.output;
+    usage.cacheRead += r.usage.cacheRead;
+    if (r.cut) {
+      problem = r.cut;
+      continue;
+    }
+    const reply = interpret(r.text);
+    if (reply) return { ...reply, usage };
+    problem = r.text.trim() ? "resposta fora do formato" : "resposta vazia";
+  }
+  return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage, failure: problem || "sem resposta" };
+}
+
+/** Falhas passageiras que valem uma nova tentativa. */
+function isRetryableAiError(e: unknown): boolean {
+  if (e instanceof DeepSeekError) return e.status === 0 || e.status === 429 || e.status >= 500;
+  if (e instanceof Anthropic.APIConnectionError) return true;
+  if (e instanceof Anthropic.APIError) return e.status === 429 || (e.status ?? 0) >= 500;
+  return false;
 }
 
 /** Teste rápido da chave (painel). */

@@ -142,7 +142,12 @@ export default apiHandler({
       console.error("[ai]", e);
       const msg = brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
       await addConversationMessage(session.conversationId, "bot", "text", { text: msg }, node.id);
+      // o motivo aparece no painel (Cérebro → Conexão com a IA)
+      await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "ai_error", nodeId: node.id, data: { error: describeAiError(e), brain: brain.name } });
       return { messages: [msg], offer: null, audio: null, image: null, end: false, error: describeAiError(e) };
+    }
+    if (reply.failure) {
+      await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "ai_error", nodeId: node.id, data: { error: reply.failure, brain: brain.name } });
     }
 
     for (const m of reply.messages) await addConversationMessage(session.conversationId, "bot", "text", { text: m }, node.id);
