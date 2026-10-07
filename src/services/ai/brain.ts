@@ -147,7 +147,7 @@ Estas regras têm prioridade sobre a personalidade, o conteúdo, o objetivo do m
 }
 
 /** Parte fixa do prompt (cacheável): muda só quando o cérebro é editado. */
-function stableSystem(brain: Brain, products: Map<string, Product>): string {
+function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons = false): string {
   const offers = brainOffers(brain)
     .map((o) => {
       const p = products.get(o.productId);
@@ -194,7 +194,7 @@ ${brain.knowledge || "(sem conteúdo cadastrado)"}
 - Trechos entre colchetes no histórico (ex.: [mostrou o card da oferta...]) são anotações do sistema sobre o que aconteceu no chat. Nunca escreva colchetes nem anotações assim nas suas mensagens.
 ${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}
 # Ofertas disponíveis
-${offers || "(nenhuma oferta cadastrada — não ofereça produtos)"}
+${offers || (flowButtons ? "(nenhuma oferta por card — neste bloco os produtos são vendidos pelos BOTÕES DE OFERTA, veja a seção no fim)" : "(nenhuma oferta cadastrada — não ofereça produtos)")}
 Para mostrar o card de compra (ou ligar, nas ofertas em formato de chamada), coloque o offer_id em "offer_id" (no máximo uma oferta por resposta) e diga uma frase chamando para o botão ou avisando que vai ligar. Se o histórico mostrar que o lead recusou a chamada, não ligue de novo na mesma hora: acolha e, se houver, ofereça uma opção mais curta ou mais barata. Use "" quando não for oferecer. Não repita a mesma oferta se ela já foi mostrada e o lead não demonstrou interesse novo.
 
 # Áudios gravados
@@ -239,9 +239,14 @@ function flowOffersSection(list: FlowOfferInfo[] | undefined): string {
     (o) =>
       `- ${o.button ? `Botão "${o.button}" → ` : ""}${o.name} — ${formatBRL(o.price)}${o.originalPrice && o.originalPrice > o.price ? ` (de ${formatBRL(o.originalPrice)})` : ""}${o.description ? `\n  ${o.description}` : ""}`,
   );
-  return `# Botões de oferta deste momento da conversa
-Aqui você não mostra os produtos abaixo pelo offer_id: eles aparecem em BOTÕES no chat. Seu papel é explicar os produtos, tirar dúvidas, quebrar objeções e conduzir o lead até a compra.
-Quando o lead estiver pronto (pediu preço, quis comprar, perguntou como pega ou já entendeu o que cada um entrega), coloque "show_offers": true e, na última mensagem, chame para escolher nos botões (ex.: "escolhe aqui embaixo 👇"). Caso contrário, "show_offers": false. Se os botões já foram mostrados e o lead voltou com uma dúvida, responda e mostre de novo quando fizer sentido.
+  return `# BOTÕES DE OFERTA — seu objetivo de venda neste momento
+Os produtos abaixo são vendidos por BOTÕES que aparecem no chat quando você coloca "show_offers": true (não use offer_id para eles; neste momento prefira os botões a qualquer card).
+Como agir:
+1. Explique os produtos de forma curta e desejável, ligando ao que o lead contou. Use os nomes e preços exatamente como estão abaixo.
+2. Coloque "show_offers": true assim que o lead perguntar preço, valor, opções, como comprar ou como funciona, disser que quer, demonstrar interesse — ou, no máximo, depois de 2 ou 3 trocas de mensagem falando dos produtos. Na dúvida, mostre os botões.
+3. Quando mostrar, a última mensagem chama para escolher nos botões (ex.: "escolhe aqui embaixo 👇").
+4. Se os botões já apareceram no histórico ([opções: ...]) e o lead voltou com uma dúvida ou objeção, responda e mostre os botões de novo na mesma resposta, a menos que ele tenha dito que não quer.
+5. Fora isso, "show_offers": false.
 ${lines.join("\n") || "(os botões mostram as opções configuradas no fluxo)"}`;
 }
 
@@ -334,7 +339,7 @@ export async function runBrain(input: {
       format: { type: "json_schema", schema: OUTPUT_SCHEMA(validOffers.map((o) => o.id), audios.map((a) => a.id), images.map((a) => a.id), !!input.flowOffers) },
     },
     system: [
-      { type: "text", text: stableSystem(input.brain, products), cache_control: { type: "ephemeral" } },
+      { type: "text", text: stableSystem(input.brain, products, !!input.flowOffers), cache_control: { type: "ephemeral" } },
       ...(volatile ? [{ type: "text" as const, text: volatile }] : []),
     ],
     messages: await toApiMessages(input.history, true),
