@@ -225,9 +225,11 @@ model Product {
   imageUrl      String?
   /// vídeo de prévia exibido no card da oferta (só com botão de play)
   videoUrl      String?
-  /// valores em centavos
+  /// valores em centavos (na moeda do produto)
   originalPrice Int?
   price         Int
+  /// moeda: BRL (Brasil) ou MXN (México)
+  currency      String   @default("BRL")
   /// link de checkout externo opcional (se preenchido, usado no lugar do checkout integrado)
   checkoutUrl   String?
   /// link de acesso liberado SOMENTE após pagamento aprovado (nunca enviado ao front antes disso)

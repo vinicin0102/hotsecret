@@ -3,6 +3,19 @@ export function formatBRL(cents: number | null | undefined): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+export type Currency = "BRL" | "MXN";
+export const CURRENCIES: Record<Currency, { label: string; locale: string; symbol: string }> = {
+  BRL: { label: "Real (R$)", locale: "pt-BR", symbol: "R$" },
+  MXN: { label: "Peso mexicano (MXN)", locale: "es-MX", symbol: "$" },
+};
+export const asCurrency = (v: unknown): Currency => (v === "MXN" ? "MXN" : "BRL");
+
+/** Valor em centavos na moeda do produto. locale: idioma de exibição (o painel usa pt-BR → "MX$ 199,00"). */
+export function formatMoney(cents: number | null | undefined, currency: unknown = "BRL", locale = "pt-BR"): string {
+  const c = asCurrency(currency);
+  return ((cents ?? 0) / 100).toLocaleString(locale, { style: "currency", currency: c });
+}
+
 export function formatNumber(n: number): string {
   return n.toLocaleString("pt-BR");
 }

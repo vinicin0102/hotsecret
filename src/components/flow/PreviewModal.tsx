@@ -16,7 +16,8 @@ export function PreviewModal({ funnel, onClose }: { funnel: PublicFunnel; onClos
       },
       (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
       (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined,
-      (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined)),
+      (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined),
+      funnel.locale === "es-MX" ? "es-MX" : "pt-BR"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [round],
   );

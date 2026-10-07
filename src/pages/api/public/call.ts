@@ -50,7 +50,7 @@ export default apiHandler({
           .filter((m) => byId.has(m.productId))
           .map((m) => {
             const p = byId.get(m.productId)!;
-            return { ...m, product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice } };
+            return { ...m, product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency } };
           }),
       },
     };

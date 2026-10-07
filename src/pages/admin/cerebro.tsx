@@ -256,6 +256,7 @@ function TestChat({ brain }: { brain: Brain }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [language, setLanguage] = useState<"pt-BR" | "es-MX">("pt-BR");
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
@@ -282,6 +283,7 @@ function TestChat({ brain }: { brain: Brain }) {
             role: h.role,
             text: h.voice ? "[ligou para o lead (ligação de voz)]" : h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
           })),
+          language,
         },
       });
       const bot = [
@@ -310,9 +312,15 @@ function TestChat({ brain }: { brain: Brain }) {
     <div className="card brain-test">
       <div className="card-head">
         <h3>Testar conversa</h3>
-        <button className="btn btn-ghost btn-sm" onClick={() => setHistory([])}>
-          Limpar
-        </button>
+        <div className="row">
+          <select className="select" style={{ width: "auto" }} value={language} onChange={(e) => setLanguage(e.target.value === "es-MX" ? "es-MX" : "pt-BR")} aria-label="Idioma do teste">
+            <option value="pt-BR">🇧🇷 Português</option>
+            <option value="es-MX">🇲🇽 Español (México)</option>
+          </select>
+          <button className="btn btn-ghost btn-sm" onClick={() => setHistory([])}>
+            Limpar
+          </button>
+        </div>
       </div>
       <p className="hint" style={{ marginTop: -6 }}>
         Converse como se fosse um lead. Usa a versão <b>salva</b> do cérebro; nada aqui é gravado.
@@ -370,6 +378,7 @@ const IMPROVE_FIELDS: { field: ImproveField; label: string; action: string }[] =
 function ImproveCard({ draft, apply }: { draft: Draft; apply: (field: ImproveField, value: string) => void }) {
   const [open, setOpen] = useState(false);
   const [about, setAbout] = useState("");
+  const [lang, setLang] = useState<"pt-BR" | "es-MX">("pt-BR");
   const [pick, setPick] = useState<Record<ImproveField, boolean>>({ persona: true, knowledge: true, mustRules: true, examples: true });
   const [busy, setBusy] = useState<ImproveField | null>(null);
   const [out, setOut] = useState<Partial<Record<ImproveField, { text?: string; error?: string; used?: boolean }>>>({});
@@ -390,6 +399,7 @@ function ImproveCard({ draft, apply }: { draft: Draft; apply: (field: ImproveFie
           body: {
             field,
             about,
+            language: lang,
             draft: {
               name: draft.name,
               persona: draft.persona,
@@ -449,6 +459,13 @@ function ImproveCard({ draft, apply }: { draft: Draft; apply: (field: ImproveFie
           value={about}
           onChange={(e) => setAbout(e.target.value)}
         />
+      </div>
+      <div className="field">
+        <label htmlFor="imp-lang">Idioma dos textos gerados</label>
+        <select id="imp-lang" className="select" value={lang} onChange={(e) => setLang(e.target.value === "es-MX" ? "es-MX" : "pt-BR")}>
+          <option value="pt-BR">🇧🇷 Português (Brasil)</option>
+          <option value="es-MX">🇲🇽 Español (México)</option>
+        </select>
       </div>
       <div className="improve-picks">
         {IMPROVE_FIELDS.map(({ field, label }) => (

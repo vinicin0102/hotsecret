@@ -37,6 +37,7 @@ export function FunnelSettingsModal({
   const [tracking, setTracking] = useState<TrackingIds>({ ...(meta.settings?.tracking ?? {}) });
   const [recovery, setRecovery] = useState<RecoverySettings>({ ...DEFAULT_RECOVERY, ...(meta.settings?.recovery ?? {}) });
   const [appearance, setAppearance] = useState<ChatAppearance>({ bgDim: 35, ...(meta.settings?.appearance ?? {}) });
+  const [locale, setLocale] = useState<"pt-BR" | "es-MX">(meta.settings?.locale === "es-MX" ? "es-MX" : "pt-BR");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -44,7 +45,7 @@ export function FunnelSettingsModal({
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking, appearance } });
+      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking, appearance, locale } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -97,6 +98,27 @@ export function FunnelSettingsModal({
           <label>Mensagem inicial (referência)</label>
           <input className="input" value={m.initialMessage ?? ""} onChange={(e) => setM({ ...m, initialMessage: e.target.value })} />
         </div>
+      </div>
+
+      <div className="section-title">País</div>
+      <div className="field">
+        <div className="segmented">
+          {(
+            [
+              ["pt-BR", "🇧🇷 Brasil — português, R$"],
+              ["es-MX", "🇲🇽 México — espanhol, MXN"],
+            ] as const
+          ).map(([v, label]) => (
+            <button key={v} type="button" className={locale === v ? "active" : ""} onClick={() => setLocale(v)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="hint">
+          {locale === "es-MX"
+            ? "As telas do chat ficam em espanhol e a IA responde em espanhol do México. Use nas ofertas produtos com moeda MXN (Produtos → Moeda). Mensagens, botões e textos que você escreve nos blocos e no cérebro aparecem como você escreveu — escreva-os em espanhol."
+            : "Chat e IA em português, preços em reais."}
+        </span>
       </div>
 
       <div className="section-title">Tempo entre mensagens</div>

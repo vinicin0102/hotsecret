@@ -135,6 +135,8 @@ export const funnelMetaSchema = z.object({
         .optional(),
       recovery: recoverySchema.optional(),
       tracking: trackingIdsSchema.optional(),
+      /** país do fluxo: idioma do chat/IA (pt-BR Brasil, es-MX México) */
+      locale: z.enum(["pt-BR", "es-MX"]).optional(),
       appearance: z
         .object({
           bgVideoUrl: optUrl,
@@ -162,7 +164,8 @@ export const productSchema = z.object({
   imageUrl: optUrl.nullable(),
   videoUrl: optUrl.nullable(),
   originalPrice: z.number().int().min(0).max(100_000_00).nullable().optional(),
-  price: z.number().int().min(100, "Preço mínimo R$ 1,00").max(100_000_00),
+  price: z.number().int().min(100, "Preço mínimo 1,00").max(100_000_00),
+  currency: z.enum(["BRL", "MXN"]).default("BRL"),
   checkoutUrl: optUrl.nullable(),
   deliveryUrl: optUrl.nullable(),
   active: z.boolean().default(true),

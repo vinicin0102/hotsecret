@@ -10,6 +10,7 @@ const t = (n: number) => z.string().max(n).optional();
 const schema = z.object({
   field: z.enum(["persona", "knowledge", "mustRules", "examples"]),
   about: t(2000),
+  language: z.enum(["pt-BR", "es-MX"]).optional(),
   draft: z.object({
     name: t(200),
     persona: t(12000),
@@ -28,9 +29,9 @@ export default apiHandler({
   POST: async (req) => {
     await requireAdmin(req);
     rateLimit(req, "brain-improve", 30, 10 * 60_000);
-    const { field, draft, about } = schema.parse(req.body);
+    const { field, draft, about, language } = schema.parse(req.body);
     try {
-      return { text: await improveBrainField(field, draft, about) };
+      return { text: await improveBrainField(field, draft, about, language) };
     } catch (e) {
       throw new HttpError(502, e instanceof Error && e.message.startsWith("A IA") ? e.message : describeAiError(e));
     }

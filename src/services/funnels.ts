@@ -100,6 +100,7 @@ export function getFunnelSettings(raw: unknown): Required<FunnelSettings> {
     tracking: s.tracking ?? {},
     appearance: s.appearance ?? {},
     recovery: { ...DEFAULT_RECOVERY, ...(s.recovery ?? {}) },
+    locale: s.locale === "es-MX" ? "es-MX" : "pt-BR",
   };
 }
 
@@ -201,6 +202,7 @@ async function buildPublicFunnel(
       videoUrl: p.videoUrl,
       originalPrice: p.originalPrice,
       price: p.price,
+      currency: p.currency,
       externalCheckoutUrl: p.checkoutUrl ?? null,
       metaPixelId: p.metaPixelId ?? null,
     };
@@ -222,6 +224,7 @@ async function buildPublicFunnel(
     products: publicProducts,
     delay: getFunnelSettings(funnel.settings).delay,
     appearance: getFunnelSettings(funnel.settings).appearance,
+    locale: getFunnelSettings(funnel.settings).locale,
     tracking: publicTracking(mergeTracking(await getGlobalTracking(), (funnel.settings as FunnelSettings | null)?.tracking)),
   };
 }

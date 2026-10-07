@@ -88,7 +88,7 @@ export const mercadoPagoProvider: PaymentProvider = {
       method: "POST",
       idempotencyKey: input.paymentId,
       body: JSON.stringify({
-        items: [{ id: input.paymentId, title: input.description, quantity: 1, unit_price: input.amount / 100, currency_id: "BRL" }],
+        items: [{ id: input.paymentId, title: input.description, quantity: 1, unit_price: input.amount / 100, currency_id: input.currency ?? "BRL" }],
         payer: { name: payer.first_name, surname: payer.last_name, email: payer.email },
         external_reference: input.paymentId,
         notification_url: input.notificationUrl,

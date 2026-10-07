@@ -4,7 +4,7 @@ import { UploadInput } from "@/components/admin/UploadInput";
 import { Modal } from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/client";
-import { centsToInput, formatBRL, parseMoneyToCents } from "@/lib/format";
+import { centsToInput, CURRENCIES, formatMoney, parseMoneyToCents } from "@/lib/format";
 
 interface Product {
   id: string;
@@ -18,6 +18,7 @@ interface Product {
   deliveryUrl: string | null;
   metaPixelId?: string | null;
   metaCapiConfigured?: boolean;
+  currency?: string;
   active: boolean;
   stats: { sales: number; revenue: number };
 }
@@ -37,9 +38,10 @@ type Form = {
   metaCapiToken: string;
   metaCapiConfigured?: boolean;
   removeCapiToken?: boolean;
+  currency: "BRL" | "MXN";
   active: boolean;
 };
-const EMPTY: Form = { name: "", description: "", imageUrl: "", videoUrl: "", originalPrice: "", price: "", checkoutUrl: "", deliveryUrl: "", metaPixelId: "", metaCapiToken: "", active: true };
+const EMPTY: Form = { name: "", description: "", imageUrl: "", videoUrl: "", originalPrice: "", price: "", checkoutUrl: "", deliveryUrl: "", metaPixelId: "", metaCapiToken: "", currency: "BRL", active: true };
 
 export default function Products() {
   const { data, reload } = useFetch<{ products: Product[] }>("/api/admin/products");
@@ -56,6 +58,7 @@ export default function Products() {
       videoUrl: form.videoUrl || null,
       originalPrice: form.originalPrice ? parseMoneyToCents(form.originalPrice) : null,
       price: parseMoneyToCents(form.price),
+      currency: form.currency,
       checkoutUrl: form.checkoutUrl || null,
       deliveryUrl: form.deliveryUrl || null,
       metaPixelId: form.metaPixelId.trim() || null,
@@ -110,13 +113,13 @@ export default function Products() {
               <span className={`pill ${p.active ? "status-PUBLISHED" : "status-ARCHIVED"}`}>{p.active ? "Ativo" : "Inativo"}</span>
             </div>
             <div>
-              {p.originalPrice ? <span className="price-old">De {formatBRL(p.originalPrice)}</span> : null}
+              {p.originalPrice ? <span className="price-old">De {formatMoney(p.originalPrice, p.currency)}</span> : null}
               <div className="serif" style={{ fontSize: 24, fontWeight: 700 }}>
-                Por {formatBRL(p.price)}
+                Por {formatMoney(p.price, p.currency)}
               </div>
             </div>
             <div className="hint">
-              {p.stats.sales} venda(s) · <span className="gold">{formatBRL(p.stats.revenue)}</span>
+              {p.stats.sales} venda(s) · <span className="gold">{formatMoney(p.stats.revenue, p.currency)}</span>
             </div>
             <div className="hint">{p.deliveryUrl ? "✓ Link de acesso externo" : "Entrega no próprio chat"}</div>
             {p.metaPixelId && <div className="hint">📊 Pixel próprio: {p.metaPixelId}</div>}
@@ -137,6 +140,7 @@ export default function Products() {
                     metaPixelId: p.metaPixelId ?? "",
                     metaCapiToken: "",
                     metaCapiConfigured: p.metaCapiConfigured,
+                    currency: p.currency === "MXN" ? "MXN" : "BRL",
                     active: p.active,
                   })
                 }
@@ -171,13 +175,24 @@ export default function Products() {
             <UploadInput value={form.videoUrl} onChange={(videoUrl) => setForm((f) => (f ? { ...f, videoUrl } : f))} accept="video/mp4,video/webm" />
             <div className="hint">Aparece no card da oferta no lugar da imagem, só com o botão de play. A imagem vira a capa do vídeo.</div>
           </div>
+          <div className="field">
+            <label htmlFor="pr-currency">Moeda</label>
+            <select id="pr-currency" className="select" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value === "MXN" ? "MXN" : "BRL" })}>
+              {(Object.keys(CURRENCIES) as ("BRL" | "MXN")[]).map((c) => (
+                <option key={c} value={c}>
+                  {CURRENCIES[c].label}
+                </option>
+              ))}
+            </select>
+            {form.currency === "MXN" && <span className="hint">Para fluxos do México. Use este produto nas ofertas de um fluxo com País = México.</span>}
+          </div>
           <div className="grid-2">
             <div className="field">
-              <label>Preço original (R$)</label>
+              <label>Preço original ({form.currency === "MXN" ? "MXN" : "R$"})</label>
               <input className="input" inputMode="decimal" placeholder="27,00" value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} />
             </div>
             <div className="field">
-              <label>Preço promocional (R$)</label>
+              <label>Preço promocional ({form.currency === "MXN" ? "MXN" : "R$"})</label>
               <input className="input" inputMode="decimal" placeholder="9,90" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
             </div>
           </div>

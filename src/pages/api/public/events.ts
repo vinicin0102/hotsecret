@@ -156,6 +156,7 @@ export default apiHandler({
             headline: (content.headline as string) || product.name,
             price: product.price,
             originalPrice: product.originalPrice,
+            currency: product.currency,
           }, node.id);
           data.productId = product.id;
           break;

@@ -3,7 +3,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Brain, Product } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { openSecret, sealSecret } from "@/lib/secret-box";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatMoney } from "@/lib/format";
+
+/** preço como a IA deve falar: R$ 19,90 ou $199.00 MXN */
+const money = (cents: number | null | undefined, currency?: string | null) =>
+  currency === "MXN" ? `${formatMoney(cents, "MXN", "es-MX")} MXN` : formatBRL(cents);
 import type { TarotCard } from "@/types/flow";
 import { readStoredImage } from "@/services/storage";
 import {
@@ -222,7 +226,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
       const p = products.get(o.productId);
       if (!p || !p.active) return null;
       return [
-        `- offer_id "${o.id}": ${p.name} — ${formatBRL(p.price)}${p.originalPrice && p.originalPrice > p.price ? ` (de ${formatBRL(p.originalPrice)})` : ""}`,
+        `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${p.originalPrice && p.originalPrice > p.price ? ` (de ${money(p.originalPrice, p.currency)})` : ""}`,
         p.description ? `  Descrição: ${p.description}` : "",
         o.when ? `  Quando oferecer: ${o.when}` : "",
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
@@ -327,6 +331,7 @@ const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[
 export interface FlowOfferInfo {
   name: string;
   price: number;
+  currency?: string;
   originalPrice?: number | null;
   description?: string | null;
   button?: string;
@@ -336,7 +341,7 @@ function flowOffersSection(list: FlowOfferInfo[] | undefined): string {
   if (!list) return "";
   const lines = list.map(
     (o) =>
-      `- ${o.button ? `Botão "${o.button}" → ` : ""}${o.name} — ${formatBRL(o.price)}${o.originalPrice && o.originalPrice > o.price ? ` (de ${formatBRL(o.originalPrice)})` : ""}${o.description ? `\n  ${o.description}` : ""}`,
+      `- ${o.button ? `Botão "${o.button}" → ` : ""}${o.name} — ${money(o.price, o.currency)}${o.originalPrice && o.originalPrice > o.price ? ` (de ${money(o.originalPrice, o.currency)})` : ""}${o.description ? `\n  ${o.description}` : ""}`,
   );
   return `# BOTÕES DE OFERTA — seu objetivo de venda neste momento
 Os produtos abaixo são vendidos por BOTÕES que aparecem no chat quando você coloca "show_offers": true (não use offer_id para estes produtos). As ofertas com offer_id — como a chamada de vídeo — continuam valendo: se o lead pedir o que elas entregam (ex.: ligação/chamada), use o offer_id delas.
@@ -443,6 +448,8 @@ export async function runBrain(input: {
   context?: string;
   /** ofertas do fluxo ligadas na saída "Mostrar botões de oferta" (undefined = saída não ligada) */
   flowOffers?: FlowOfferInfo[];
+  /** idioma do fluxo (país): es-MX = responde em espanhol do México */
+  language?: "pt-BR" | "es-MX";
 }): Promise<BrainReply> {
   const target = await aiClient();
   const offers = brainOffers(input.brain);
@@ -458,13 +465,15 @@ export async function runBrain(input: {
     input.goal ? `# Objetivo neste momento da conversa\n${input.goal}` : "",
     input.context ? `# Sobre este lead\n${input.context}` : "",
     flowOffersSection(input.flowOffers),
+    input.language === "es-MX" ? LANGUAGE_ES_MX : "",
     // lembrete no fim (o objetivo do bloco não passa por cima das regras obrigatórias)
     input.goal && mustRulesList(input.brain.mustRules).length ? "Siga o objetivo acima sem quebrar nenhuma das REGRAS OBRIGATÓRIAS." : "",
   ]
     .filter(Boolean)
     .join("\n\n");
 
-  const fallbackText = input.brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
+  const es = input.language === "es-MX";
+  const fallbackText = input.brain.fallbackMessage || (es ? "Mmm, me perdí 😅 ¿me lo repites?" : "Hmm, me perdi aqui 😅 pode repetir?");
   const schema = OUTPUT_SCHEMA(
     validOffers.map((o) => o.id),
     audios.map((a) => a.id),
@@ -492,14 +501,14 @@ export async function runBrain(input: {
     `Você é ${input.brain.name || "a atendente"}, conversando com um lead em um chat de vendas pelo celular. Fale de forma simpática, curta e provocante, sem nenhum conteúdo sexual explícito.
 - Mensagens curtas (1 a 3), linguagem natural, no máximo 1 emoji por mensagem.
 - Nunca diga que é uma IA. Use só os preços listados. O pagamento é pelo botão da oferta (PIX).
-- Se o lead pedir algo que uma oferta entrega ou disser que quer, mostre essa oferta (offer_id) na mesma resposta.
+- Se o lead pedir algo que uma oferta entrega ou disser que quer, mostre essa oferta (offer_id) na mesma resposta.${es ? "\n- IDIOMA: responda SEMPRE em espanhol do México (es-MX)." : ""}
 
 # Ofertas
 ${
       validOffers
         .map((o) => {
           const p = products.get(o.productId)!;
-          return `- offer_id "${o.id}": ${p.name} — ${formatBRL(p.price)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : ""}`;
+          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : ""}`;
         })
         .join("\n") || "(nenhuma)"
     }
@@ -673,7 +682,7 @@ ${flowOffersSection(input.flowOffers)}`;
   if (sale) {
     const isCall = sale.style === "call" && !!sale.videoId;
     return {
-      messages: [isCall ? "vou te ligar agora 😏" : "olha aqui 👇"],
+      messages: [isCall ? (es ? "te llamo ahorita 😏" : "vou te ligar agora 😏") : es ? "mira aquí 👇" : "olha aqui 👇"],
       offer: { ...sale, product: products.get(sale.productId)! },
       audio: null,
       image: null,
@@ -686,7 +695,7 @@ ${flowOffersSection(input.flowOffers)}`;
 }
 
 const STOP = new Set(
-  "quando quiser pedir pedirem oferecer ofertar lead leads mandar enviar sobre para pelo pela mais muito tambem depois antes ainda voce voces essa esse isso esta este quer querer gostar falar falou disser disse alguma algum coisa conversa mensagem mensagens".split(" "),
+  "cuando quiere quieres pedir pidan ofrecer mandar enviar sobre para pero esta este eso como algo alguna mensaje mensajes quando quiser pedir pedirem oferecer ofertar lead leads mandar enviar sobre para pelo pela mais muito tambem depois antes ainda voce voces essa esse isso esta este quer querer gostar falar falou disser disse alguma algum coisa conversa mensagem mensagens".split(" "),
 );
 const keyWords = (v: string) =>
   new Set(
@@ -698,8 +707,15 @@ const keyWords = (v: string) =>
       .filter((w) => w.length >= 4 && !STOP.has(w)),
   );
 const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((w) => b.has(w)).length;
-const PREVIEW_INTENT = /(pr[eé]via|previazinha|provinha|amostra|\bfot(o|inha|os)\b|\bv[ií]deo\b|videozinho|deixa eu ver|mostra (algo|um pouco|um pouquinho|uma|um)|mostra a[ií])/i;
-const ASK_INTENT = /\b(faz|fa[cç]a|fazer|joga|jogar|tira|tirar|como funciona|como [eé]|me fala|saber|ver)\b/i;
+const PREVIEW_INTENT =
+  /(previa|previazinha|provinha|amostra|\bfot(o|inha|os|ito|itos)\b|\bvideo\b|videozinho|videito|deixa eu ver|mostra (algo|um pouco|um pouquinho|uma|um)|mostra ai|adelanto|avance|probadita|muestrame|ensename|dejame ver|quiero ver)/i;
+const ASK_INTENT = /\b(faz|faca|fazer|joga|jogar|tira|tirar|como funciona|como e|me fala|saber|ver|haz|hazme|hacer|tirame|leer|lectura|dime)\b/i;
+const plain = (v: string) =>
+  v
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+const has = (re: RegExp, text: string) => re.test(plain(text));
 
 /**
  * Garante o envio quando o pedido do lead é claro e a IA não escolheu nada:
@@ -724,8 +740,9 @@ function assistReply(
   // ligação de voz: a IA pediu para ligar e o lead autorizou (só uma vez por conversa)
   if (!out.voiceCall && voiceCalls.length && !/liga[cç][aã]o de voz/.test(past)) {
     const lastBot = [...history].reverse().find((t) => t.role === "bot" && !t.text.startsWith("["))?.text ?? "";
-    const askedToCall = /(te )?lig(ar|o|ue|a[cç][aã]o)|posso te ligar/i.test(lastBot) && !/v[ií]deo/i.test(lastBot);
-    if (askedToCall && YES_INTENT.test(lastLead) && !NO_INTENT.test(lastLead)) {
+    const askedToCall =
+      /(te )?lig(ar|o|ue|acao)|posso te ligar|te llamo|llamarte|te marco|marcarte|puedo llamarte|una llamada/i.test(plain(lastBot)) && !/video/i.test(plain(lastBot));
+    if (askedToCall && has(YES_INTENT, lastLead) && !has(NO_INTENT, lastLead)) {
       out.voiceCall = voiceCalls[0];
       return out;
     }
@@ -736,7 +753,7 @@ function assistReply(
     const declinedCall = /recusou a chamada/.test(history.slice(-4).map((t) => t.text).join(" "));
     const calls = offers.filter((o) => o.style === "call" && o.videoId);
     let pick: BrainOffer | undefined;
-    if (calls.length && !declinedCall && CALL_INTENT.test(lastLead) && (BUY_INTENT.test(lastLead) || ASK_INTENT.test(lastLead))) pick = calls[0];
+    if (calls.length && !declinedCall && has(CALL_INTENT, lastLead) && (has(BUY_INTENT, lastLead) || has(ASK_INTENT, lastLead))) pick = calls[0];
     if (!pick) {
       // produto citado pelo nome/título (ex.: "tarot") ou pela descrição de quando oferecer
       let best = 0;
@@ -746,14 +763,14 @@ function assistReply(
         const score = nameHit * 2 + whenHit;
         if ((nameHit >= 1 || whenHit >= 2) && score > best) [pick, best] = [o, score];
       }
-      if (pick && !(BUY_INTENT.test(lastLead) || ASK_INTENT.test(lastLead) || best >= 3)) pick = undefined;
+      if (pick && !(has(BUY_INTENT, lastLead) || has(ASK_INTENT, lastLead) || best >= 3)) pick = undefined;
     }
     // não repete a mesma oferta que acabou de aparecer
     if (pick && !recentBot.includes(`offer_id "${pick.id}"`)) out.offer = { ...pick, product: products.get(pick.productId)! };
   }
 
   // pedido de prévia (pedir "chamada de vídeo" é ligação, não prévia)
-  if (!out.image && images.length && PREVIEW_INTENT.test(lastLead) && !CALL_INTENT.test(lastLead)) {
+  if (!out.image && images.length && has(PREVIEW_INTENT, lastLead) && !has(CALL_INTENT, lastLead)) {
     const unsent = images.filter((m) => !past.includes(`image_id "${m.id}"`));
     const wantsVideo = /v[ií]deo/i.test(lastLead);
     const pool = unsent.filter((m) => (wantsVideo ? m.kind === "video" : true));
@@ -777,21 +794,23 @@ function assistReply(
   return out;
 }
 
-const YES_INTENT = /\b(sim|s|ss|pode|podes|liga|ligar|me liga|bora|vamos|vamo|claro|quero|aceito|ok|okay|beleza|blz|manda|t[aá]|ta bom|uhum|aham|yes|com certeza)\b/i;
-const NO_INTENT = /\b(n[aã]o|nao|agora n[aã]o|depois|nem|nunca)\b/i;
+// as intenções são testadas no texto sem acentos (português e espanhol)
+const YES_INTENT =
+  /\b(sim|s|ss|pode|podes|liga|ligar|me liga|bora|vamos|vamo|claro|quero|aceito|ok|okay|okey|beleza|blz|manda|ta|ta bom|uhum|aham|yes|com certeza|si|sip|dale|va|vale|orale|andale|por supuesto|llamame|llama|marcame|quiero|acepto|bueno|sale|simon|obvio)\b/i;
+const NO_INTENT = /\b(nao|agora nao|depois|nem|nunca|no|ahorita no|despues|luego|nel)\b/i;
 
 const BUY_INTENT =
-  /\b(quero|qro|quer|bora|vamos|vamo|sim|ss|manda|mande|me manda|liga|ligar|liga[cç][aã]o|chamada|videochamada|v[ií]deo ?chamada|quanto|pre[cç]o|valor|comprar|compro|pix|pagar|aceito|topo|pode ser|claro|fechado|fecho|bota|libera)\b/i;
-const CALL_INTENT = /(liga|ligar|liga[cç][aã]o|chamada|videochamada|call|ao vivo|me liga)/i;
+  /\b(quero|qro|quer|bora|vamos|vamo|sim|ss|manda|mande|me manda|liga|ligar|ligacao|chamada|videochamada|video ?chamada|quanto|preco|valor|comprar|compro|pix|pagar|aceito|topo|pode ser|claro|fechado|fecho|bota|libera|quiero|kiero|dale|si|llamame|llamada|videollamada|cuanto|precio|costo|cuesta|pago|acepto|me interesa|mandame|sale|orale|andale)\b/i;
+const CALL_INTENT = /(liga|ligar|ligacao|chamada|videochamada|call|ao vivo|me liga|llamame|llamar|llamada|videollamada|marcame|en vivo)/i;
 
 /** Quando a IA falha: escolhe a oferta pelo que o lead acabou de dizer (ou pela última proposta do atendente). */
 function salesFallback(history: ChatTurn[], offers: BrainOffer[]): BrainOffer | null {
   if (!offers.length) return null;
   const lastLead = [...history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
-  if (!BUY_INTENT.test(lastLead)) return null;
+  if (!has(BUY_INTENT, lastLead)) return null;
   const lastBot = [...history].reverse().find((t) => t.role === "bot" && !t.text.startsWith("["))?.text ?? "";
   const calls = offers.filter((o) => o.style === "call" && o.videoId);
-  if (calls.length && (CALL_INTENT.test(lastLead) || CALL_INTENT.test(lastBot))) return calls[0];
+  if (calls.length && (has(CALL_INTENT, lastLead) || has(CALL_INTENT, lastBot))) return calls[0];
   // a oferta cujo "quando oferecer" mais combina com a conversa
   const words = (v: string) => new Set(v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
   const said = words(`${lastLead} ${lastBot}`);
@@ -809,6 +828,11 @@ function isContentBlock(e: unknown): boolean {
   if (e instanceof DeepSeekError) return /content|risk|sensitive/i.test(e.message) && e.status === 400;
   return false;
 }
+
+/** Fluxo do México: a IA fala espanhol mexicano mesmo com o cérebro escrito em português. */
+const LANGUAGE_ES_MX = `# IDIOMA (OBRIGATÓRIO)
+Este chat é do México. Escreva TODAS as mensagens em espanhol do México (es-MX), natural e coloquial como no WhatsApp mexicano (ex.: "ahorita", "qué onda", "va", "órale" quando combinar), mesmo que a personalidade, o conteúdo e as regras acima estejam em português — traduza a ideia, nunca escreva em português.
+Os preços estão em pesos mexicanos: fale como "$199 pesos" ou "$199 MXN", exatamente com os valores listados. O pagamento é por transferência (não existe PIX no México): nunca fale em PIX.`;
 
 /** Falhas passageiras que valem uma nova tentativa. */
 function isRetryableAiError(e: unknown): boolean {
@@ -853,7 +877,7 @@ Use o jeito de falar da personalidade e só fatos do conteúdo/produtos. Separe 
 };
 
 /** Gera a sugestão de um campo do cérebro com a IA em uso (o painel mostra para o dono aceitar ou não). */
-export async function improveBrainField(field: ImproveField, draft: BrainDraftForImprove, about?: string): Promise<string> {
+export async function improveBrainField(field: ImproveField, draft: BrainDraftForImprove, about?: string, language?: "pt-BR" | "es-MX"): Promise<string> {
   const target = await aiClient(55_000);
   const ids = (draft.offers ?? []).map((o) => o.productId).filter(Boolean);
   const prods = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } } }) : [];
@@ -861,14 +885,17 @@ export async function improveBrainField(field: ImproveField, draft: BrainDraftFo
     .map((o) => {
       const p = prods.find((x) => x.id === o.productId);
       if (!p) return null;
-      return `- ${p.name} — ${formatBRL(p.price)}${p.description ? ` — ${p.description}` : ""}${o.when ? ` (oferecer: ${o.when})` : ""}${o.pitch ? ` (argumentos: ${o.pitch})` : ""}`;
+      return `- ${p.name} — ${money(p.price, p.currency)}${p.description ? ` — ${p.description}` : ""}${o.when ? ` (oferecer: ${o.when})` : ""}${o.pitch ? ` (argumentos: ${o.pitch})` : ""}`;
     })
     .filter(Boolean)
     .join("\n");
   const cut = (v: string | undefined, n: number) => (v ?? "").trim().slice(0, n) || "(vazio)";
   const system =
     "Você é especialista em vendas por chat (estilo WhatsApp) e em configurar atendentes virtuais que vendem conversando. " +
-    "Escreva em português do Brasil. Responda SOMENTE com o texto pedido, pronto para colar no campo, sem introdução, sem comentários e sem blocos de código.";
+    (language === "es-MX"
+      ? "Escreva TUDO em espanhol do México (es-MX), natural e coloquial, para leads mexicanos (preços em pesos, pagamento por transferência, nada de PIX). "
+      : "Escreva em português do Brasil. ") +
+    "Responda SOMENTE com o texto pedido, pronto para colar no campo, sem introdução, sem comentários e sem blocos de código.";
   const prompt = `# Cérebro atual
 Nome: ${draft.name || "(sem nome)"}
 

@@ -42,7 +42,7 @@ export async function sendMetaPurchase(payment: Payment): Promise<void> {
         event_source_url: funnel ? absoluteUrl(`/f/${funnel.slug}`) : undefined,
         user_data: userData,
         custom_data: {
-          currency: "BRL",
+          currency: payment.currency || "BRL",
           value: payment.amount / 100,
           content_name: product?.name,
           content_ids: [payment.productId],

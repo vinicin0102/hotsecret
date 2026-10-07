@@ -1,6 +1,6 @@
 // Oferta em formato de chamada de vídeo: tela de ligação recebida e a chamada em andamento.
 import { useEffect, useRef, useState } from "react";
-import { formatBRL } from "@/lib/format";
+import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicCharacter, PublicProduct } from "@/types/flow";
 import type { CallVideo, ChatTransport, PublicPaymentInfo } from "@/features/chat-engine/transport";
 import { PaymentStatus } from "./PaymentStatus";
@@ -84,11 +84,12 @@ export function IncomingCall({
   kind?: "video" | "voice";
 }) {
   useRingtone(true);
+  const { t } = useChatI18n();
   return (
-    <div className="call-overlay ringing" role="dialog" aria-label={`${kind === "voice" ? "Ligação" : "Chamada de vídeo"} de ${character.name}`}>
+    <div className="call-overlay ringing" role="dialog" aria-label={`${kind === "voice" ? t.voiceCall : t.videoCall} · ${character.name}`}>
       {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
       <div className="call-top">
-        <div className="call-kind">{kind === "voice" ? "📞 Ligação de voz" : "📹 Chamada de vídeo"}</div>
+        <div className="call-kind">{kind === "voice" ? t.voiceCall : t.videoCall}</div>
         <div className="call-avatar-wrap">
           <span className="call-ring r1" />
           <span className="call-ring r2" />
@@ -101,21 +102,22 @@ export function IncomingCall({
         </div>
         <div className="call-name">{character.name}</div>
         <div className="call-status">
-          chamando<span className="dots">...</span>
+          {t.calling}
+          <span className="dots">...</span>
         </div>
       </div>
       <div className="call-actions">
         <div>
-          <button className="call-btn decline" onClick={onDecline} aria-label="Recusar">
+          <button className="call-btn decline" onClick={onDecline} aria-label={t.decline}>
             <PhoneIcon down />
           </button>
-          <span>Recusar</span>
+          <span>{t.decline}</span>
         </div>
         <div>
-          <button className="call-btn accept" onClick={onAccept} aria-label="Atender">
+          <button className="call-btn accept" onClick={onAccept} aria-label={t.answer}>
             {kind === "voice" ? <PhoneIcon /> : <CamIcon />}
           </button>
-          <span>Atender</span>
+          <span>{t.answer}</span>
         </div>
       </div>
     </div>
@@ -143,6 +145,7 @@ export function PixPopup({
   onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const { t, money } = useChatI18n();
   const code = payment?.pixQrCode ?? "";
   const failed = payment?.status === "FAILED";
   const copy = async () => {
@@ -158,9 +161,9 @@ export function PixPopup({
     setTimeout(() => setCopied(false), 2500);
   };
   return (
-    <div className="call-overlay pix" role="dialog" aria-label="Pagamento PIX">
+    <div className="call-overlay pix" role="dialog" aria-label={t.payEyebrowPix}>
       {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
-      <button className="pix-close" onClick={onClose} aria-label="Fechar">
+      <button className="pix-close" onClick={onClose} aria-label={t.close}>
         ✕
       </button>
       <div className="pix-box">
@@ -171,13 +174,14 @@ export function PixPopup({
           <div className="pix-avatar">{character.name.slice(0, 1)}</div>
         )}
         <div className="pix-title">
-          {downsell ? downsellText || "Tudo bem 🥺 que tal uma chamada mais curtinha?" : `${character.name} está te esperando na chamada 📹`}
+          {downsell ? downsellText || t.downsellDefault : `${character.name} ${t.waitingInCall}`}
         </div>
         {product && (
           <div className="pix-product">
             {product.name}
             <b>
-              {product.originalPrice && product.originalPrice > product.price ? <s>{formatBRL(product.originalPrice)}</s> : null} {formatBRL(product.price)}
+              {product.originalPrice && product.originalPrice > product.price ? <s>{money(product.originalPrice, product.currency)}</s> : null}{" "}
+              {money(product.price, product.currency)}
             </b>
           </div>
         )}
@@ -185,31 +189,33 @@ export function PixPopup({
           <div className="error-text">{error}</div>
         ) : !payment ? (
           <div className="pix-wait">
-            <span className="once-spin" /> Gerando o PIX...
+            <span className="once-spin" /> {t.generatingKey}
           </div>
         ) : failed ? (
-          <div className="error-text">Pagamento não aprovado. Feche e tente de novo.</div>
+          <div className="error-text">{t.callNotApproved}</div>
         ) : (
           <>
-            <div className="pix-label">Chave PIX de {character.name.trim().split(/\s+/)[0]}</div>
+            <div className="pix-label">
+              {t.keyOf} {character.name.trim().split(/\s+/)[0]}
+            </div>
             <div className="pix-code-box" id="pix-code-text" onClick={copy}>
               {code}
             </div>
             <button className="btn btn-primary btn-block cta-glow pix-copy" onClick={copy} disabled={!code}>
-              {copied ? "CHAVE COPIADA ✓" : "COPIAR CHAVE PIX"}
+              {copied ? t.keyCopied : t.copyKey}
             </button>
             <ol className="pix-steps">
-              <li>Abra o app do seu banco e escolha PIX → Copia e cola</li>
-              <li>Cole a chave e confirme o pagamento</li>
-              <li>A chamada começa sozinha assim que o PIX for confirmado</li>
+              <li>{t.step1}</li>
+              <li>{t.step2}</li>
+              <li>{t.step3}</li>
             </ol>
             <div className="pix-wait">
-              <span className="once-spin" /> Aguardando o pagamento...
+              <span className="once-spin" /> {t.waitingPay}
             </div>
             {onSimulate && payment && (
               <div className="row" style={{ justifyContent: "center", marginTop: 8 }}>
                 <button className="btn btn-sm" onClick={() => onSimulate(payment.id, "APPROVED")}>
-                  Simular aprovação
+                  {t.simApprove}
                 </button>
               </div>
             )}
@@ -247,6 +253,7 @@ export function CallScreen({
   previewMode?: boolean;
 }) {
   const vRef = useRef<HTMLVideoElement>(null);
+  const { t: tx, money } = useChatI18n();
   const [video, setVideo] = useState<CallVideo | null | undefined>(undefined);
   const [t, setT] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -342,7 +349,7 @@ export function CallScreen({
   const mm = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
-    <div className="call-overlay active" role="dialog" aria-label="Chamada de vídeo">
+    <div className="call-overlay active" role="dialog" aria-label={tx.videoCall}>
       {video ? (
         <video
           ref={vRef}
@@ -358,7 +365,7 @@ export function CallScreen({
       ) : (
         <div className="call-connecting">
           {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
-          <div className="call-status">{video === undefined ? "conectando..." : "câmera indisponível"}</div>
+          <div className="call-status">{video === undefined ? tx.connecting : tx.cameraOff}</div>
         </div>
       )}
       <div className="call-hud">
@@ -387,7 +394,7 @@ export function CallScreen({
             setNeedsTap(false);
           }}
         >
-          🔇 Toque para ouvir
+          {tx.tapToHearVideo}
         </button>
       )}
       {cues.length > 0 && (
@@ -405,12 +412,12 @@ export function CallScreen({
           <div className="call-upsell-text">{upsell.text || upsell.product.name}</div>
           <div className="call-upsell-price">
             {upsell.product.originalPrice && upsell.product.originalPrice > upsell.product.price ? (
-              <s>{formatBRL(upsell.product.originalPrice)}</s>
+              <s>{money(upsell.product.originalPrice, upsell.product.currency)}</s>
             ) : null}{" "}
-            {formatBRL(upsell.product.price)}
+            {money(upsell.product.price, upsell.product.currency)}
           </div>
           {boughtUpsell(upsell.productId) ? (
-            <div className="call-upsell-ok">Desbloqueado ✓</div>
+            <div className="call-upsell-ok">{tx.unlocked}</div>
           ) : upsellBuying && upsellPayment ? (
             <PaymentStatus
               payment={upsellPayment}
@@ -426,18 +433,18 @@ export function CallScreen({
                 onBuyUpsell(upsell.productId);
               }}
             >
-              {upsell.ctaLabel || "DESBLOQUEAR"}
+              {upsell.ctaLabel || tx.unlock}
             </button>
           )}
           {!boughtUpsell(upsell.productId) && (
             <button className="call-upsell-skip" onClick={closeUpsell}>
-              Agora não
+              {tx.notNow}
             </button>
           )}
         </div>
       )}
 
-      <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label="Desligar">
+      <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label={tx.hangUp}>
         <PhoneIcon down />
       </button>
     </div>
@@ -473,6 +480,7 @@ export function VoiceCall({
   const [muted, setMuted] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const ended = useRef(false);
+  const { t } = useChatI18n();
 
   const finish = () => {
     if (ended.current) return;
@@ -502,10 +510,10 @@ export function VoiceCall({
   if (phase === "ringing") return <IncomingCall character={character} kind="voice" onAccept={accept} onDecline={onDecline} />;
 
   return (
-    <div className={`call-overlay voice-call ${phase === "ended" ? "ended" : ""}`} role="dialog" aria-label={`Ligação com ${character.name}`}>
+    <div className={`call-overlay voice-call ${phase === "ended" ? "ended" : ""}`} role="dialog" aria-label={`${t.voiceCall} · ${character.name}`}>
       {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
       <div className="call-top">
-        <div className="call-kind">📞 Ligação de voz</div>
+        <div className="call-kind">{t.voiceCall}</div>
         <div className="call-avatar-wrap">
           {phase === "active" && !muted && <span className="voice-wave" />}
           {character.avatarUrl ? (
@@ -516,7 +524,7 @@ export function VoiceCall({
           )}
         </div>
         <div className="call-name">{character.name}</div>
-        <div className="call-status voice-timer">{phase === "ended" ? `Chamada encerrada · ${fmt(endedSeconds ?? elapsed)}` : fmt(elapsed)}</div>
+        <div className="call-status voice-timer">{phase === "ended" ? `${t.callEnded} · ${fmt(endedSeconds ?? elapsed)}` : fmt(elapsed)}</div>
         {blocked && phase === "active" && (
           <button
             className="btn btn-primary voice-unblock"
@@ -525,7 +533,7 @@ export function VoiceCall({
               audio.current?.play().catch(() => setBlocked(true));
             }}
           >
-            🔊 Toque para ouvir
+            {t.tapToHear}
           </button>
         )}
       </div>
@@ -539,17 +547,17 @@ export function VoiceCall({
                 setMuted(m);
                 if (audio.current) audio.current.muted = m;
               }}
-              aria-label={muted ? "Ativar som" : "Silenciar"}
+              aria-label={muted ? t.muted : t.speaker}
             >
               {muted ? "🔇" : "🔊"}
             </button>
-            <span>{muted ? "Sem som" : "Alto-falante"}</span>
+            <span>{muted ? t.muted : t.speaker}</span>
           </div>
           <div>
-            <button className="call-btn decline" onClick={finish} aria-label="Desligar">
+            <button className="call-btn decline" onClick={finish} aria-label={t.hangUp}>
               <PhoneIcon down />
             </button>
-            <span>Desligar</span>
+            <span>{t.hangUp}</span>
           </div>
         </div>
       )}

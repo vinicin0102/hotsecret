@@ -5,7 +5,7 @@ import { apiHandler, HttpError, rateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { sanitizeText } from "@/lib/sanitize";
 import { requireLeadSession } from "@/services/conversation";
-import { entitledNodes } from "@/services/funnels";
+import { entitledNodes, getFunnelSettings } from "@/services/funnels";
 import { addConversationMessage } from "@/services/payments/service";
 import { trackEvent } from "@/services/tracking";
 import { describeAiError, publicOfferFormat, runBrain, type ChatTurn, type FlowOfferInfo } from "@/services/ai/brain";
@@ -138,14 +138,16 @@ export default apiHandler({
       flowOffers = list
         .map((o): FlowOfferInfo | null => {
           const p = prods.find((x) => x.id === o.productId);
-          return p ? { name: o.headline || p.name, price: p.price, originalPrice: p.originalPrice, description: p.description, button: o.button } : null;
+          return p ? { name: o.headline || p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency, description: p.description, button: o.button } : null;
         })
         .filter((v): v is FlowOfferInfo => !!v);
     }
 
     let reply;
     try {
-      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers });
+      const funnelRow = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } });
+      const language = getFunnelSettings(funnelRow?.settings).locale;
+      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language });
     } catch (e) {
       console.error("[ai]", e);
       const msg = brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
@@ -185,7 +187,7 @@ export default apiHandler({
         session.conversationId,
         "bot",
         "offer",
-        { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, aiOfferId: reply.offer.id, style: offer.style, tarotCards: offer.tarotCards ?? null, tarotBackUrl: offer.tarotBackUrl ?? null } as Prisma.InputJsonValue,
+        { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, currency: p.currency, aiOfferId: reply.offer.id, style: offer.style, tarotCards: offer.tarotCards ?? null, tarotBackUrl: offer.tarotBackUrl ?? null } as Prisma.InputJsonValue,
         node.id,
       );
       await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "offer_viewed", nodeId: node.id, data: { productId: p.id, ai: true } });

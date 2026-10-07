@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { formatBRL } from "@/lib/format";
+import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicPaymentInfo } from "@/features/chat-engine/transport";
 
 /** Imagem do gateway (URL, data URI ou base64 puro) — usada só se não der para gerar o QR localmente. */
@@ -43,6 +43,7 @@ export function PaymentStatus({
   previewMode?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const { t, money } = useChatI18n();
   const qr = usePixQr(payment?.pixQrCode, payment?.pixQrCodeBase64);
   if (!payment) return null;
   const pending = payment.status === "PENDING" || payment.status === "CREATED";
@@ -62,59 +63,57 @@ export function PaymentStatus({
     <div className="msg-row bot">
       <div className="card-msg payment-card">
         <div className="card-body">
-          <div className="eyebrow">{payment.method === "PIX" ? "Pagamento via PIX" : "Pagamento com cartão"}</div>
+          <div className="eyebrow">{payment.method === "PIX" ? t.payEyebrowPix : t.payEyebrowCard}</div>
           <h3 style={{ fontSize: 17 }}>
-            {productName ?? "Seu pedido"} · {formatBRL(payment.amount)}
+            {productName ?? t.yourOrder} · {money(payment.amount, payment.currency)}
           </h3>
 
-          {payment.status === "APPROVED" && <div className="status-line status-approved">✓ Pagamento confirmado. Acesso liberado!</div>}
+          {payment.status === "APPROVED" && <div className="status-line status-approved">{t.approved}</div>}
           {payment.status === "FAILED" && (
             <>
-              <div className="status-line status-failed">Pagamento não aprovado.</div>
+              <div className="status-line status-failed">{t.notApproved}</div>
               {onRetry && (
                 <button className="btn btn-primary btn-block" onClick={onRetry}>
-                  Tentar novamente
+                  {t.retry}
                 </button>
               )}
             </>
           )}
-          {payment.status === "REFUNDED" && <div className="status-line status-failed">Pagamento estornado.</div>}
+          {payment.status === "REFUNDED" && <div className="status-line status-failed">{t.refunded}</div>}
 
           {pending && payment.method === "PIX" && (
             <>
-              {qr && (
+              {qr && payment.currency !== "MXN" && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img className="qr" src={qr} alt="QR Code PIX" />
               )}
-              <p style={{ fontSize: 13 }}>Copie o código abaixo e pague no app do seu banco (PIX copia e cola):</p>
+              <p style={{ fontSize: 13 }}>{t.copyInstructions}</p>
               {payment.pixQrCode && <div className="pix-code">{payment.pixQrCode}</div>}
               <button className="btn btn-gold btn-block" style={{ marginTop: 10 }} onClick={copy}>
-                {copied ? "Código copiado ✓" : "Copiar código PIX"}
+                {copied ? t.copied : t.copyCode}
               </button>
             </>
           )}
           {pending && payment.method === "CARD" && payment.redirectUrl && (
             <a className="btn btn-primary btn-block" href={payment.redirectUrl} target="_blank" rel="noopener noreferrer">
-              Abrir pagamento seguro
+              {t.openSecure}
             </a>
           )}
           {pending && (
             <div className="status-line">
-              <span className="spinner" /> Aguardando confirmação do pagamento...
+              <span className="spinner" /> {t.waitingPayment}
             </div>
           )}
 
           {pending && onSimulate && (
             <div className="sandbox-box">
-              {previewMode
-                ? "Pré-visualização: este PIX é simulado e nada é cobrado. Publique o fluxo e abra o link público para gerar o PIX real."
-                : "Ambiente de teste — nenhum valor é cobrado."}
+              {previewMode ? t.previewNote : t.testNote}
               <div className="row">
                 <button className="btn btn-sm" onClick={() => onSimulate("APPROVED")}>
-                  Simular aprovação
+                  {t.simApprove}
                 </button>
                 <button className="btn btn-sm btn-danger" onClick={() => onSimulate("FAILED")}>
-                  Simular recusa
+                  {t.simFail}
                 </button>
               </div>
             </div>

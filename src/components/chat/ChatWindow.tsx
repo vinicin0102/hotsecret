@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { asChatLocale, ChatI18nContext, makeChatI18n } from "@/features/i18n/chat";
 import type { AudioContent, DeliveryContent, ImageContent, LinkContent, OfferContent, PublicFunnel, VideoContent } from "@/types/flow";
 import { getNode } from "@/features/chat-engine/engine";
 import { useChatEngine, type ChatItem, type ResumeState } from "@/features/chat-engine/useChatEngine";
@@ -43,6 +44,8 @@ function visibleItems(items: ChatItem[], count: number, isOpen: (i: ChatItem) =>
 
 export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, onRestart }: Props) {
   const engine = useChatEngine(funnel, transport, resume);
+  const i18n = useMemo(() => makeChatI18n(asChatLocale(funnel.locale)), [funnel.locale]);
+  const { t } = i18n;
   const bgVideo = funnel.appearance?.bgVideoUrl || null;
   // com vídeo de fundo: só as últimas mensagens ficam na tela (as antigas vão sumindo)
   const fadeOld = !!bgVideo && funnel.appearance?.fadeOld !== false;
@@ -104,7 +107,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           return (
             <MessageBubble key={item.id} sender={item.sender} at={item.at} media>
               <ImageMessage url={m.url} caption={m.caption} />
-              {c.sending ? <div className="photo-sending">enviando…</div> : null}
+              {c.sending ? <div className="photo-sending">{t.sending}</div> : null}
             </MessageBubble>
           );
         }
@@ -213,7 +216,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
               rel="noopener noreferrer"
               onClick={() => engine.track("link_clicked", item.nodeId)}
             >
-              {c.buttonLabel || "Abrir"}
+              {c.buttonLabel || t.open}
             </a>
           </div>
         );
@@ -222,9 +225,11 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         return (
           <div key={item.id} className="msg-row bot">
             <div className="link-card call-access">
-              <div className="hint">📹 Sua chamada com {funnel.character.name} está liberada</div>
+              <div className="hint">
+                {t.callReadyA} {funnel.character.name} {t.callReadyB}
+              </div>
               <button className="btn btn-gold cta-glow" style={{ marginTop: 6, minWidth: 240 }} onClick={() => engine.enterCall(item.nodeId, item.productId)}>
-                ENTRAR NA CHAMADA
+                {t.enterCall}
               </button>
             </div>
           </div>
@@ -254,7 +259,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   };
 
   return (
-    <div className={`chat-shell ${embedded ? "embedded" : ""} ${bgVideo ? "has-bg-video" : ""}`}>
+    <ChatI18nContext.Provider value={i18n}>
+    <div className={`chat-shell ${embedded ? "embedded" : ""} ${bgVideo ? "has-bg-video" : ""}`} lang={i18n.locale}>
       {!embedded && <Particles />}
       <div className="chat-window">
         {bgVideo && (
@@ -308,10 +314,10 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         )}
         <ChatHeader character={funnel.character} typing={typing} />
         <div className={`chat-body ${fadeOld ? "fade-old" : ""}`} ref={bodyRef} aria-live="polite">
-          {!bgVideo && <div className="day-sep">Hoje</div>}
+          {!bgVideo && <div className="day-sep">{t.today}</div>}
           {!bgVideo && (
           <div className="secret-note">
-            🔒 Esta conversa é <b>privada</b>. Só você está vendo.
+            🔒 {t.privateA} <b>{t.privateB}</b>. {t.privateC}
           </div>
           )}
           {(fadeOld ? visibleItems(items, visibleCount, isOpenItem) : items).map(renderItem)}
@@ -322,7 +328,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           {ended && onRestart && (
             <div className="restart-bar">
               <button className="btn btn-ghost btn-sm" onClick={onRestart}>
-                ↺ Recomeçar conversa
+                {t.restart}
               </button>
             </div>
           )}
@@ -342,8 +348,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           <button
             type="button"
             className="photo-btn"
-            aria-label="Enviar foto"
-            title="Tirar ou enviar foto"
+            aria-label={t.sendPhoto}
+            title={t.takePhoto}
             disabled={!canType || engine.photoBusy}
             onClick={() => photoRef.current?.click()}
           >
@@ -361,21 +367,22 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             disabled={!canType}
             placeholder={
               canType
-                ? (awaiting?.placeholder ?? "") || "Digite sua resposta..."
+                ? (awaiting?.placeholder ?? "") || t.typeAnswer
                 : awaiting?.kind === "buttons"
-                  ? "Escolha uma opção acima"
-                  : "Mensagem"
+                  ? t.chooseAbove
+                  : t.message
             }
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKey}
             maxLength={1000}
             enterKeyHint="send"
           />
-          <button className="send" aria-label="Enviar" disabled={!canType || !draft.trim()} onClick={send}>
+          <button className="send" aria-label={t.send} disabled={!canType || !draft.trim()} onClick={send}>
             ➤
           </button>
         </div>
       </div>
     </div>
+    </ChatI18nContext.Provider>
   );
 }

@@ -79,6 +79,8 @@ interface PixelProduct {
   eventId: string;
   /** pixel da Meta próprio da oferta (no lugar do pixel do fluxo) */
   metaPixelId?: string | null;
+  /** BRL ou MXN */
+  currency?: string | null;
 }
 
 /** Evento da Meta só para um pixel: o da oferta, se tiver; senão o do fluxo. */
@@ -90,19 +92,19 @@ function metaTrack(w: W, event: string, data: Record<string, unknown>, p: PixelP
 export function pixelInitiateCheckout(p: PixelProduct) {
   if (typeof window === "undefined") return;
   const w = window as W;
-  const data = { value: p.value, currency: "BRL", content_name: p.name, content_ids: [p.id], content_type: "product", num_items: 1 };
+  const data = { value: p.value, currency: p.currency || "BRL", content_name: p.name, content_ids: [p.id], content_type: "product", num_items: 1 };
   metaTrack(w, "InitiateCheckout", data, p);
-  if (active.tiktokPixelId) w.ttq?.track("InitiateCheckout", { value: p.value, currency: "BRL", content_id: p.id, content_name: p.name }, { event_id: p.eventId });
-  if (active.googleTagId) w.gtag?.("event", "begin_checkout", { value: p.value, currency: "BRL", items: [{ item_id: p.id, item_name: p.name }] });
+  if (active.tiktokPixelId) w.ttq?.track("InitiateCheckout", { value: p.value, currency: p.currency || "BRL", content_id: p.id, content_name: p.name }, { event_id: p.eventId });
+  if (active.googleTagId) w.gtag?.("event", "begin_checkout", { value: p.value, currency: p.currency || "BRL", items: [{ item_id: p.id, item_name: p.name }] });
 }
 
 export function pixelPurchase(p: PixelProduct) {
   if (typeof window === "undefined") return;
   const w = window as W;
-  const data = { value: p.value, currency: "BRL", content_name: p.name, content_ids: [p.id], content_type: "product", num_items: 1 };
+  const data = { value: p.value, currency: p.currency || "BRL", content_name: p.name, content_ids: [p.id], content_type: "product", num_items: 1 };
   metaTrack(w, "Purchase", data, p);
-  if (active.tiktokPixelId) w.ttq?.track("CompletePayment", { value: p.value, currency: "BRL", content_id: p.id, content_name: p.name }, { event_id: p.eventId });
-  if (active.googleTagId) w.gtag?.("event", "purchase", { transaction_id: p.eventId, value: p.value, currency: "BRL", items: [{ item_id: p.id, item_name: p.name }] });
+  if (active.tiktokPixelId) w.ttq?.track("CompletePayment", { value: p.value, currency: p.currency || "BRL", content_id: p.id, content_name: p.name }, { event_id: p.eventId });
+  if (active.googleTagId) w.gtag?.("event", "purchase", { transaction_id: p.eventId, value: p.value, currency: p.currency || "BRL", items: [{ item_id: p.id, item_name: p.name }] });
 }
 
 /** Cookies do pixel da Meta, enviados ao servidor para a API de Conversões. */

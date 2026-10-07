@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatBRL } from "@/lib/format";
+import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicProduct } from "@/types/flow";
 import type { CheckoutForm } from "@/features/chat-engine/transport";
 
@@ -7,6 +7,8 @@ import type { CheckoutForm } from "@/features/chat-engine/transport";
 export function CheckoutCard({ product, onSubmit }: { product: PublicProduct; onSubmit: (form: CheckoutForm) => Promise<unknown> }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { t, money } = useChatI18n();
+  const price = money(product.price, product.currency);
 
   const confirm = async () => {
     setError(null);
@@ -14,7 +16,7 @@ export function CheckoutCard({ product, onSubmit }: { product: PublicProduct; on
     try {
       await onSubmit({ method: "PIX" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível gerar o PIX. Tente novamente.");
+      setError(err instanceof Error ? err.message : t.generateError);
       setLoading(false);
     }
   };
@@ -23,24 +25,25 @@ export function CheckoutCard({ product, onSubmit }: { product: PublicProduct; on
     <div className="msg-row bot">
       <div className="card-msg checkout-card">
         <div className="card-body">
-          <div className="eyebrow">Finalizar acesso</div>
+          <div className="eyebrow">{t.finishAccess}</div>
           <div className="summary">
             <div>
-              <div className="hint">Produto</div>
+              <div className="hint">{t.product}</div>
               <div className="pname">{product.name}</div>
             </div>
-            <div className="pprice">{formatBRL(product.price)}</div>
+            <div className="pprice">{price}</div>
           </div>
           <p style={{ margin: "0 0 4px", fontSize: 13 }}>
-            Pagamento via <b style={{ color: "#fff" }}>PIX</b> · liberação imediata aqui no chat
+            {t.payVia} <b style={{ color: "#fff" }}>{t.payMethod}</b> · {t.instantRelease}
           </p>
           {error && <div className="error-text" style={{ marginTop: 8 }}>{error}</div>}
           <button className="btn btn-primary cta-glow" onClick={confirm} disabled={loading}>
-            {loading ? "Gerando PIX..." : `GERAR PIX · ${formatBRL(product.price)}`}
+            {loading ? t.generating : `${t.generate} · ${price}`}
           </button>
           <div className="secure-note">
-            Você está comprando <b>{product.name}</b> por <b>{formatBRL(product.price)}</b>.
-            <br />O conteúdo é liberado aqui mesmo assim que o pagamento for confirmado.
+            {t.buyingA} <b>{product.name}</b> {t.buyingFor} <b>{price}</b>.
+            <br />
+            {t.buyingB}
           </div>
         </div>
       </div>

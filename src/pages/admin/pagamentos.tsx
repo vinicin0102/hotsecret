@@ -5,13 +5,14 @@ import { AnalyticsCard } from "@/components/admin/AnalyticsCard";
 import { PAYMENT_LABEL, PaymentBadge } from "@/components/admin/Badges";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/client";
-import { formatBRL, formatDateTime } from "@/lib/format";
+import { formatBRL, formatDateTime, formatMoney } from "@/lib/format";
 
 interface Row {
   id: string;
   status: string;
   method: string;
   amount: number;
+  currency?: string;
   provider: string;
   providerPaymentId: string | null;
   product: string;
@@ -26,6 +27,7 @@ interface Resp {
   provider: string;
   sandbox: boolean;
   totals: Record<string, { count: number; amount: number }>;
+  totalsMXN?: Record<string, { count: number; amount: number }>;
   payments: Row[];
 }
 
@@ -46,6 +48,14 @@ export default function Payments() {
         <AnalyticsCard label="Pendentes" value={String((t.PENDING?.count ?? 0) + (t.CREATED?.count ?? 0))} hint={formatBRL((t.PENDING?.amount ?? 0) + (t.CREATED?.amount ?? 0))} />
         <AnalyticsCard label="Recusados" value={String(t.FAILED?.count ?? 0)} />
         <AnalyticsCard label="Estornados" value={String(t.REFUNDED?.count ?? 0)} hint={formatBRL(t.REFUNDED?.amount ?? 0)} />
+        {data?.totalsMXN && Object.keys(data.totalsMXN).length > 0 && (
+          <AnalyticsCard
+            label="Aprovados México (MXN)"
+            value={formatMoney(data.totalsMXN.APPROVED?.amount ?? 0, "MXN")}
+            hint={`${data.totalsMXN.APPROVED?.count ?? 0} pagamentos`}
+            gold
+          />
+        )}
       </div>
       <div className="card-head">
         <div className="segmented">
@@ -85,7 +95,7 @@ export default function Payments() {
                   <div className="hint">{p.customerEmail}</div>
                 </td>
                 <td>{p.product}</td>
-                <td className="strong">{formatBRL(p.amount)}</td>
+                <td className="strong">{formatMoney(p.amount, p.currency)}</td>
                 <td>{p.method === "PIX" ? "PIX" : "Cartão"}</td>
                 <td>
                   {p.funnel}

@@ -100,7 +100,8 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
       },
       (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
       (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined,
-      (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined));
+      (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined),
+      funnel.locale === "es-MX" ? "es-MX" : "pt-BR");
     }
     if (!token) return null;
     return createLiveTransport(() => token, { sandbox });
@@ -123,23 +124,24 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
     );
   }
 
+  const es = funnel.locale === "es-MX";
   return (
     <>
       <Head>
         <title>{`${funnel.character.name} · HOT SECRET`}</title>
-        <meta name="description" content="Conversas que guardam segredos." />
+        <meta name="description" content={es ? "Conversaciones que guardan secretos." : "Conversas que guardam segredos."} />
         <meta property="og:title" content={funnel.character.name} />
-        <meta property="og:description" content="Uma conversa pode mudar tudo." />
+        <meta property="og:description" content={es ? "Una conversación puede cambiarlo todo." : "Uma conversa pode mudar tudo."} />
         {funnel.character.avatarUrl && <meta property="og:image" content={funnel.character.avatarUrl} />}
         <meta name="robots" content="noindex" />
       </Head>
       {error ? (
         <div className="chat-shell">
           <div className="chat-empty">
-            <h1>Ops...</h1>
+            <h1>{es ? "Ups..." : "Ops..."}</h1>
             <p>{error}</p>
             <button className="btn btn-primary" onClick={() => location.reload()}>
-              Tentar novamente
+              {es ? "Intentar de nuevo" : "Tentar novamente"}
             </button>
           </div>
         </div>

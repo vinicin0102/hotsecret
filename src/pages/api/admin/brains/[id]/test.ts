@@ -9,6 +9,8 @@ export const config = { maxDuration: 60 };
 const schema = z.object({
   history: z.array(z.object({ role: z.enum(["lead", "bot"]), text: z.string().max(2000) })).max(60),
   goal: z.string().max(2000).optional(),
+  /** idioma do teste/preview (país do fluxo) */
+  language: z.enum(["pt-BR", "es-MX"]).optional(),
   /** preview do fluxo: ofertas ligadas na saída "Mostrar botões de oferta" */
   flowOffers: z
     .array(z.object({ productId: z.string().max(64), headline: z.string().max(200).optional(), button: z.string().max(200).optional() }))
@@ -20,7 +22,7 @@ export default apiHandler({
   POST: async (req) => {
     await requireAdmin(req, "VIEWER");
     rateLimit(req, "ai-brain-test", 30, 60_000);
-    const { history, goal, flowOffers: flowList } = schema.parse(req.body);
+    const { history, goal, flowOffers: flowList, language } = schema.parse(req.body);
     const brain = await prisma.brain.findUnique({ where: { id: String(req.query.id) } });
     if (!brain) throw new HttpError(404, "Cérebro não encontrado");
     try {
@@ -34,7 +36,7 @@ export default apiHandler({
           })
           .filter((v): v is FlowOfferInfo => !!v);
       }
-      const r = await runBrain({ brain, history, goal, flowOffers });
+      const r = await runBrain({ brain, history, goal, flowOffers, language });
       return {
         messages: r.messages,
         audio: r.audio,

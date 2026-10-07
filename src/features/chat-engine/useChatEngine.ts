@@ -6,6 +6,7 @@ import { AI_OFFERS_OUT, autoDelay, getNode, findStartNode, matchChoice, nextNode
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
 import { compressPhoto } from "./photo";
+import { asChatLocale, chatTexts } from "@/features/i18n/chat";
 
 export type ChatItem =
   | { kind: "message"; id: string; sender: "bot" | "user" | "system"; type: "text" | "image" | "video" | "audio"; content: Record<string, unknown>; nodeId?: string | null; at: string }
@@ -49,6 +50,7 @@ const lid = () => `l${++localSeq}_${Date.now().toString(36)}`;
 const now = () => new Date().toISOString();
 
 export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | null, resume: ResumeState | null) {
+  const tx = chatTexts(asChatLocale(funnel.locale));
   // o grafo público chega sem o conteúdo pago; ele é mesclado após o pagamento aprovado
   const [graph, setGraph] = useState<FlowGraph>(funnel.graph);
   const graphRef = useRef<FlowGraph>(funnel.graph);
@@ -296,7 +298,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       try {
         r = await t.ai(nodeId, text, event);
       } catch {
-        r = { messages: ["Ops, minha internet falhou aqui 😅 me manda de novo?"], audio: null, offer: null, end: false };
+        r = { messages: [tx.netFail], audio: null, offer: null, end: false };
       }
       if (runId.current !== token) return;
       for (let i = 0; i < r.messages.length; i++) {
@@ -432,7 +434,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       try {
         blob = await compressPhoto(file);
       } catch {
-        fail("Não consegui abrir essa foto 😕 tenta outra?");
+        fail(tx.photoOpenFail);
         return;
       }
       const id = lid();
@@ -445,7 +447,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         await t.sendPhoto(nodeId, blob);
       } catch (e) {
         setItems((prev) => prev.filter((i) => i.id !== id));
-        fail(e instanceof Error && e.message ? `Foto não enviada: ${e.message}` : "Foto não enviada, tenta de novo.");
+        fail(e instanceof Error && e.message ? `${tx.photoNotSentReason} ${e.message}` : tx.photoNotSent);
         setAwaiting(a);
         return;
       } finally {
@@ -481,7 +483,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         setAwaiting(null);
       }
       if (product && transportRef.current?.mode === "live") {
-        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, eventId: `ic_${offerNodeId}_${Date.now()}` });
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${offerNodeId}_${Date.now()}` });
       }
       setCheckoutOpened(true);
       if (product?.externalCheckoutUrl) {
@@ -593,7 +595,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         // venda confirmada pelo gateway (mesmo id do evento enviado pela API de Conversões)
         if (p.status === "APPROVED" && transportRef.current?.mode === "live") {
           const product = funnel.products[p.productId];
-          pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id, metaPixelId: product?.metaPixelId });
+          pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id, metaPixelId: product?.metaPixelId, currency: product?.currency });
         }
         // upsell comprado durante a chamada de vídeo: não segue o ramo da oferta principal
         const offerNode = getNode(graphRef.current, p.offerNodeId);
@@ -786,14 +788,14 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       track("offer_clicked", nodeId, { call: downsell ? "declined" : "answered", productId });
       track("checkout_started", nodeId, { productId, ...(downsell ? { downsell: true } : {}) });
       if (product && transportRef.current?.mode === "live") {
-        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, eventId: `ic_${nodeId}_${Date.now()}` });
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
       }
       setCheckoutOpened(true);
       const mainOfNode = (getNode(graphRef.current, nodeId)?.content as OfferContent | undefined)?.productId;
       try {
         await submitCheckout(nodeId, { method: "PIX", ...(productId !== mainOfNode ? { productId } : {}) }, { silent: true });
       } catch (e) {
-        setCallError(e instanceof Error ? e.message : "Não foi possível gerar o pagamento");
+        setCallError(e instanceof Error ? e.message : tx.generateError);
       }
     },
     [funnel.products, submitCheckout, track],
@@ -907,7 +909,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       try {
         await submitCheckout(call.nodeId, { method: "PIX", productId }, { silent: true });
       } catch (e) {
-        setCallError(e instanceof Error ? e.message : "Não foi possível gerar o pagamento");
+        setCallError(e instanceof Error ? e.message : tx.generateError);
       }
     },
     [call, submitCheckout, track],

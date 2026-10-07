@@ -3,6 +3,8 @@ import type { PaymentMethod, PaymentStatus } from "@prisma/client";
 export interface CreatePaymentInput {
   paymentId: string; // id interno (external_reference)
   amount: number; // centavos
+  /** BRL ou MXN */
+  currency?: string;
   description: string;
   method: PaymentMethod;
   customer: { name: string; email: string };

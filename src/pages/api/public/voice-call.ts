@@ -53,7 +53,7 @@ export default apiHandler({
       session.conversationId,
       "bot",
       "offer",
-      { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, aiOfferId: o.id, style: "card" } as Prisma.InputJsonValue,
+      { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, currency: p.currency, aiOfferId: o.id, style: "card" } as Prisma.InputJsonValue,
       node.id,
     );
     await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "offer_viewed", nodeId: node.id, data: { productId: p.id, ai: true, voiceCall: callId } });

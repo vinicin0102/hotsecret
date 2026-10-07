@@ -1,4 +1,4 @@
-import { formatBRL, formatDateTime, formatTime } from "@/lib/format";
+import { formatDateTime, formatMoney, formatTime } from "@/lib/format";
 
 export interface ViewerMessage {
   id: string;
@@ -70,7 +70,7 @@ export function ConversationViewer({ messages }: { messages: ViewerMessage[] }) 
                 <div className="eyebrow gold" style={{ fontSize: 10, letterSpacing: ".14em" }}>
                   OFERTA EXIBIDA
                 </div>
-                <b>{String(c.headline ?? c.name ?? "")}</b> — {formatBRL(Number(c.price ?? 0))}
+                <b>{String(c.headline ?? c.name ?? "")}</b> — {formatMoney(Number(c.price ?? 0), c.currency)}
               </div>
             );
             break;

@@ -9,7 +9,7 @@ import { absoluteUrl } from "@/lib/paths";
 import type { LeadSession } from "@/lib/auth";
 import { trackEvent } from "../tracking";
 import { addTagToLead, ensureTag } from "../tags";
-import { getProvider } from "./index";
+import { activeProviderName, getProvider } from "./index";
 import { sendMetaPurchase } from "../meta-capi";
 import { brainOffers } from "../ai/brain";
 
@@ -35,6 +35,7 @@ export function publicPayment(p: Payment) {
     status: p.status,
     method: p.method,
     amount: p.amount,
+    currency: p.currency,
     pixQrCode: p.pixQrCode,
     pixQrCodeBase64: p.pixQrCodeBase64,
     redirectUrl: p.redirectUrl,
@@ -123,11 +124,22 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
   if (recent && (recent.pixQrCode || recent.redirectUrl || recent.provider === "sandbox")) return recent;
 
   let provider;
+  const currency = product.currency === "MXN" ? "MXN" : "BRL";
   try {
-    provider = getProvider();
+    if (currency === "MXN") {
+      // pesos: gateway próprio do México (PAYMENT_PROVIDER_MXN); o PIX/ZuckPay só cobra em reais
+      const mx = process.env.PAYMENT_PROVIDER_MXN || (activeProviderName() === "sandbox" ? "sandbox" : "");
+      if (!mx) throw new Error("gateway do México (MXN) não configurado");
+      provider = getProvider(mx);
+    } else {
+      provider = getProvider();
+    }
   } catch (err) {
     console.error("[checkout] gateway não configurado", err);
-    throw new HttpError(503, "Pagamentos indisponíveis no momento. Tente novamente mais tarde.");
+    throw new HttpError(
+      503,
+      currency === "MXN" ? "Pagos no disponibles por el momento. Intenta de nuevo más tarde." : "Pagamentos indisponíveis no momento. Tente novamente mais tarde.",
+    );
   }
   const payer = payerIdentity(randomBytes(6).toString("hex"));
   const payment = await prisma.payment.create({
@@ -138,6 +150,7 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
       productId: product.id,
       offerNodeId: input.offerNodeId,
       amount: product.price,
+      currency,
       method: input.method,
       status: "CREATED",
       provider: provider.name,
@@ -160,6 +173,7 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     result = await provider.createPayment({
       paymentId: payment.id,
       amount: product.price,
+      currency,
       description: product.name,
       method: input.method,
       customer: payer,
@@ -219,8 +233,20 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
   });
 
   if (payment.conversationId && (status === "APPROVED" || status === "FAILED" || status === "REFUNDED")) {
+    // pagamento em pesos = fluxo do México (mensagem em espanhol)
+    const es = payment.currency === "MXN";
     const text =
-      status === "APPROVED" ? "Pagamento aprovado ✅" : status === "FAILED" ? "Pagamento não aprovado" : "Pagamento estornado";
+      status === "APPROVED"
+        ? es
+          ? "Pago aprobado ✅"
+          : "Pagamento aprovado ✅"
+        : status === "FAILED"
+          ? es
+            ? "Pago no aprobado"
+            : "Pagamento não aprovado"
+          : es
+            ? "Pago reembolsado"
+            : "Pagamento estornado";
     await addConversationMessage(payment.conversationId, "system", "payment_update", { text, status, paymentId });
   }
 

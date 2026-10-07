@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatBRL } from "@/lib/format";
+import { useChatI18n } from "@/features/i18n/chat";
 import type { OfferContent, PublicProduct, TarotCard } from "@/types/flow";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII"];
@@ -27,6 +27,7 @@ export function TarotOffer({
   const [cards, setCards] = useState<TarotCard[] | null>(null);
   const [flipped, setFlipped] = useState(false);
   const [failed, setFailed] = useState(false);
+  const { t, money } = useChatI18n();
   const load = useRef(loadCards);
   load.current = loadCards;
 
@@ -58,7 +59,7 @@ export function TarotOffer({
     return () => clearTimeout(t);
   }, [cards]);
 
-  if (!product) return <div className="bubble system">Oferta indisponível no momento.</div>;
+  if (!product) return <div className="bubble system">{t.offerUnavailable}</div>;
   const shown = cards ?? slots;
 
   return (
@@ -73,7 +74,7 @@ export function TarotOffer({
               className={`tarot-card ${flipped ? "flipped" : ""} ${picked === i && !bought ? "picked" : ""}`}
               style={{ ["--i" as string]: i }}
               onClick={() => !bought && setPicked(i)}
-              aria-label={flipped ? c.name || c.label || `Carta ${i + 1}` : `Carta ${i + 1} virada`}
+              aria-label={flipped ? c.name || c.label || `${t.card} ${i + 1}` : `${t.card} ${i + 1} ${t.cardFaceDown}`}
             >
               <span className="tarot-inner">
                 <span className="tarot-face tarot-back">
@@ -105,25 +106,27 @@ export function TarotOffer({
           ))}
         </div>
 
-        {!bought && picked === null && <div className="tarot-hint">Toque em uma carta para descobrir ✨</div>}
+        {!bought && picked === null && <div className="tarot-hint">{t.tarotHint}</div>}
 
         {!bought && picked !== null && (
           <div className="tarot-buy">
             {product.description && <p>{product.description}</p>}
             {product.originalPrice && product.originalPrice > product.price ? (
-              <div className="price-old">De {formatBRL(product.originalPrice)}</div>
+              <div className="price-old">
+                {t.from} {money(product.originalPrice, product.currency)}
+              </div>
             ) : null}
             <div className="price">
-              {formatBRL(product.price)} <small>pagamento único</small>
+              {money(product.price, product.currency)} <small>{t.oneTime}</small>
             </div>
             <button className="btn btn-primary cta-glow" onClick={onCta}>
-              {offer.ctaLabel || "REVELAR MINHAS CARTAS 🔮"}
+              {offer.ctaLabel || t.tarotCta}
             </button>
-            <div className="secure-note">🔒 Pagamento seguro via PIX · sem cadastro</div>
+            <div className="secure-note">{t.tarotSecure}</div>
           </div>
         )}
 
-        {bought && !cards && <div className="tarot-hint">{failed ? "Não consegui abrir suas cartas agora. Recarregue a página." : "Revelando suas cartas…"}</div>}
+        {bought && !cards && <div className="tarot-hint">{failed ? t.tarotFailed : t.tarotRevealing}</div>}
 
         {cards && (
           <div className={`tarot-reading ${flipped ? "show" : ""}`}>

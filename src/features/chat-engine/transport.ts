@@ -16,6 +16,8 @@ export interface PublicPaymentInfo {
   status: "CREATED" | "PENDING" | "APPROVED" | "FAILED" | "REFUNDED";
   method: "PIX" | "CARD";
   amount: number;
+  /** BRL ou MXN */
+  currency?: string;
   pixQrCode: string | null;
   pixQrCodeBase64: string | null;
   redirectUrl: string | null;
@@ -47,7 +49,7 @@ export interface CallVideo {
   free: TimeRange;
   vip: TimeRange;
   chat: ChatCue[];
-  markers: (UpsellMarker & { product: { id: string; name: string; price: number; originalPrice: number | null } })[];
+  markers: (UpsellMarker & { product: { id: string; name: string; price: number; originalPrice: number | null; currency?: string } })[];
 }
 
 /** Resposta do Cérebro (IA). */
@@ -208,6 +210,8 @@ export function createPreviewTransport(
   aiNode: (nodeId: string) => { brainId?: string; goal?: string; videoId?: string } | undefined = () => undefined,
   /** ofertas ligadas na saída "Mostrar botões de oferta" do bloco (undefined = saída não ligada) */
   aiFlowOffers: (nodeId: string) => { productId: string; headline?: string; button?: string }[] | undefined = () => undefined,
+  /** país do fluxo (idioma da IA no preview) */
+  language: "pt-BR" | "es-MX" = "pt-BR",
 ): ChatTransport {
   const opened = new Set<string>();
   const aiHistory = new Map<string, { role: "lead" | "bot"; text: string }[]>();
@@ -330,7 +334,7 @@ export function createPreviewTransport(
           voiceCall?: { id: string; url: string } | null;
         }>(
           `/api/admin/brains/${cfg.brainId}/test`,
-          { history, goal: cfg.goal, flowOffers: aiFlowOffers(nodeId) },
+          { history, goal: cfg.goal, flowOffers: aiFlowOffers(nodeId), language },
         );
         for (const m of r.messages) history.push({ role: "bot", text: m });
         if (r.image) history.push({ role: "bot", text: r.image.kind === "video" ? "[enviou um vídeo]" : "[enviou uma foto]" });

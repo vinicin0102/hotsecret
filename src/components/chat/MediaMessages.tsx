@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useChatI18n } from "@/features/i18n/chat";
 
 export function ImageMessage({ url, caption }: { url: string; caption?: string }) {
   return (
@@ -34,6 +35,7 @@ function ViewOnceVideo({
   onPlay?: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const { t } = useChatI18n();
   const [phase, setPhase] = useState<"idle" | "loading" | "playing" | "done">(viewed || !loadOnce ? "done" : "idle");
   const [src, setSrc] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
@@ -67,8 +69,8 @@ function ViewOnceVideo({
           1
         </span>
         <div>
-          <b>Vídeo visualizado</b>
-          <small>Visualização única</small>
+          <b>{t.videoViewed}</b>
+          <small>{t.viewOnce}</small>
         </div>
       </div>
     );
@@ -122,7 +124,7 @@ function ViewOnceVideo({
         <button type="button" className="video-play" aria-label="Assistir vídeo de visualização única" disabled={phase === "loading"}>
           {phase === "loading" ? <span className="once-spin" /> : <PlayIcon />}
         </button>
-        <div className="once-label">{error ? "Não abriu. Toque para tentar de novo" : "Visualização única · toque para assistir"}</div>
+        <div className="once-label">{error ? t.viewOnceRetry : t.viewOnceTap}</div>
       </div>
       {caption && <div className="caption">{caption}</div>}
     </>

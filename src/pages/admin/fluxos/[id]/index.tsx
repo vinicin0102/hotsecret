@@ -438,6 +438,7 @@ function Builder() {
             graph,
             delay: meta.settings?.delay,
             appearance: meta.settings?.appearance,
+            locale: meta.settings?.locale,
             products: Object.fromEntries(
               products.map((p) => [
                 p.id,

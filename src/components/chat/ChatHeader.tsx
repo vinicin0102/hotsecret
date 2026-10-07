@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicCharacter } from "@/types/flow";
 
 export function Avatar({ character, size = 42 }: { character: PublicCharacter; size?: number }) {
@@ -17,6 +18,7 @@ export function Avatar({ character, size = 42 }: { character: PublicCharacter; s
 
 export function ChatHeader({ character, typing, onBack }: { character: PublicCharacter; typing: boolean; onBack?: () => void }) {
   const [info, setInfo] = useState(false);
+  const { t } = useChatI18n();
   return (
     <>
       <header className="chat-header">
@@ -28,7 +30,7 @@ export function ChatHeader({ character, typing, onBack }: { character: PublicCha
           <div className="name">{character.name}</div>
           <div className={`status ${typing ? "is-typing" : ""}`}>
             {typing ? (
-              "digitando..."
+              t.typing
             ) : (
               <>
                 {character.showOnline && <span className="dot" />}
@@ -46,7 +48,7 @@ export function ChatHeader({ character, typing, onBack }: { character: PublicCha
           <strong>{character.name}</strong>
           {character.description && <div style={{ marginTop: 4 }}>{character.description}</div>}
           <div className="hint" style={{ marginTop: 10 }}>
-            Esta é uma conversa automatizada. Ofertas e pagamentos são sempre identificados de forma clara.
+            {t.botNotice}
           </div>
         </div>
       )}

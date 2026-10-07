@@ -214,6 +214,8 @@ export interface FunnelSettings {
   tracking?: TrackingIds;
   delay?: FunnelDelay;
   recovery?: RecoverySettings;
+  /** país do fluxo: pt-BR (Brasil) ou es-MX (México) — idioma do chat e da IA */
+  locale?: "pt-BR" | "es-MX";
 }
 
 /** Produto exposto ao front público (sem link de entrega). */
@@ -226,6 +228,8 @@ export interface PublicProduct {
   videoUrl?: string | null;
   originalPrice: number | null;
   price: number;
+  /** BRL ou MXN */
+  currency?: string;
   /** checkout externo opcional (link do produto) */
   externalCheckoutUrl: string | null;
   /** pixel da Meta só desta oferta (só o ID, público) */
@@ -253,6 +257,8 @@ export interface PublicFunnel {
   delay?: FunnelDelay;
   tracking?: TrackingIds;
   appearance?: ChatAppearance;
+  /** pt-BR ou es-MX */
+  locale?: "pt-BR" | "es-MX";
 }
 
 export const DEFAULT_RECOVERY: RecoverySettings = {
