@@ -431,6 +431,8 @@ model Brain {
   rules           String   @default("")
   /// regras obrigatórias: o que a IA DEVE fazer sempre (uma por linha)
   mustRules       String   @default("")
+  /// exemplos de conversas que venderam bem (a IA imita o jeito, não copia)
+  examples        String   @default("")
   /// [{ id, productId, when, pitch, headline, ctaLabel }]
   offers          Json     @default("[]")
   /// áudios gravados que a IA pode enviar: [{ id, url, when }]

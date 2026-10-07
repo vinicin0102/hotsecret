@@ -191,6 +191,7 @@ export const brainSchema = z.object({
   knowledge: txt(60000).default(""),
   rules: txt(6000).default(""),
   mustRules: txt(6000).default(""),
+  examples: txt(12000).default(""),
   offers: z.array(brainOfferSchema).max(20).default([]),
   audios: z.array(brainAudioSchema).max(40).default([]),
   images: z

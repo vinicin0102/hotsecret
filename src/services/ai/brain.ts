@@ -151,13 +151,13 @@ type AiTarget =
   | { provider: "anthropic"; client: Anthropic; model: AiModelId }
   | { provider: "deepseek"; apiKey: string; model: string };
 
-async function aiClient(): Promise<AiTarget> {
+async function aiClient(timeoutMs = 25_000): Promise<AiTarget> {
   const s = await readSettings();
   const provider: AiProvider = s.provider ?? "anthropic";
   const apiKey = providerKey(s, provider);
   if (!apiKey) throw new AiNotConfiguredError();
   if (provider === "deepseek") return { provider, apiKey, model: resolveDeepSeekModel(s.deepseekModel) };
-  return { provider, client: new Anthropic({ apiKey, timeout: 25_000, maxRetries: 0 }), model: resolveModel(s.model) };
+  return { provider, client: new Anthropic({ apiKey, timeout: timeoutMs, maxRetries: 0 }), model: resolveModel(s.model) };
 }
 
 // ---------- Prompt ----------
@@ -240,6 +240,7 @@ ${brain.knowledge || "(sem conteúdo cadastrado)"}
 # Regras
 - Escreva como em um chat de celular: mensagens curtas, linguagem natural, no máximo 1 ou 2 emojis por mensagem quando combinar.
 - Divida a resposta em 1 a 3 mensagens curtas (cada item de "messages" vira um balão).
+- Leia o histórico antes de responder: não repita perguntas já respondidas, não se apresente de novo e não repita frases que você já mandou.
 - Responda no mesmo idioma do lead.
 - Nunca diga que é uma IA, um robô ou um modelo de linguagem, a menos que as regras abaixo permitam.
 - Preços: use somente os valores listados nas ofertas. Nunca dê desconto, brinde ou condição que não esteja no conteúdo.
@@ -251,7 +252,19 @@ ${
       : "- O lead pode mandar fotos ([o lead enviou uma foto]). Você não consegue ver o conteúdo: reaja com carinho e curiosidade, sem inventar o que aparece nela, e siga conduzindo a conversa."
   }
 - Trechos entre colchetes no histórico (ex.: [mostrou o card da oferta...]) são anotações do sistema sobre o que aconteceu no chat. Nunca escreva colchetes nem anotações assim nas suas mensagens.
-${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}
+
+# Como vender conversando
+- Primeiro entenda o lead: faça UMA pergunta por vez sobre o que ele procura, e use o que ele contar para personalizar a conversa.
+- Responda exatamente o que ele perguntou antes de puxar outro assunto. Se não souber algo, não invente: diga que vai ver ou redirecione com naturalidade.
+- Fale do resultado e da sensação que o produto entrega, não só das características. Use o nome dele quando souber.
+- Objeções ("tá caro", "depois eu vejo", "é seguro?", "será que funciona?"): acolha primeiro, depois responda com o conteúdo e conduza de volta para a oferta. Nunca discuta nem pressione de forma agressiva.
+- Quando ele demonstrar interesse, não enrole: mostre a oferta. Depois de mostrar, ajude a decidir (tire dúvidas, reforce o benefício, lembre que é rápido pelo PIX).
+- Se ele sumir ou responder curto, faça uma pergunta leve e fácil de responder para reabrir a conversa.
+${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}${
+    brain.examples?.trim()
+      ? `\n# Exemplos de conversas que deram certo\nImite o jeito, o tom e o ritmo destes exemplos, adaptando ao que o lead disser. Não copie as frases palavra por palavra e não use fatos dos exemplos que não estejam no conteúdo.\n${brain.examples.trim()}\n`
+      : ""
+  }
 # Ofertas disponíveis
 ${offers || (flowButtons ? "(nenhuma oferta por card — neste bloco os produtos são vendidos pelos BOTÕES DE OFERTA, veja a seção no fim)" : "(nenhuma oferta cadastrada — não ofereça produtos)")}
 Para mostrar o card de compra (ou ligar, nas ofertas em formato de chamada), coloque o offer_id em "offer_id" (no máximo uma oferta por resposta) e diga uma frase chamando para o botão ou avisando que vai ligar. Se o histórico mostrar que o lead recusou a chamada, não ligue de novo na mesma hora: acolha e, se houver, ofereça uma opção mais curta ou mais barata. Use "" quando não for oferecer. Não repita a mesma oferta se ela já foi mostrada e o lead não demonstrou interesse novo.
@@ -539,6 +552,117 @@ function isRetryableAiError(e: unknown): boolean {
   if (e instanceof Anthropic.APIConnectionError) return true;
   if (e instanceof Anthropic.APIError) return e.status === 429 || (e.status ?? 0) >= 500;
   return false;
+}
+
+// ---------- "Melhorar com IA": sugestões para preencher o cérebro ----------
+export type ImproveField = "persona" | "knowledge" | "mustRules" | "examples";
+export interface BrainDraftForImprove {
+  name?: string;
+  persona?: string;
+  knowledge?: string;
+  rules?: string;
+  mustRules?: string;
+  examples?: string;
+  offers?: { productId: string; when?: string; pitch?: string; style?: string }[];
+}
+
+const IMPROVE_TASK: Record<ImproveField, string> = {
+  persona: `Reescreva a PERSONALIDADE E JEITO DE FALAR da atendente, pronta para colar no campo.
+Mantenha o nome, o gênero, o estilo e tudo o que já foi definido; só deixe mais concreto e completo:
+- quem ela é (1 a 2 frases) e como trata o lead;
+- como escreve no chat: tamanho das mensagens, gírias, emojis, pontuação, se usa "amor", "linda" etc.;
+- o que ela NUNCA faz no jeito de falar;
+- 6 a 8 frases de exemplo no estilo dela (abrir conversa, perguntar, apresentar a oferta, contornar objeção, fechar).
+Máximo de 1500 caracteres.`,
+  knowledge: `Escreva um bloco para ACRESCENTAR ao conteúdo que a IA usa, com dois títulos:
+"PERGUNTAS FREQUENTES" — 8 a 12 perguntas que leads fazem sobre estes produtos, cada uma com a resposta curta e certa;
+"OBJEÇÕES E COMO CONTORNAR" — 6 a 8 objeções comuns ("tá caro", "depois eu vejo", "é seguro?", "como recebo?", "e se eu não gostar?" etc.), cada uma com a resposta ideal em tom de conversa.
+Use só fatos do conteúdo e dos produtos abaixo. Quando faltar uma informação, escreva [PREENCHER: o que falta] em vez de inventar.
+Não repita o que já está no conteúdo. Máximo de 3500 caracteres.`,
+  mustRules: `Escreva de 5 a 8 REGRAS OBRIGATÓRIAS para esta IA vender melhor neste contexto, uma por linha, curtas e diretas (ex.: "Sempre pergunte o nome antes de oferecer").
+Mantenha as regras obrigatórias que já existem (pode melhorar a redação) e não contradiga as regras do vendedor. Sem numeração e sem explicações.`,
+  examples: `Escreva 2 conversas de EXEMPLO curtas, no formato:
+Lead: ...
+Você: ...
+Elas devem mostrar o jeito ideal desta atendente: abrir a conversa, entender o que o lead quer com uma pergunta por vez, apresentar a oferta certa e contornar uma objeção até o lead aceitar ver a oferta.
+Use o jeito de falar da personalidade e só fatos do conteúdo/produtos. Separe as conversas com uma linha "---". Máximo de 1800 caracteres.`,
+};
+
+/** Gera a sugestão de um campo do cérebro com a IA em uso (o painel mostra para o dono aceitar ou não). */
+export async function improveBrainField(field: ImproveField, draft: BrainDraftForImprove, about?: string): Promise<string> {
+  const target = await aiClient(55_000);
+  const ids = (draft.offers ?? []).map((o) => o.productId).filter(Boolean);
+  const prods = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } } }) : [];
+  const offers = (draft.offers ?? [])
+    .map((o) => {
+      const p = prods.find((x) => x.id === o.productId);
+      if (!p) return null;
+      return `- ${p.name} — ${formatBRL(p.price)}${p.description ? ` — ${p.description}` : ""}${o.when ? ` (oferecer: ${o.when})` : ""}${o.pitch ? ` (argumentos: ${o.pitch})` : ""}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+  const cut = (v: string | undefined, n: number) => (v ?? "").trim().slice(0, n) || "(vazio)";
+  const system =
+    "Você é especialista em vendas por chat (estilo WhatsApp) e em configurar atendentes virtuais que vendem conversando. " +
+    "Escreva em português do Brasil. Responda SOMENTE com o texto pedido, pronto para colar no campo, sem introdução, sem comentários e sem blocos de código.";
+  const prompt = `# Cérebro atual
+Nome: ${draft.name || "(sem nome)"}
+
+## Personalidade e jeito de falar
+${cut(draft.persona, 3000)}
+
+## Conteúdo
+${cut(draft.knowledge, 9000)}
+
+## Regras do vendedor (o que nunca fazer)
+${cut(draft.rules, 1500)}
+
+## Regras obrigatórias
+${cut(draft.mustRules, 1500)}
+
+## Exemplos de conversa
+${cut(draft.examples, 2500)}
+
+## Produtos / ofertas
+${offers || "(nenhuma oferta cadastrada)"}
+${about?.trim() ? `\n## O que o dono contou sobre o negócio\n${about.trim().slice(0, 2000)}\n` : ""}
+# Tarefa
+${IMPROVE_TASK[field]}`;
+
+  const generate = async (timeoutMs: number): Promise<string> => {
+    if (target.provider === "deepseek") {
+      const r = await callDeepSeek({
+        apiKey: target.apiKey,
+        model: target.model,
+        maxTokens: 2500,
+        timeoutMs,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: prompt },
+        ],
+      });
+      return r.text;
+    }
+    const r = await target.client.messages.create({
+      model: target.model,
+      max_tokens: 4000,
+      system,
+      messages: [{ role: "user", content: prompt }],
+    });
+    return r.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+  };
+  const tidy = (t: string) =>
+    t
+      .trim()
+      .replace(/^```[a-z]*\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
+  const started = Date.now();
+  let clean = tidy(await generate(55_000));
+  // resposta vazia: tenta mais uma vez se ainda houver tempo (limite da função ~60s)
+  if (!clean && Date.now() - started < 25_000) clean = tidy(await generate(55_000 - (Date.now() - started)));
+  if (!clean) throw new Error("A IA não devolveu nenhuma sugestão. Tente de novo.");
+  return clean.slice(0, field === "knowledge" ? 6000 : 4000);
 }
 
 /** Teste rápido da chave (painel). */

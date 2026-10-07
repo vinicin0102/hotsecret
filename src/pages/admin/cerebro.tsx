@@ -56,6 +56,7 @@ interface Brain {
   knowledge: string;
   rules: string;
   mustRules: string;
+  examples?: string;
   offers: Offer[];
   audios: Audio[];
   images: (Audio & { kind?: "image" | "video" })[];
@@ -77,6 +78,7 @@ const EMPTY: Draft = {
   knowledge: "",
   rules: "",
   mustRules: "",
+  examples: "",
   offers: [],
   audios: [],
   images: [],
@@ -343,6 +345,131 @@ function TestChat({ brain }: { brain: Brain }) {
   );
 }
 
+type ImproveField = "persona" | "knowledge" | "mustRules" | "examples";
+const IMPROVE_FIELDS: { field: ImproveField; label: string; action: string }[] = [
+  { field: "persona", label: "Personalidade e jeito de falar", action: "Usar esta versão" },
+  { field: "knowledge", label: "Perguntas frequentes e objeções (acrescenta ao conteúdo)", action: "Acrescentar ao conteúdo" },
+  { field: "mustRules", label: "Regras obrigatórias", action: "Usar estas regras" },
+  { field: "examples", label: "Exemplos de conversa", action: "Usar estes exemplos" },
+];
+
+/** A IA em uso sugere cada campo do cérebro; o dono revisa e aceita (depois clica em Salvar cérebro). */
+function ImproveCard({ draft, apply }: { draft: Draft; apply: (field: ImproveField, value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [about, setAbout] = useState("");
+  const [pick, setPick] = useState<Record<ImproveField, boolean>>({ persona: true, knowledge: true, mustRules: true, examples: true });
+  const [busy, setBusy] = useState<ImproveField | null>(null);
+  const [out, setOut] = useState<Partial<Record<ImproveField, { text?: string; error?: string; used?: boolean }>>>({});
+  // trocou de cérebro: limpa as sugestões do anterior
+  useEffect(() => {
+    setOut({});
+    setAbout("");
+    setOpen(false);
+  }, [draft.id]);
+
+  const run = async () => {
+    setOut({});
+    for (const { field } of IMPROVE_FIELDS) {
+      if (!pick[field]) continue;
+      setBusy(field);
+      try {
+        const r = await api<{ text: string }>("/api/admin/brains/improve", {
+          body: {
+            field,
+            about,
+            draft: {
+              name: draft.name,
+              persona: draft.persona,
+              knowledge: draft.knowledge,
+              rules: draft.rules,
+              mustRules: draft.mustRules,
+              examples: draft.examples,
+              offers: draft.offers.map((o) => ({ productId: o.productId, when: o.when, pitch: o.pitch, style: o.style })),
+            },
+          },
+        });
+        setOut((p) => ({ ...p, [field]: { text: r.text } }));
+      } catch (e) {
+        setOut((p) => ({ ...p, [field]: { error: e instanceof Error ? e.message : "Falhou" } }));
+      }
+    }
+    setBusy(null);
+  };
+  const use = (field: ImproveField) => {
+    const text = out[field]?.text;
+    if (!text) return;
+    const value = field === "knowledge" ? `${draft.knowledge.trim()}${draft.knowledge.trim() ? "\n\n" : ""}${text}` : text;
+    apply(field, value);
+    setOut((p) => ({ ...p, [field]: { ...p[field], used: true } }));
+  };
+
+  if (!open)
+    return (
+      <div className="card improve-card">
+        <div className="card-head">
+          <h3>✨ Melhorar com IA</h3>
+          <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>
+            Abrir
+          </button>
+        </div>
+        <p className="hint" style={{ margin: 0 }}>
+          A IA em uso lê este cérebro e os produtos das ofertas e sugere uma personalidade mais completa, perguntas frequentes e respostas para
+          objeções, regras obrigatórias e exemplos de conversa. Você revisa e escolhe o que usar.
+        </p>
+      </div>
+    );
+  return (
+    <div className="card improve-card">
+      <div className="card-head">
+        <h3>✨ Melhorar com IA</h3>
+        <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>
+          Fechar
+        </button>
+      </div>
+      <div className="field">
+        <label htmlFor="imp-about">Conte rapidinho sobre o seu negócio (opcional, mas ajuda muito)</label>
+        <textarea
+          id="imp-about"
+          className="textarea"
+          rows={3}
+          placeholder="Ex.: vendo packs de fotos e chamadas de vídeo da Bianca. Público masculino, 25–45 anos. O que mais vende é o Pack VIP. As dúvidas mais comuns são se é seguro e como recebe."
+          value={about}
+          onChange={(e) => setAbout(e.target.value)}
+        />
+      </div>
+      <div className="improve-picks">
+        {IMPROVE_FIELDS.map(({ field, label }) => (
+          <label key={field} className="check">
+            <input type="checkbox" checked={pick[field]} onChange={(e) => setPick({ ...pick, [field]: e.target.checked })} /> {label}
+          </label>
+        ))}
+      </div>
+      <div className="row">
+        <button className="btn btn-primary btn-sm" disabled={!!busy || !Object.values(pick).some(Boolean)} onClick={() => void run()}>
+          {busy ? `Gerando: ${IMPROVE_FIELDS.find((f) => f.field === busy)?.label}…` : "Gerar sugestões"}
+        </button>
+        <span className="hint">Leva uns segundos por item. Nada é salvo até você clicar em “Salvar cérebro”.</span>
+      </div>
+      {IMPROVE_FIELDS.filter(({ field }) => out[field]).map(({ field, label, action }) => {
+        const o = out[field]!;
+        return (
+          <div key={field} className="improve-out">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <b>{label}</b>
+              {o.text && (
+                <button className="btn btn-sm" disabled={o.used} onClick={() => use(field)}>
+                  {o.used ? "Usado ✓" : action}
+                </button>
+              )}
+            </div>
+            {o.error ? <p className="error-text">{o.error}</p> : <pre className="improve-text">{o.text}</pre>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function CerebroPage() {
   const { data, reload } = useFetch<{ brains: Brain[] }>("/api/admin/brains");
   const { data: prod } = useFetch<{ products: Product[] }>("/api/admin/products");
@@ -454,6 +581,7 @@ export default function CerebroPage() {
 
         {draft && (
           <div className="brain-editor">
+            <ImproveCard draft={draft} apply={(field, value) => set(field, value)} />
             <div className="card">
               <div className="grid-2">
                 <div className="field">
@@ -513,6 +641,18 @@ export default function CerebroPage() {
                 <div className="hint">
                   Têm prioridade sobre a personalidade, o conteúdo e o objetivo do bloco. Escreva uma regra por linha, de forma direta.
                 </div>
+              </div>
+              <div className="field">
+                <label htmlFor="b-examples">Exemplos de conversa (a IA imita o jeito)</label>
+                <textarea
+                  id="b-examples"
+                  className="textarea"
+                  rows={6}
+                  placeholder={"Cole 1 a 3 conversas que venderam bem. Ex.:\nLead: oi\nVocê: oii amor 😊 tudo bem? o que te trouxe aqui?\nLead: quanto custa?\nVocê: depende do que você quer ver kkk me conta...\n---\n(outra conversa)"}
+                  value={draft.examples ?? ""}
+                  onChange={(e) => set("examples", e.target.value)}
+                />
+                <div className="hint">A IA copia o tom, o ritmo e a forma de conduzir — não as frases palavra por palavra.</div>
               </div>
               <div className="field">
                 <label htmlFor="b-rules">Regras (o que ela nunca deve fazer)</label>

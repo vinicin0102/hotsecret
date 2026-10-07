@@ -29,6 +29,7 @@ export async function callDeepSeek(input: {
   /** pede a resposta em JSON (o reasoner não aceita: o formato vai só pelas instruções) */
   json?: boolean;
   maxTokens?: number;
+  timeoutMs?: number;
 }): Promise<{ text: string; finish: string; usage: { input: number; output: number; cacheRead: number } }> {
   const reasoner = input.model === "deepseek-reasoner";
   let res: Response;
@@ -45,7 +46,7 @@ export async function callDeepSeek(input: {
         // 1.3: valor indicado pela DeepSeek para conversa
         ...(!reasoner ? { temperature: 1.3 } : {}),
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(input.timeoutMs ?? 25_000),
     });
   } catch {
     throw new DeepSeekError(0, "Não foi possível falar com a DeepSeek agora.");

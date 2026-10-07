@@ -1118,3 +1118,37 @@ code.inline {
   display: grid;
   gap: 4px;
 }
+
+/* Cérebro: Melhorar com IA */
+.improve-card {
+  border-color: rgba(216, 168, 92, 0.35);
+}
+.improve-picks {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+.improve-picks .check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.improve-out {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-2);
+  background: rgba(255, 255, 255, 0.03);
+}
+.improve-text {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+  max-height: 320px;
+  overflow: auto;
+}
