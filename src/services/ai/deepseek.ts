@@ -43,8 +43,8 @@ export async function callDeepSeek(input: {
         max_tokens: input.maxTokens ?? 2000,
         stream: false,
         ...(input.json && !reasoner ? { response_format: { type: "json_object" } } : {}),
-        // 1.3: valor indicado pela DeepSeek para conversa
-        ...(!reasoner ? { temperature: 1.3 } : {}),
+        // 1.0: natural, mas obediente ao formato e aos ids das ofertas
+        ...(!reasoner ? { temperature: 1.0 } : {}),
       }),
       signal: AbortSignal.timeout(input.timeoutMs ?? 25_000),
     });

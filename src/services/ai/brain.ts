@@ -258,6 +258,7 @@ ${
 - Responda exatamente o que ele perguntou antes de puxar outro assunto. Se não souber algo, não invente: diga que vai ver ou redirecione com naturalidade.
 - Fale do resultado e da sensação que o produto entrega, não só das características. Use o nome dele quando souber.
 - Objeções ("tá caro", "depois eu vejo", "é seguro?", "será que funciona?"): acolha primeiro, depois responda com o conteúdo e conduza de volta para a oferta. Nunca discuta nem pressione de forma agressiva.
+- Não demore para oferecer: se o lead pedir algo que uma oferta entrega (ligação/chamada, vídeo, conteúdo, preço) ou disser que quer ("quero", "bora", "sim", "manda"), mostre ESSA oferta na mesma resposta, seguindo o "Quando oferecer" de cada uma.
 - Quando ele demonstrar interesse, não enrole: mostre a oferta. Depois de mostrar, ajude a decidir (tire dúvidas, reforce o benefício, lembre que é rápido pelo PIX).
 - Se ele sumir ou responder curto, faça uma pergunta leve e fácil de responder para reabrir a conversa.
 ${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}${
@@ -312,7 +313,7 @@ function flowOffersSection(list: FlowOfferInfo[] | undefined): string {
       `- ${o.button ? `Botão "${o.button}" → ` : ""}${o.name} — ${formatBRL(o.price)}${o.originalPrice && o.originalPrice > o.price ? ` (de ${formatBRL(o.originalPrice)})` : ""}${o.description ? `\n  ${o.description}` : ""}`,
   );
   return `# BOTÕES DE OFERTA — seu objetivo de venda neste momento
-Os produtos abaixo são vendidos por BOTÕES que aparecem no chat quando você coloca "show_offers": true (não use offer_id para eles; neste momento prefira os botões a qualquer card).
+Os produtos abaixo são vendidos por BOTÕES que aparecem no chat quando você coloca "show_offers": true (não use offer_id para estes produtos). As ofertas com offer_id — como a chamada de vídeo — continuam valendo: se o lead pedir o que elas entregam (ex.: ligação/chamada), use o offer_id delas.
 Como agir:
 1. Explique os produtos de forma curta e desejável, ligando ao que o lead contou. Use os nomes e preços exatamente como estão abaixo.
 2. Coloque "show_offers": true assim que o lead perguntar preço, valor, opções, como comprar ou como funciona, disser que quer, demonstrar interesse — ou, no máximo, depois de 2 ou 3 trocas de mensagem falando dos produtos. Na dúvida, mostre os botões.
@@ -387,10 +388,11 @@ function toPlainMessages(history: ChatTurn[], leadWaiting: boolean): DeepSeekMes
 }
 
 /** Formato da resposta em texto (para IAs sem saída com schema, como a DeepSeek). */
-function jsonInstructions(schema: ReturnType<typeof OUTPUT_SCHEMA>): string {
+function jsonInstructions(schema: ReturnType<typeof OUTPUT_SCHEMA>, labels: Record<string, string> = {}): string {
   const props = schema.properties as Record<string, { enum?: string[] }>;
   const ids = (k: string) => (props[k]?.enum ?? []).filter(Boolean);
-  const list = (k: string) => (ids(k).length ? ids(k).map((v) => `"${v}"`).join(", ") : "(nenhum — use sempre \"\")");
+  const list = (k: string) =>
+    ids(k).length ? ids(k).map((v) => (labels[v] ? `"${v}" (${labels[v]})` : `"${v}"`)).join(", ") : "(nenhum — use sempre \"\")";
   const showOffers = "show_offers" in props;
   return `# Formato da resposta (OBRIGATÓRIO)
 Responda SOMENTE com um objeto json válido, sem nenhum texto antes ou depois e sem blocos de código, exatamente com estas chaves:
@@ -400,7 +402,7 @@ Responda SOMENTE com um objeto json válido, sem nenhum texto antes ou depois e 
 - audio_id: "" ou um destes: ${list("audio_id")}
 - image_id: "" ou um destes: ${list("image_id")}
 - end: true só quando a conversa terminou de vez.${showOffers ? "\n- show_offers: true para soltar os botões de oferta (veja a seção BOTÕES DE OFERTA)." : ""}
-Nunca escreva os ids dentro de messages.`;
+Copie o id exatamente como está entre aspas. Nunca escreva os ids dentro de messages.`;
 }
 
 export async function runBrain(input: {
@@ -437,15 +439,41 @@ export async function runBrain(input: {
   const anthropicMessages = target.provider === "anthropic" ? await toApiMessages(input.history, true) : [];
 
   /** Uma chamada à IA. cut = a resposta veio cortada/recusada (tenta de novo). */
-  const callOnce = async (): Promise<{ text: string; usage: BrainReply["usage"] & object; cut?: string }> => {
+  const offerLabels: Record<string, string> = Object.fromEntries(
+    validOffers.map((o) => [o.id, `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : ""}`]),
+  );
+  // modo seguro: usado quando o filtro de conteúdo da IA bloqueia — vai só o essencial para vender (sem os textos do cérebro)
+  const safeSystem = () =>
+    `Você é ${input.brain.name || "a atendente"}, conversando com um lead em um chat de vendas pelo celular. Fale de forma simpática, curta e provocante, sem nenhum conteúdo sexual explícito.
+- Mensagens curtas (1 a 3), linguagem natural, no máximo 1 emoji por mensagem.
+- Nunca diga que é uma IA. Use só os preços listados. O pagamento é pelo botão da oferta (PIX).
+- Se o lead pedir algo que uma oferta entrega ou disser que quer, mostre essa oferta (offer_id) na mesma resposta.
+
+# Ofertas
+${
+      validOffers
+        .map((o) => {
+          const p = products.get(o.productId)!;
+          return `- offer_id "${o.id}": ${p.name} — ${formatBRL(p.price)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : ""}`;
+        })
+        .join("\n") || "(nenhuma)"
+    }
+${audios.length ? `\n# Áudios\n${audios.map((a) => `- audio_id "${a.id}": ${a.when || ""}`).join("\n")}` : ""}
+${images.length ? `\n# Prévias\n${images.map((a) => `- image_id "${a.id}" (${a.kind === "video" ? "vídeo" : "foto"}): ${a.when || ""}`).join("\n")}` : ""}
+${flowOffersSection(input.flowOffers)}`;
+  const safeHistory = (): ChatTurn[] => input.history.slice(-6).map((t) => ({ role: t.role, text: t.imageUrl ? "[enviou uma foto]" : t.text.slice(0, 300) }));
+
+  const callOnce = async (safe = false): Promise<{ text: string; usage: BrainReply["usage"] & object; cut?: string }> => {
     if (target.provider === "deepseek") {
       // DeepSeek: sem visão e sem formato com schema → o formato vai nas instruções e o JSON é conferido aqui
-      const system = [stableSystem(input.brain, products, !!input.flowOffers, false), volatile, jsonInstructions(schema)].filter(Boolean).join("\n\n");
+      const system = safe
+        ? [safeSystem(), jsonInstructions(schema, offerLabels)].join("\n\n")
+        : [stableSystem(input.brain, products, !!input.flowOffers, false), volatile, jsonInstructions(schema, offerLabels)].filter(Boolean).join("\n\n");
       const r = await callDeepSeek({
         apiKey: target.apiKey,
         model: target.model,
         json: true,
-        messages: mergeRoles([{ role: "system", content: system }, ...toPlainMessages(input.history, true)]),
+        messages: mergeRoles([{ role: "system", content: system }, ...toPlainMessages(safe ? safeHistory() : input.history, true)]),
       });
       const cut =
         r.finish === "length"
@@ -466,11 +494,13 @@ export async function runBrain(input: {
         ...(model === "claude-haiku-4-5" ? {} : { effort: "low" as const }),
         format: { type: "json_schema", schema },
       },
-      system: [
-        { type: "text", text: stableSystem(input.brain, products, !!input.flowOffers), cache_control: { type: "ephemeral" } },
-        ...(volatile ? [{ type: "text" as const, text: volatile }] : []),
-      ],
-      messages: anthropicMessages,
+      system: safe
+        ? [{ type: "text", text: safeSystem() }]
+        : [
+            { type: "text", text: stableSystem(input.brain, products, !!input.flowOffers), cache_control: { type: "ephemeral" } },
+            ...(volatile ? [{ type: "text" as const, text: volatile }] : []),
+          ],
+      messages: safe ? await toApiMessages(safeHistory(), true) : anthropicMessages,
     });
     const usage = {
       input: response.usage.input_tokens,
@@ -480,6 +510,29 @@ export async function runBrain(input: {
     const cut = response.stop_reason === "refusal" ? "o Claude recusou responder (conteúdo sensível — deixe o cérebro sugestivo, sem nada explícito)" : response.stop_reason === "max_tokens" ? "resposta cortada (longa demais)" : undefined;
     const text = response.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")?.text ?? "";
     return { text, usage, cut };
+  };
+
+  const norm = (v: string) =>
+    v
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9_]+/g, " ")
+      .trim();
+  /** Acha a oferta pelo id (tolerando espaços/maiúsculas) ou pelo nome do produto/título. */
+  const findOffer = (raw: unknown): BrainOffer | undefined => {
+    if (typeof raw !== "string" || !raw.trim()) return undefined;
+    const v = raw.trim();
+    const exact = validOffers.find((o) => o.id === v) ?? validOffers.find((o) => o.id.toLowerCase() === v.toLowerCase());
+    if (exact) return exact;
+    const contains = validOffers.find((o) => v.includes(o.id));
+    if (contains) return contains;
+    const n = norm(v);
+    if (!n) return undefined;
+    return validOffers.find((o) => {
+      const names = [products.get(o.productId)?.name ?? "", o.headline ?? ""].map(norm).filter(Boolean);
+      return names.some((x) => x === n || (n.length >= 4 && (x.includes(n) || n.includes(x))));
+    });
   };
 
   /** Lê a resposta. Aceita pequenas variações de formato e, se vier texto puro, usa o texto. */
@@ -509,7 +562,18 @@ export async function runBrain(input: {
       .filter((m): m is string => typeof m === "string" && m.trim() !== "")
       .slice(0, 4)
       .map((m) => m.trim().slice(0, 1200));
-    const offer = validOffers.find((o) => o.id === parsed!.offer_id);
+    let offer = findOffer(parsed.offer_id);
+    if (!offer) {
+      // a IA escreveu o id dentro das mensagens: usa a oferta e tira o id do texto
+      const inText = validOffers.find((o) => messages.some((m) => m.includes(o.id)));
+      if (inText) offer = inText;
+    }
+    for (let i = 0; i < messages.length; i++) {
+      for (const o of validOffers) messages[i] = messages[i].replace(new RegExp(`\\(?\\[?"?${o.id}"?\\]?\\)?`, "g"), "").trim();
+    }
+    const cleanMessages = messages.filter(Boolean);
+    messages.length = 0;
+    messages.push(...cleanMessages);
     const audio = audios.find((a) => a.id === parsed!.audio_id) ?? null;
     const image = images.find((a) => a.id === parsed!.image_id) ?? null;
     if (!messages.length && !offer && !audio && !image) return null;
@@ -523,32 +587,83 @@ export async function runBrain(input: {
     };
   };
 
-  // até 2 tentativas: falha de rede/limite/servidor, resposta vazia, cortada ou fora do formato
+  // tentativas: falha passageira → tenta de novo; filtro de conteúdo → tenta no modo seguro (sem os textos do cérebro)
   const usage = { input: 0, output: 0, cacheRead: 0 };
+  const started = Date.now();
   let problem = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let safe = false;
+  for (let attempt = 0; attempt < 3 && Date.now() - started < 30_000; attempt++) {
     let r: Awaited<ReturnType<typeof callOnce>>;
     try {
-      r = await callOnce();
+      r = await callOnce(safe);
     } catch (e) {
-      if (attempt === 0 && isRetryableAiError(e)) {
-        problem = describeAiError(e);
+      problem = describeAiError(e);
+      if (isContentBlock(e) && !safe) {
+        safe = true;
         continue;
       }
-      throw e;
+      if (isRetryableAiError(e) && attempt < 2) continue;
+      break;
     }
     usage.input += r.usage.input;
     usage.output += r.usage.output;
     usage.cacheRead += r.usage.cacheRead;
     if (r.cut) {
       problem = r.cut;
+      if (/filtro|recusou/.test(r.cut)) safe = true;
       continue;
     }
     const reply = interpret(r.text);
-    if (reply) return { ...reply, usage };
+    if (reply) return { ...reply, usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
     problem = r.text.trim() ? "resposta fora do formato" : "resposta vazia";
   }
+  // sem resposta da IA (o motivo vai em "failure" → painel, Saúde da IA)
+
+  // a IA não respondeu: se o lead quer comprar, a oferta sai mesmo assim (a venda não para)
+  const sale = salesFallback(input.history, validOffers);
+  if (sale) {
+    const isCall = sale.style === "call" && !!sale.videoId;
+    return {
+      messages: [isCall ? "vou te ligar agora 😏" : "olha aqui 👇"],
+      offer: { ...sale, product: products.get(sale.productId)! },
+      audio: null,
+      image: null,
+      end: false,
+      usage,
+      failure: `${problem || "sem resposta"} — oferta disparada automaticamente`,
+    };
+  }
   return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage, failure: problem || "sem resposta" };
+}
+
+const BUY_INTENT =
+  /\b(quero|qro|quer|bora|vamos|vamo|sim|ss|manda|mande|me manda|liga|ligar|liga[cç][aã]o|chamada|videochamada|v[ií]deo ?chamada|quanto|pre[cç]o|valor|comprar|compro|pix|pagar|aceito|topo|pode ser|claro|fechado|fecho|bota|libera)\b/i;
+const CALL_INTENT = /(liga|ligar|liga[cç][aã]o|chamada|videochamada|call|ao vivo|me liga)/i;
+
+/** Quando a IA falha: escolhe a oferta pelo que o lead acabou de dizer (ou pela última proposta do atendente). */
+function salesFallback(history: ChatTurn[], offers: BrainOffer[]): BrainOffer | null {
+  if (!offers.length) return null;
+  const lastLead = [...history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
+  if (!BUY_INTENT.test(lastLead)) return null;
+  const lastBot = [...history].reverse().find((t) => t.role === "bot" && !t.text.startsWith("["))?.text ?? "";
+  const calls = offers.filter((o) => o.style === "call" && o.videoId);
+  if (calls.length && (CALL_INTENT.test(lastLead) || CALL_INTENT.test(lastBot))) return calls[0];
+  // a oferta cujo "quando oferecer" mais combina com a conversa
+  const words = (v: string) => new Set(v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
+  const said = words(`${lastLead} ${lastBot}`);
+  let best: BrainOffer | null = null;
+  let score = 0;
+  for (const o of offers) {
+    const s = [...words(`${o.when ?? ""} ${o.headline ?? ""} ${o.pitch ?? ""}`)].filter((w) => said.has(w)).length;
+    if (s > score) [best, score] = [o, s];
+  }
+  return best ?? offers[0];
+}
+
+/** Bloqueio por conteúdo (filtro da DeepSeek ou recusa do Claude). */
+function isContentBlock(e: unknown): boolean {
+  if (e instanceof DeepSeekError) return /content|risk|sensitive/i.test(e.message) && e.status === 400;
+  return false;
 }
 
 /** Falhas passageiras que valem uma nova tentativa. */
