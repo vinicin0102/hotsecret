@@ -401,7 +401,8 @@ Responda SOMENTE com um objeto json válido, sem nenhum texto antes ou depois e 
 - offer_id: "" ou um destes: ${list("offer_id")}
 - audio_id: "" ou um destes: ${list("audio_id")}
 - image_id: "" ou um destes: ${list("image_id")}
-- end: true só quando a conversa terminou de vez.${showOffers ? "\n- show_offers: true para soltar os botões de oferta (veja a seção BOTÕES DE OFERTA)." : ""}
+- end: true só quando a conversa terminou de vez.
+Use as ofertas, os áudios e as prévias de verdade: sempre que a situação combinar com o "quando" de um item, coloque o id dele (não responda só com texto). Se o lead pedir prévia, foto ou vídeo e houver prévia ainda não enviada, mande o image_id.${showOffers ? "\n- show_offers: true para soltar os botões de oferta (veja a seção BOTÕES DE OFERTA)." : ""}
 Copie o id exatamente como está entre aspas. Nunca escreva os ids dentro de messages.`;
 }
 
@@ -439,9 +440,17 @@ export async function runBrain(input: {
   const anthropicMessages = target.provider === "anthropic" ? await toApiMessages(input.history, true) : [];
 
   /** Uma chamada à IA. cut = a resposta veio cortada/recusada (tenta de novo). */
-  const offerLabels: Record<string, string> = Object.fromEntries(
-    validOffers.map((o) => [o.id, `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : ""}`]),
-  );
+  // cada id aparece com o que é e quando usar (a DeepSeek escolhe muito melhor assim)
+  const offerLabels: Record<string, string> = {
+    ...Object.fromEntries(
+      validOffers.map((o) => [
+        o.id,
+        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : ""}${o.when ? `; quando: ${o.when.slice(0, 140)}` : ""}`,
+      ]),
+    ),
+    ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
+    ...Object.fromEntries(images.map((a) => [a.id, `${a.kind === "video" ? "vídeo" : "foto"}; quando: ${(a.when || "quando pedirem prévia").slice(0, 140)}`])),
+  };
   // modo seguro: usado quando o filtro de conteúdo da IA bloqueia — vai só o essencial para vender (sem os textos do cérebro)
   const safeSystem = () =>
     `Você é ${input.brain.name || "a atendente"}, conversando com um lead em um chat de vendas pelo celular. Fale de forma simpática, curta e provocante, sem nenhum conteúdo sexual explícito.
@@ -614,7 +623,7 @@ ${flowOffersSection(input.flowOffers)}`;
       continue;
     }
     const reply = interpret(r.text);
-    if (reply) return { ...reply, usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
+    if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
     problem = r.text.trim() ? "resposta fora do formato" : "resposta vazia";
   }
   // sem resposta da IA (o motivo vai em "failure" → painel, Saúde da IA)
@@ -634,6 +643,86 @@ ${flowOffersSection(input.flowOffers)}`;
     };
   }
   return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage, failure: problem || "sem resposta" };
+}
+
+const STOP = new Set(
+  "quando quiser pedir pedirem oferecer ofertar lead leads mandar enviar sobre para pelo pela mais muito tambem depois antes ainda voce voces essa esse isso esta este quer querer gostar falar falou disser disse alguma algum coisa conversa mensagem mensagens".split(" "),
+);
+const keyWords = (v: string) =>
+  new Set(
+    v
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !STOP.has(w)),
+  );
+const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((w) => b.has(w)).length;
+const PREVIEW_INTENT = /(pr[eé]via|previazinha|provinha|amostra|\bfot(o|inha|os)\b|\bv[ií]deo\b|videozinho|deixa eu ver|mostra (algo|um pouco|um pouquinho|uma|um)|mostra a[ií])/i;
+const ASK_INTENT = /\b(faz|fa[cç]a|fazer|joga|jogar|tira|tirar|como funciona|como [eé]|me fala|saber|ver)\b/i;
+
+/**
+ * Garante o envio quando o pedido do lead é claro e a IA não escolheu nada:
+ * oferta citada pelo nome/descrição (ou ligação pedida), prévia pedida, áudio cuja descrição bate com a mensagem.
+ */
+function assistReply(
+  reply: Omit<BrainReply, "usage">,
+  history: ChatTurn[],
+  offers: BrainOffer[],
+  products: Map<string, Product>,
+  audios: BrainAudio[],
+  images: BrainMedia[],
+): Omit<BrainReply, "usage"> {
+  const lastLead = [...history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
+  if (!lastLead.trim()) return reply;
+  const said = keyWords(lastLead);
+  const past = history.map((t) => t.text).join("\n");
+  const recentBot = history.slice(-6).filter((t) => t.role === "bot").map((t) => t.text).join("\n");
+  const out = { ...reply };
+
+  if (!out.offer && !out.showOffers) {
+    const declinedCall = /recusou a chamada/.test(history.slice(-4).map((t) => t.text).join(" "));
+    const calls = offers.filter((o) => o.style === "call" && o.videoId);
+    let pick: BrainOffer | undefined;
+    if (calls.length && !declinedCall && CALL_INTENT.test(lastLead) && (BUY_INTENT.test(lastLead) || ASK_INTENT.test(lastLead))) pick = calls[0];
+    if (!pick) {
+      // produto citado pelo nome/título (ex.: "tarot") ou pela descrição de quando oferecer
+      let best = 0;
+      for (const o of offers) {
+        const nameHit = overlap(said, keyWords(`${products.get(o.productId)?.name ?? ""} ${o.headline ?? ""}`));
+        const whenHit = overlap(said, keyWords(o.when ?? ""));
+        const score = nameHit * 2 + whenHit;
+        if ((nameHit >= 1 || whenHit >= 2) && score > best) [pick, best] = [o, score];
+      }
+      if (pick && !(BUY_INTENT.test(lastLead) || ASK_INTENT.test(lastLead) || best >= 3)) pick = undefined;
+    }
+    // não repete a mesma oferta que acabou de aparecer
+    if (pick && !recentBot.includes(`offer_id "${pick.id}"`)) out.offer = { ...pick, product: products.get(pick.productId)! };
+  }
+
+  // pedido de prévia (pedir "chamada de vídeo" é ligação, não prévia)
+  if (!out.image && images.length && PREVIEW_INTENT.test(lastLead) && !CALL_INTENT.test(lastLead)) {
+    const unsent = images.filter((m) => !past.includes(`image_id "${m.id}"`));
+    const wantsVideo = /v[ií]deo/i.test(lastLead);
+    const pool = unsent.filter((m) => (wantsVideo ? m.kind === "video" : true));
+    const ranked = (pool.length ? pool : unsent).sort((a, b) => overlap(said, keyWords(b.when ?? "")) - overlap(said, keyWords(a.when ?? "")));
+    if (ranked[0]) out.image = ranked[0];
+  }
+
+  if (!out.audio && audios.length) {
+    let best: BrainAudio | null = null;
+    let score = 0;
+    for (const a of audios) {
+      if (past.includes(`audio_id "${a.id}"`)) continue;
+      const w = keyWords(a.when ?? "");
+      const hit = overlap(said, w);
+      // descrição curta (1–2 palavras-chave): basta 1 acerto; longa: precisa de 2
+      if (hit >= (w.size <= 2 ? 1 : 2) && hit > score) [best, score] = [a, hit];
+    }
+    if (best) out.audio = best;
+  }
+  if (!out.messages.length && !out.offer && !out.image && !out.audio) return reply;
+  return out;
 }
 
 const BUY_INTENT =
