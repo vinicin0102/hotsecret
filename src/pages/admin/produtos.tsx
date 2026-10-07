@@ -16,12 +16,30 @@ interface Product {
   price: number;
   checkoutUrl: string | null;
   deliveryUrl: string | null;
+  metaPixelId?: string | null;
+  metaCapiConfigured?: boolean;
   active: boolean;
   stats: { sales: number; revenue: number };
 }
 
-type Form = { id?: string; name: string; description: string; imageUrl: string; videoUrl: string; originalPrice: string; price: string; checkoutUrl: string; deliveryUrl: string; active: boolean };
-const EMPTY: Form = { name: "", description: "", imageUrl: "", videoUrl: "", originalPrice: "", price: "", checkoutUrl: "", deliveryUrl: "", active: true };
+type Form = {
+  id?: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  videoUrl: string;
+  originalPrice: string;
+  price: string;
+  checkoutUrl: string;
+  deliveryUrl: string;
+  metaPixelId: string;
+  /** token novo (vazio = manter o atual) */
+  metaCapiToken: string;
+  metaCapiConfigured?: boolean;
+  removeCapiToken?: boolean;
+  active: boolean;
+};
+const EMPTY: Form = { name: "", description: "", imageUrl: "", videoUrl: "", originalPrice: "", price: "", checkoutUrl: "", deliveryUrl: "", metaPixelId: "", metaCapiToken: "", active: true };
 
 export default function Products() {
   const { data, reload } = useFetch<{ products: Product[] }>("/api/admin/products");
@@ -40,6 +58,8 @@ export default function Products() {
       price: parseMoneyToCents(form.price),
       checkoutUrl: form.checkoutUrl || null,
       deliveryUrl: form.deliveryUrl || null,
+      metaPixelId: form.metaPixelId.trim() || null,
+      ...(form.removeCapiToken ? { metaCapiToken: null } : form.metaCapiToken.trim() ? { metaCapiToken: form.metaCapiToken.trim() } : {}),
       active: form.active,
     };
     try {
@@ -99,6 +119,7 @@ export default function Products() {
               {p.stats.sales} venda(s) · <span className="gold">{formatBRL(p.stats.revenue)}</span>
             </div>
             <div className="hint">{p.deliveryUrl ? "✓ Link de acesso externo" : "Entrega no próprio chat"}</div>
+            {p.metaPixelId && <div className="hint">📊 Pixel próprio: {p.metaPixelId}</div>}
             <div className="row">
               <button
                 className="btn btn-sm"
@@ -113,6 +134,9 @@ export default function Products() {
                     price: centsToInput(p.price),
                     checkoutUrl: p.checkoutUrl ?? "",
                     deliveryUrl: p.deliveryUrl ?? "",
+                    metaPixelId: p.metaPixelId ?? "",
+                    metaCapiToken: "",
+                    metaCapiConfigured: p.metaCapiConfigured,
                     active: p.active,
                   })
                 }
@@ -166,7 +190,40 @@ export default function Products() {
             <label>Checkout externo (opcional)</label>
             <input className="input" placeholder="Deixe vazio para usar o checkout integrado no chat" value={form.checkoutUrl} onChange={(e) => setForm({ ...form, checkoutUrl: e.target.value })} />
           </div>
-          <label className="checkbox">
+          <div className="section-title" style={{ marginTop: 6 }}>Pixel desta oferta (opcional)</div>
+          <p className="hint" style={{ marginTop: -4 }}>
+            Preencha só se esta oferta usa outro pixel/conta de anúncios. O InitiateCheckout e a compra dela vão para este pixel no lugar do pixel do fluxo
+            (no navegador e pela API de Conversões). O PageView do chat vai para os dois.
+          </p>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="pr-pixel">ID do pixel da Meta</label>
+              <input id="pr-pixel" className="input" inputMode="numeric" placeholder="Ex.: 123456789012345" value={form.metaPixelId} onChange={(e) => setForm({ ...form, metaPixelId: e.target.value })} />
+            </div>
+            <div className="field">
+              <label htmlFor="pr-capi">Token da API de Conversões deste pixel</label>
+              <input
+                id="pr-capi"
+                className="input"
+                type="password"
+                autoComplete="off"
+                placeholder={form.metaCapiConfigured && !form.removeCapiToken ? "Configurado — cole outro para trocar" : "Opcional — vazio usa o token padrão"}
+                value={form.metaCapiToken}
+                onChange={(e) => setForm({ ...form, metaCapiToken: e.target.value, removeCapiToken: false })}
+              />
+              {form.metaCapiConfigured && (
+                <label className="checkbox" style={{ marginTop: 6 }}>
+                  <input type="checkbox" checked={!!form.removeCapiToken} onChange={(e) => setForm({ ...form, removeCapiToken: e.target.checked, metaCapiToken: "" })} />
+                  Remover token deste pixel
+                </label>
+              )}
+            </div>
+          </div>
+          <span className="hint">
+            O token só é necessário se o pixel for de outra conta (gere em Gerenciador de Eventos → pixel → Configurações → API de Conversões). Ele fica
+            guardado criptografado e nunca aparece na página.
+          </span>
+          <label className="checkbox" style={{ marginTop: 10 }}>
             <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
             Produto ativo
           </label>

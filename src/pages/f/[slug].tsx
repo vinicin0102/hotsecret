@@ -82,7 +82,13 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
 
   // pixels de anúncios (não carregam na pré-visualização de rascunho)
   useEffect(() => {
-    if (funnel && !draftPreview) initPixels(funnel.tracking);
+    if (funnel && !draftPreview)
+      initPixels(
+        funnel.tracking,
+        Object.values(funnel.products)
+          .map((p) => p.metaPixelId)
+          .filter((v): v is string => !!v),
+      );
   }, [funnel, draftPreview]);
 
   const transport: ChatTransport | null = useMemo(() => {

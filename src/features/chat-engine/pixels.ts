@@ -21,13 +21,14 @@ function addScript(src: string) {
   document.head.appendChild(s);
 }
 
-/** Carrega os pixels configurados e registra o PageView. */
-export function initPixels(ids: TrackingIds | undefined) {
-  if (typeof window === "undefined" || !ids) return;
+/** Carrega os pixels configurados e registra o PageView. offerPixels: pixels da Meta próprios de ofertas do fluxo. */
+export function initPixels(ids: TrackingIds | undefined, offerPixels: string[] = []) {
+  if (typeof window === "undefined" || (!ids && !offerPixels.length)) return;
   const w = window as W;
-  active = ids;
+  active = ids ?? {};
+  const metaIds = [...new Set([ids?.metaPixelId, ...offerPixels].filter((v): v is string => !!v && /^\d{6,25}$/.test(v)))];
 
-  if (ids.metaPixelId && !w.fbq) {
+  if (metaIds.length && !w.fbq) {
     const n = function (...args: unknown[]) {
       n.callMethod ? n.callMethod(...args) : n.queue!.push(args);
     } as Fbq;
@@ -38,9 +39,10 @@ export function initPixels(ids: TrackingIds | undefined) {
     w.fbq = n;
     w._fbq = n;
     addScript("https://connect.facebook.net/en_US/fbevents.js");
-    w.fbq("init", ids.metaPixelId);
-    w.fbq("track", "PageView");
+    for (const id of metaIds) w.fbq("init", id);
+    w.fbq("track", "PageView"); // vai para todos os pixels iniciados
   }
+  if (!ids) return;
 
   if (ids.tiktokPixelId && !w.ttq) {
     const methods = ["page", "track", "identify", "instances", "debug", "on", "off", "once", "ready", "alias", "group", "enableCookie", "disableCookie"];
@@ -75,13 +77,21 @@ interface PixelProduct {
   id: string;
   /** id do evento — o mesmo é usado na API de Conversões para não contar duas vezes */
   eventId: string;
+  /** pixel da Meta próprio da oferta (no lugar do pixel do fluxo) */
+  metaPixelId?: string | null;
+}
+
+/** Evento da Meta só para um pixel: o da oferta, se tiver; senão o do fluxo. */
+function metaTrack(w: W, event: string, data: Record<string, unknown>, p: PixelProduct) {
+  const target = p.metaPixelId || active.metaPixelId;
+  if (target) w.fbq?.("trackSingle", target, event, data, { eventID: p.eventId });
 }
 
 export function pixelInitiateCheckout(p: PixelProduct) {
   if (typeof window === "undefined") return;
   const w = window as W;
   const data = { value: p.value, currency: "BRL", content_name: p.name, content_ids: [p.id], content_type: "product", num_items: 1 };
-  if (active.metaPixelId) w.fbq?.("track", "InitiateCheckout", data, { eventID: p.eventId });
+  metaTrack(w, "InitiateCheckout", data, p);
   if (active.tiktokPixelId) w.ttq?.track("InitiateCheckout", { value: p.value, currency: "BRL", content_id: p.id, content_name: p.name }, { event_id: p.eventId });
   if (active.googleTagId) w.gtag?.("event", "begin_checkout", { value: p.value, currency: "BRL", items: [{ item_id: p.id, item_name: p.name }] });
 }
@@ -90,7 +100,7 @@ export function pixelPurchase(p: PixelProduct) {
   if (typeof window === "undefined") return;
   const w = window as W;
   const data = { value: p.value, currency: "BRL", content_name: p.name, content_ids: [p.id], content_type: "product", num_items: 1 };
-  if (active.metaPixelId) w.fbq?.("track", "Purchase", data, { eventID: p.eventId });
+  metaTrack(w, "Purchase", data, p);
   if (active.tiktokPixelId) w.ttq?.track("CompletePayment", { value: p.value, currency: "BRL", content_id: p.id, content_name: p.name }, { event_id: p.eventId });
   if (active.googleTagId) w.gtag?.("event", "purchase", { transaction_id: p.eventId, value: p.value, currency: "BRL", items: [{ item_id: p.id, item_name: p.name }] });
 }

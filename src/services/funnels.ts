@@ -202,6 +202,7 @@ async function buildPublicFunnel(
       originalPrice: p.originalPrice,
       price: p.price,
       externalCheckoutUrl: p.checkoutUrl ?? null,
+      metaPixelId: p.metaPixelId ?? null,
     };
   }
   const c = funnel.character;

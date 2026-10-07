@@ -472,7 +472,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         setAwaiting(null);
       }
       if (product && transportRef.current?.mode === "live") {
-        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, eventId: `ic_${offerNodeId}_${Date.now()}` });
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, eventId: `ic_${offerNodeId}_${Date.now()}` });
       }
       setCheckoutOpened(true);
       if (product?.externalCheckoutUrl) {
@@ -584,7 +584,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         // venda confirmada pelo gateway (mesmo id do evento enviado pela API de Conversões)
         if (p.status === "APPROVED" && transportRef.current?.mode === "live") {
           const product = funnel.products[p.productId];
-          pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id });
+          pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id, metaPixelId: product?.metaPixelId });
         }
         // upsell comprado durante a chamada de vídeo: não segue o ramo da oferta principal
         const offerNode = getNode(graphRef.current, p.offerNodeId);
@@ -777,7 +777,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       track("offer_clicked", nodeId, { call: downsell ? "declined" : "answered", productId });
       track("checkout_started", nodeId, { productId, ...(downsell ? { downsell: true } : {}) });
       if (product && transportRef.current?.mode === "live") {
-        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, eventId: `ic_${nodeId}_${Date.now()}` });
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, eventId: `ic_${nodeId}_${Date.now()}` });
       }
       setCheckoutOpened(true);
       const mainOfNode = (getNode(graphRef.current, nodeId)?.content as OfferContent | undefined)?.productId;

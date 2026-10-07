@@ -232,6 +232,10 @@ model Product {
   checkoutUrl   String?
   /// link de acesso liberado SOMENTE após pagamento aprovado (nunca enviado ao front antes disso)
   deliveryUrl   String?
+  /// pixel da Meta só desta oferta (checkout e compra vão para ele no lugar do pixel do fluxo)
+  metaPixelId         String?
+  /// token da API de Conversões desse pixel (criptografado; vazio = usa o token padrão)
+  metaCapiTokenSealed String?
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

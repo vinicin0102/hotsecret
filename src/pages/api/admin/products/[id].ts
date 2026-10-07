@@ -1,12 +1,12 @@
 import { apiHandler, HttpError, requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { productSchema } from "@/lib/validation";
+import { adminProduct, productData } from "@/services/products";
 
 export default apiHandler({
   PUT: async (req) => {
     await requireAdmin(req);
-    const product = await prisma.product.update({ where: { id: String(req.query.id) }, data: productSchema.parse(req.body) });
-    return { product };
+    const product = await prisma.product.update({ where: { id: String(req.query.id) }, data: productData(req.body) });
+    return { product: adminProduct(product) };
   },
   DELETE: async (req) => {
     await requireAdmin(req);

@@ -166,6 +166,13 @@ export const productSchema = z.object({
   checkoutUrl: optUrl.nullable(),
   deliveryUrl: optUrl.nullable(),
   active: z.boolean().default(true),
+  /** pixel da Meta só desta oferta ("" ou null = usa o do fluxo) */
+  metaPixelId: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : typeof v === "string" ? v.trim() : v),
+    z.string().regex(/^\d{6,25}$/, "Pixel da Meta: use só os números do ID do pixel").nullable().optional(),
+  ),
+  /** token da API de Conversões desse pixel: undefined = manter · null = remover · texto = novo */
+  metaCapiToken: z.string().trim().min(20, "Token muito curto").max(600).nullable().optional(),
 });
 
 const brainOfferSchema = z.object({

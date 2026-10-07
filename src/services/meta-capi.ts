@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { absoluteUrl } from "@/lib/paths";
 import type { FunnelSettings } from "@/types/flow";
 import { getGlobalTracking, mergeTracking } from "./tracking-settings";
+import { openSecret } from "@/lib/secret-box";
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v23.0";
 const GRAPH_URL = (process.env.META_GRAPH_URL || "https://graph.facebook.com").replace(/\/$/, "");
@@ -14,14 +15,15 @@ const sha256 = (v: string) => createHash("sha256").update(v.trim().toLowerCase()
 
 export async function sendMetaPurchase(payment: Payment): Promise<void> {
   const global = await getGlobalTracking();
-  if (!global.metaCapiToken) return;
   const [funnel, lead, product] = await Promise.all([
     payment.funnelId ? prisma.funnel.findUnique({ where: { id: payment.funnelId }, select: { slug: true, settings: true } }) : null,
     prisma.lead.findUnique({ where: { id: payment.leadId } }),
-    prisma.product.findUnique({ where: { id: payment.productId }, select: { name: true } }),
+    prisma.product.findUnique({ where: { id: payment.productId }, select: { name: true, metaPixelId: true, metaCapiTokenSealed: true } }),
   ]);
-  const { metaPixelId } = mergeTracking(global, (funnel?.settings as FunnelSettings | null)?.tracking);
-  if (!metaPixelId || !lead) return;
+  // oferta com pixel próprio: a venda vai para ele (com o token dele, se tiver; senão o padrão)
+  const metaPixelId = product?.metaPixelId || mergeTracking(global, (funnel?.settings as FunnelSettings | null)?.tracking).metaPixelId;
+  const token = (product?.metaPixelId && product.metaCapiTokenSealed ? openSecret(product.metaCapiTokenSealed) : null) || global.metaCapiToken;
+  if (!token || !metaPixelId || !lead) return;
 
   const userData: Record<string, unknown> = { external_id: [sha256(lead.id)] };
   if (lead.clientIp && lead.clientIp !== "unknown") userData.client_ip_address = lead.clientIp;
@@ -52,7 +54,7 @@ export async function sendMetaPurchase(payment: Payment): Promise<void> {
   };
   if (global.metaTestEventCode) body.test_event_code = global.metaTestEventCode;
 
-  const res = await fetch(`${GRAPH_URL}/${GRAPH_VERSION}/${metaPixelId}/events?access_token=${encodeURIComponent(global.metaCapiToken)}`, {
+  const res = await fetch(`${GRAPH_URL}/${GRAPH_VERSION}/${metaPixelId}/events?access_token=${encodeURIComponent(token)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

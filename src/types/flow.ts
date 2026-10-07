@@ -228,6 +228,8 @@ export interface PublicProduct {
   price: number;
   /** checkout externo opcional (link do produto) */
   externalCheckoutUrl: string | null;
+  /** pixel da Meta só desta oferta (só o ID, público) */
+  metaPixelId?: string | null;
 }
 
 export interface PublicCharacter {
