@@ -48,6 +48,7 @@ function pruneEdges(nodes: HsFlowNode[], edges: Edge[]): Edge[] {
     if (!src || !byId.has(e.target)) return false;
     const h = e.sourceHandle ?? "default";
     if (h === "btn:decline") return src.type === "offer" && (src.content as { style?: string }).style === "call";
+    if (h === "ai:offers") return src.type === "ai";
     if (h.startsWith("btn:")) {
       const buttons = ((src.content as { buttons?: { id: string }[] }).buttons ?? []).map((b) => `btn:${b.id}`);
       return buttons.includes(h);

@@ -162,7 +162,7 @@ export interface FlowEdge {
   id: string;
   source: string;
   target: string;
-  /** "default" | "btn:<buttonId>" | "payment:approved" | "payment:failed" */
+  /** "default" | "btn:<buttonId>" | "payment:approved" | "payment:failed" | "ai:offers" (Cérebro: mostrar botões de oferta) */
   condition: string;
 }
 

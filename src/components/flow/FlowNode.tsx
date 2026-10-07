@@ -162,6 +162,10 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
             ✕ Pagamento recusado
             <Handle type="source" id="payment:failed" position={Position.Right} />
           </div>
+          <div className="out offers" title="A IA explica os produtos e, quando o lead estiver pronto, solta os botões ligados aqui (ex.: bloco Botões com as ofertas)">
+            🛒 Mostrar botões de oferta
+            <Handle type="source" id="ai:offers" position={Position.Right} />
+          </div>
           <div className="out other" title="Quando a IA encerrar a conversa">
             ↳ Quando a IA encerrar
             <Handle type="source" id="default" position={Position.Right} />

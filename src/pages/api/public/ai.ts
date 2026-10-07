@@ -8,7 +8,8 @@ import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
 import { addConversationMessage } from "@/services/payments/service";
 import { trackEvent } from "@/services/tracking";
-import { describeAiError, publicOfferFormat, runBrain, type ChatTurn } from "@/services/ai/brain";
+import { describeAiError, publicOfferFormat, runBrain, type ChatTurn, type FlowOfferInfo } from "@/services/ai/brain";
+import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import { formatBRL } from "@/lib/format";
 import type { AiContent } from "@/types/flow";
 
@@ -22,7 +23,8 @@ const schema = z.object({
   start: z.boolean().optional(),
   /** algo que o lead fez no chat (ex.: recusou a chamada de vídeo) */
   /** call_declined: recusou a chamada · photo: o lead acabou de mandar uma foto (já gravada por /api/public/photo) */
-  event: z.enum(["call_declined", "photo"]).optional(),
+  /** continue: o lead voltou para a IA depois dos botões de oferta (a resposta dele já está gravada) */
+  event: z.enum(["call_declined", "photo", "continue"]).optional(),
 });
 
 type Msg = { sender: string; type: string; content: unknown };
@@ -120,9 +122,22 @@ export default apiHandler({
       .filter(Boolean)
       .join("\n");
 
+    // saída "Mostrar botões de oferta": a IA explica os produtos ligados nela e decide quando soltar os botões
+    let flowOffers: FlowOfferInfo[] | undefined;
+    if (graph.edges.some((e) => e.source === node.id && e.condition === AI_OFFERS_OUT)) {
+      const list = flowOffersFrom(graph, node.id);
+      const prods = await prisma.product.findMany({ where: { id: { in: list.map((o) => o.productId) }, active: true } });
+      flowOffers = list
+        .map((o): FlowOfferInfo | null => {
+          const p = prods.find((x) => x.id === o.productId);
+          return p ? { name: o.headline || p.name, price: p.price, originalPrice: p.originalPrice, description: p.description, button: o.button } : null;
+        })
+        .filter((v): v is FlowOfferInfo => !!v);
+    }
+
     let reply;
     try {
-      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context });
+      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers });
     } catch (e) {
       console.error("[ai]", e);
       const msg = brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
@@ -173,6 +188,7 @@ export default apiHandler({
       image: reply.image ? { url: reply.image.url, kind: reply.image.kind === "video" ? "video" : "image" } : null,
       offer,
       end: reply.end,
+      showOffers: !!reply.showOffers,
     };
   },
 });

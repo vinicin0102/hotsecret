@@ -78,7 +78,7 @@ const edgeSchema = z.object({
   target: id,
   condition: z
     .string()
-    .regex(/^(default|btn:[a-zA-Z0-9_-]{1,64}|payment:(approved|failed))$/)
+    .regex(/^(default|btn:[a-zA-Z0-9_-]{1,64}|payment:(approved|failed)|ai:offers)$/)
     .default("default"),
 });
 

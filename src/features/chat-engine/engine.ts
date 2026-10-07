@@ -19,16 +19,51 @@ export function outgoingEdges(graph: FlowGraph, nodeId: string): FlowEdge[] {
 
 /**
  * Identifica o próximo nó a partir de um nó e de uma condição
- * ("default", "btn:<id>", "payment:approved", "payment:failed").
+ * ("default", "btn:<id>", "payment:approved", "payment:failed", "ai:offers").
  * Quando não existe conexão para a condição específica, usa a conexão "default".
  */
 export function nextNodeId(graph: FlowGraph, nodeId: string, condition = "default"): string | null {
   const edges = outgoingEdges(graph, nodeId);
   const exact = edges.find((e) => e.condition === condition);
   if (exact) return exact.target;
-  if (condition.startsWith("payment:")) return null; // eventos de pagamento nunca caem no default
+  // eventos de pagamento e saídas especiais da IA nunca caem no default
+  if (condition.startsWith("payment:") || condition.startsWith("ai:")) return null;
   const fallback = edges.find((e) => e.condition === "default" || !e.condition);
   return fallback ? fallback.target : null;
+}
+
+/** Bloco Cérebro: saída "Mostrar botões de oferta" */
+export const AI_OFFERS_OUT = "ai:offers";
+
+/**
+ * Ofertas do fluxo ligadas na saída "Mostrar botões de oferta" de um bloco Cérebro
+ * (ex.: Botões → cada botão leva a uma Oferta). A IA usa para explicar os produtos antes de soltar os botões.
+ */
+export function flowOffersFrom(graph: FlowGraph, aiNodeId: string): { productId: string; headline?: string; button?: string }[] {
+  const start = graph.edges.find((e) => e.source === aiNodeId && e.condition === AI_OFFERS_OUT)?.target;
+  if (!start) return [];
+  const out: { productId: string; headline?: string; button?: string }[] = [];
+  const seen = new Set<string>();
+  const queue: { id: string; depth: number; button?: string }[] = [{ id: start, depth: 0 }];
+  while (queue.length) {
+    const { id, depth, button } = queue.shift()!;
+    if (seen.has(id) || depth > 4) continue;
+    seen.add(id);
+    const node = getNode(graph, id);
+    if (!node || node.type === "ai" || node.type === "end") continue;
+    if (node.type === "offer") {
+      const c = node.content as { productId?: string; headline?: string };
+      if (c.productId && !out.some((o) => o.productId === c.productId)) out.push({ productId: c.productId, headline: c.headline || undefined, button });
+      continue;
+    }
+    const buttons = ((node.content as { buttons?: ChoiceButton[] }).buttons ?? []) as ChoiceButton[];
+    for (const e of outgoingEdges(graph, id)) {
+      if (e.condition?.startsWith("payment:")) continue;
+      const label = e.condition?.startsWith("btn:") ? buttons.find((b) => `btn:${b.id}` === e.condition)?.label : undefined;
+      queue.push({ id: e.target, depth: depth + 1, button: label ?? button });
+    }
+  }
+  return out;
 }
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));

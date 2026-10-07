@@ -2,7 +2,7 @@
 // respostas/cliques, abre o checkout e avança somente quando o servidor confirma o pagamento.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, OfferContent, PublicFunnel, TarotCard } from "@/types/flow";
-import { autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
+import { AI_OFFERS_OUT, autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
 import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
 import { compressPhoto } from "./photo";
@@ -137,7 +137,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     return runId.current === token;
   }, []);
 
-  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined" | "photo") => Promise<void>>(async () => undefined);
+  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue") => Promise<void>>(async () => undefined);
+  /** blocos Cérebro que já conversaram nesta sessão (voltar para eles = a IA continua a conversa) */
+  const aiTalked = useRef(new Set<string>());
+  /** última resposta do lead fora da IA (botão ou texto) — a IA responde a ela ao voltar para o bloco */
+  const lastAnswer = useRef<string | null>(null);
 
   /** Percorre o fluxo a partir de um nó até encontrar um ponto de espera. */
   const run = useCallback(
@@ -237,7 +241,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             // Cérebro: a partir daqui a IA conversa com o lead
             markChatStarted();
             const ai = c as unknown as AiContent;
-            if (ai.startMode === "ai") void aiTurnRef.current(node.id, null);
+            const answer = lastAnswer.current;
+            lastAnswer.current = null;
+            // voltou para a IA depois dos botões de oferta: ela responde ao que o lead disse
+            if (aiTalked.current.has(node.id) && answer) void aiTurnRef.current(node.id, answer, "continue");
+            else if (ai.startMode === "ai") void aiTurnRef.current(node.id, null);
             else setAwaiting({ kind: "ai", nodeId: node.id, placeholder: ai.placeholder || undefined });
             return;
           }
@@ -271,9 +279,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   /** Uma rodada do Cérebro: envia a mensagem do lead e mostra a resposta como se alguém estivesse digitando. */
   const aiTurn = useCallback(
-    async (nodeId: string, text: string | null, event?: "call_declined" | "photo") => {
+    async (nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue") => {
       const t = transportRef.current;
       if (!t) return;
+      aiTalked.current.add(nodeId);
       const token = ++runId.current;
       const node = getNode(graphRef.current, nodeId);
       const placeholder = ((node?.content as AiContent | undefined)?.placeholder as string) || undefined;
@@ -334,7 +343,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         }
       }
       setTyping(false);
-      const after = r.end ? nextNodeId(graphRef.current, nodeId, "default") : null;
+      // "Mostrar botões de oferta": a IA explicou e chamou para escolher → segue para os botões ligados nessa saída
+      const after = r.end ? nextNodeId(graphRef.current, nodeId, "default") : r.showOffers ? nextNodeId(graphRef.current, nodeId, AI_OFFERS_OUT) : null;
       if (after) void run(after);
       else setAwaiting({ kind: "ai", nodeId, placeholder });
     },
@@ -350,6 +360,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       setAwaiting(null);
       markChatStarted();
       push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text: button.label }, nodeId, at: now() });
+      lastAnswer.current = button.label;
       track("button_clicked", nodeId, { buttonId: button.id });
       void run(nextNodeId(graphRef.current, nodeId, `btn:${button.id}`));
     },
@@ -371,6 +382,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         if (awaiting.inputMode === "click") return;
         // resposta livre: identifica o caminho pelas opções/palavras-chave; sem acerto → "qualquer outra resposta"
         const choice = matchChoice(awaiting.buttons, text);
+        lastAnswer.current = text;
         setAwaiting(null);
         markChatStarted();
         push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text }, nodeId, at: now() });
@@ -389,6 +401,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       setAwaiting(null);
       markChatStarted();
       push({ kind: "message", id: lid(), sender: "user", type: "text", content: { text }, nodeId, at: now() });
+      lastAnswer.current = text;
       track("question_answered", nodeId, { value: text });
       void run(nextNodeId(graphRef.current, nodeId));
     },
@@ -653,6 +666,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     for (const p of resume.payments) paymentMap[p.id] = p;
     for (const m of resume.messages) {
       seenServerMsgs.current.add(m.id);
+      if (m.nodeId && getNode(graphRef.current, m.nodeId)?.type === "ai") aiTalked.current.add(m.nodeId);
       const c = m.content ?? {};
       if (m.type === "offer" && m.nodeId) {
         const isAi = getNode(graphRef.current, m.nodeId)?.type === "ai";

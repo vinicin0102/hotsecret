@@ -1,4 +1,5 @@
 // Página pública do fluxo: /hot-secret/f/<slug>
+import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -92,7 +93,8 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
         return (n?.content as OfferContent | undefined)?.productId;
       },
       (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
-      (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined);
+      (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined,
+      (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined));
     }
     if (!token) return null;
     return createLiveTransport(() => token, { sandbox });

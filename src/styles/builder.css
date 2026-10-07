@@ -256,6 +256,11 @@
   background: rgba(61, 220, 132, 0.08);
   color: #9ff5c4;
 }
+.hs-node .out.offers {
+  border-color: rgba(216, 168, 92, 0.5);
+  background: rgba(216, 168, 92, 0.08);
+  color: #f1d39e;
+}
 .hs-node .out.failed {
   border-color: rgba(201, 47, 86, 0.5);
   background: rgba(201, 47, 86, 0.08);

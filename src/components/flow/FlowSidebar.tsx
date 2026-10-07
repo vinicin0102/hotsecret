@@ -318,6 +318,12 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
               mostrar as ofertas cadastradas lá; o pagamento segue o PIX normal. Saídas: <b>Comprou</b> (conteúdo pago, 🔒), <b>Pagamento
               recusado</b> e <b>Quando a IA encerrar</b>. Sem a saída Comprou, o chat mostra o botão de acesso do produto e a IA continua.
             </p>
+            <p className="hint">
+              <b>🛒 Mostrar botões de oferta:</b> ligue num bloco <b>Botões</b> em que cada botão leva a uma <b>Oferta</b>. A IA explica esses
+              produtos (nome, preço e descrição do cadastro), tira as dúvidas e, quando o lead estiver pronto, solta os botões. Para o lead poder
+              perguntar mais depois dos botões, deixe os Botões aceitando digitação e ligue <b>Qualquer outra resposta</b> de volta neste bloco:
+              a IA responde e mostra os botões de novo quando fizer sentido.
+            </p>
           </>
         )}
 

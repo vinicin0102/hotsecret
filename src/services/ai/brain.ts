@@ -209,7 +209,7 @@ Para mandar uma prévia (ex.: quando pedirem uma prévia, provinha, foto ou víd
 Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.${mustRulesSection(brain.mustRules)}`;
 }
 
-const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[]) => ({
+const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[], showOffers = false) => ({
   type: "object",
   properties: {
     messages: { type: "array", items: { type: "string" }, description: "1 a 3 mensagens curtas, na ordem de envio" },
@@ -217,10 +217,33 @@ const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[
     audio_id: { type: "string", enum: ["", ...audioIds] },
     image_id: { type: "string", enum: ["", ...imageIds] },
     end: { type: "boolean" },
+    // só nos blocos com a saída "Mostrar botões de oferta" ligada
+    ...(showOffers ? { show_offers: { type: "boolean" } } : {}),
   },
-  required: ["messages", "offer_id", "audio_id", "image_id", "end"],
+  required: ["messages", "offer_id", "audio_id", "image_id", "end", ...(showOffers ? ["show_offers"] : [])],
   additionalProperties: false,
 });
+
+/** oferta do fluxo ligada na saída "Mostrar botões de oferta" (a IA explica antes de soltar os botões) */
+export interface FlowOfferInfo {
+  name: string;
+  price: number;
+  originalPrice?: number | null;
+  description?: string | null;
+  button?: string;
+}
+
+function flowOffersSection(list: FlowOfferInfo[] | undefined): string {
+  if (!list) return "";
+  const lines = list.map(
+    (o) =>
+      `- ${o.button ? `Botão "${o.button}" → ` : ""}${o.name} — ${formatBRL(o.price)}${o.originalPrice && o.originalPrice > o.price ? ` (de ${formatBRL(o.originalPrice)})` : ""}${o.description ? `\n  ${o.description}` : ""}`,
+  );
+  return `# Botões de oferta deste momento da conversa
+Aqui você não mostra os produtos abaixo pelo offer_id: eles aparecem em BOTÕES no chat. Seu papel é explicar os produtos, tirar dúvidas, quebrar objeções e conduzir o lead até a compra.
+Quando o lead estiver pronto (pediu preço, quis comprar, perguntou como pega ou já entendeu o que cada um entrega), coloque "show_offers": true e, na última mensagem, chame para escolher nos botões (ex.: "escolhe aqui embaixo 👇"). Caso contrário, "show_offers": false. Se os botões já foram mostrados e o lead voltou com uma dúvida, responda e mostre de novo quando fizer sentido.
+${lines.join("\n") || "(os botões mostram as opções configuradas no fluxo)"}`;
+}
 
 export interface ChatTurn {
   role: "lead" | "bot";
@@ -237,6 +260,8 @@ export interface BrainReply {
   audio: BrainAudio | null;
   image: BrainMedia | null;
   end: boolean;
+  /** soltar os botões de oferta do fluxo (saída "Mostrar botões de oferta") */
+  showOffers?: boolean;
   usage?: { input: number; output: number; cacheRead: number };
 }
 
@@ -276,6 +301,8 @@ export async function runBrain(input: {
   goal?: string;
   /** contexto do lead: nome, compras, ofertas e áudios já usados */
   context?: string;
+  /** ofertas do fluxo ligadas na saída "Mostrar botões de oferta" (undefined = saída não ligada) */
+  flowOffers?: FlowOfferInfo[];
 }): Promise<BrainReply> {
   const { client, model } = await aiClient();
   const offers = brainOffers(input.brain);
@@ -289,6 +316,7 @@ export async function runBrain(input: {
   const volatile = [
     input.goal ? `# Objetivo neste momento da conversa\n${input.goal}` : "",
     input.context ? `# Sobre este lead\n${input.context}` : "",
+    flowOffersSection(input.flowOffers),
     // lembrete no fim (o objetivo do bloco não passa por cima das regras obrigatórias)
     input.goal && mustRulesList(input.brain.mustRules).length ? "Siga o objetivo acima sem quebrar nenhuma das REGRAS OBRIGATÓRIAS." : "",
   ]
@@ -303,7 +331,7 @@ export async function runBrain(input: {
     // conversa rápida: pouco raciocínio, resposta logo
     output_config: {
       ...(model === "claude-haiku-4-5" ? {} : { effort: "low" as const }),
-      format: { type: "json_schema", schema: OUTPUT_SCHEMA(validOffers.map((o) => o.id), audios.map((a) => a.id), images.map((a) => a.id)) },
+      format: { type: "json_schema", schema: OUTPUT_SCHEMA(validOffers.map((o) => o.id), audios.map((a) => a.id), images.map((a) => a.id), !!input.flowOffers) },
     },
     system: [
       { type: "text", text: stableSystem(input.brain, products), cache_control: { type: "ephemeral" } },
@@ -322,7 +350,7 @@ export async function runBrain(input: {
     return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage };
   }
   const text = response.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")?.text ?? "";
-  let parsed: { messages?: unknown; offer_id?: unknown; audio_id?: unknown; image_id?: unknown; end?: unknown };
+  let parsed: { messages?: unknown; offer_id?: unknown; audio_id?: unknown; image_id?: unknown; end?: unknown; show_offers?: unknown };
   try {
     parsed = JSON.parse(text);
   } catch {
@@ -341,6 +369,7 @@ export async function runBrain(input: {
     audio,
     image,
     end: parsed.end === true,
+    showOffers: !!input.flowOffers && parsed.show_offers === true,
     usage,
   };
 }
