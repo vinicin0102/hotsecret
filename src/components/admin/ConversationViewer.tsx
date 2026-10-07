@@ -42,6 +42,18 @@ export function ConversationViewer({ messages }: { messages: ViewerMessage[] }) 
           case "audio":
             body = <>🎧 Áudio {c.caption ? `— ${String(c.caption)}` : ""}</>;
             break;
+          case "voice_call":
+            body = (
+              <>
+                📞{" "}
+                {c.status === "ringing"
+                  ? "Ligou para o lead (ligação de voz)"
+                  : c.status === "declined"
+                    ? "Recusou a ligação de voz"
+                    : `Atendeu a ligação de voz (${Number(c.seconds) || 0}s)`}
+              </>
+            );
+            break;
           case "buttons":
             body = (
               <>

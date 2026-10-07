@@ -205,6 +205,19 @@ export const brainSchema = z.object({
     .array(z.object({ id, url: url.pipe(z.string().min(1, "Prévia sem arquivo")), when: optTxt(500), kind: z.enum(["image", "video"]).optional() }))
     .max(60)
     .default([]),
+  voiceCalls: z
+    .array(
+      z.object({
+        id,
+        url: url.pipe(z.string().min(1, "Ligação de voz sem áudio")),
+        when: optTxt(500),
+        /** oferta do cérebro mostrada quando a ligação termina */
+        offerId: z.string().max(64).optional(),
+        endText: optTxt(300),
+      }),
+    )
+    .max(10)
+    .default([]),
   maxReplies: z.number().int().min(1).max(200).default(30),
   fallbackMessage: txt(300).default(""),
 });

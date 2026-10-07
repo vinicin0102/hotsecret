@@ -69,6 +69,8 @@ export interface AiReply {
   end: boolean;
   /** soltar os botões de oferta (saída "Mostrar botões de oferta" do bloco) */
   showOffers?: boolean;
+  /** ligação de voz: o lead autorizou — toca a ligação com este áudio */
+  voiceCall?: { id: string; url: string } | null;
   limit?: boolean;
 }
 
@@ -85,7 +87,9 @@ export interface ChatTransport {
   viewOnce(nodeId: string): Promise<string | null>;
   /** Cérebro: a IA responde (message null = a IA puxa a conversa) */
   /** continue: o lead voltou para a IA (ex.: dúvida depois dos botões de oferta); message = o que ele respondeu */
-  ai(nodeId: string, message: string | null, event?: "call_declined" | "photo" | "continue"): Promise<AiReply>;
+  ai(nodeId: string, message: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined"): Promise<AiReply>;
+  /** ligação de voz terminou (o lead atendeu): mensagem final + oferta */
+  voiceCallEnded(nodeId: string, callId: string, seconds: number): Promise<{ endText: string | null; offer: AiReply["offer"] }>;
   /** foto do lead (já comprimida) → link da foto gravada na conversa */
   sendPhoto(nodeId: string, photo: Blob): Promise<string>;
   /** tarot: cartas reveladas (só depois do pagamento aprovado) */
@@ -144,6 +148,10 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
     async unlock() {
       const r = await post<{ nodes: FlowNode[] }>("/api/public/unlock", { token: getToken() });
       return r.nodes;
+    },
+    async voiceCallEnded(nodeId, callId, seconds) {
+      await chain;
+      return post("/api/public/voice-call", { token: getToken(), nodeId, callId, seconds });
     },
     async sendPhoto(nodeId, photo) {
       await chain;
@@ -235,6 +243,24 @@ export function createPreviewTransport(
     async unlock() {
       return []; // o preview já recebe o fluxo completo
     },
+    async voiceCallEnded(nodeId, callId, seconds) {
+      const brainId = aiNode(nodeId)?.brainId;
+      const history = aiHistory.get(nodeId);
+      history?.push({ role: "lead", text: `[atendeu a ligação de voz e ouviu ${seconds}s da sua fala]` });
+      if (!brainId) return { endText: null, offer: null };
+      const res = await fetch(withBase(`/api/admin/brains/${brainId}`));
+      if (!res.ok) return { endText: null, offer: null };
+      const { brain } = (await res.json()) as {
+        brain: { voiceCalls?: { id: string; offerId?: string; endText?: string }[]; offers: { id: string; productId: string; headline?: string; ctaLabel?: string }[] };
+      };
+      const call = brain.voiceCalls?.find((v) => v.id === callId);
+      const o = call?.offerId ? brain.offers.find((x) => x.id === call.offerId) : undefined;
+      if (call?.endText) history?.push({ role: "bot", text: call.endText });
+      return {
+        endText: call?.endText || null,
+        offer: o && products[o.productId] ? { productId: o.productId, headline: o.headline, ctaLabel: o.ctaLabel, style: "card" } : null,
+      };
+    },
     async sendPhoto(_nodeId, photo) {
       return URL.createObjectURL(photo); // preview: nada é enviado
     },
@@ -290,10 +316,19 @@ export function createPreviewTransport(
       if (event === "call_declined") history.push({ role: "lead", text: "[recusou a chamada de vídeo]" });
       else if (event === "photo") history.push({ role: "lead", text: "[enviou uma foto]" });
       else if (event === "continue" && message) history.push({ role: "lead", text: message });
+      else if (event === "voice_declined") history.push({ role: "lead", text: "[recusou a ligação de voz]" });
       else if (message !== null) history.push({ role: "lead", text: message });
       if (!cfg?.brainId) return { messages: ["(preview) Selecione um cérebro neste bloco."], audio: null, offer: null, end: false };
       try {
-        const r = await post<{ messages: string[]; audio: { url: string } | null; image: { url: string; kind?: "image" | "video" } | null; offer: AiReply["offer"]; end: boolean; showOffers?: boolean }>(
+        const r = await post<{
+          messages: string[];
+          audio: { url: string } | null;
+          image: { url: string; kind?: "image" | "video" } | null;
+          offer: AiReply["offer"];
+          end: boolean;
+          showOffers?: boolean;
+          voiceCall?: { id: string; url: string } | null;
+        }>(
           `/api/admin/brains/${cfg.brainId}/test`,
           { history, goal: cfg.goal, flowOffers: aiFlowOffers(nodeId) },
         );
@@ -302,7 +337,16 @@ export function createPreviewTransport(
         if (r.audio) history.push({ role: "bot", text: "[enviou um áudio]" });
         if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : r.offer.style === "tarot" ? "mostrou as cartas de tarot da oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
         if (r.showOffers) history.push({ role: "bot", text: "[mostrou os botões de oferta]" });
-        return { messages: r.messages, audio: r.audio ? { url: r.audio.url } : null, image: r.image ? { url: r.image.url, kind: r.image.kind } : null, offer: r.offer, end: r.end, showOffers: r.showOffers };
+        if (r.voiceCall) history.push({ role: "bot", text: "[ligou para o lead (ligação de voz)]" });
+        return {
+          messages: r.messages,
+          audio: r.audio ? { url: r.audio.url } : null,
+          image: r.image ? { url: r.image.url, kind: r.image.kind } : null,
+          offer: r.offer,
+          end: r.end,
+          showOffers: r.showOffers,
+          voiceCall: r.voiceCall ? { id: r.voiceCall.id, url: r.voiceCall.url } : null,
+        };
       } catch (e) {
         return { messages: [`(preview) ${e instanceof Error ? e.message : "Falha na IA"}`], audio: null, offer: null, end: false };
       }

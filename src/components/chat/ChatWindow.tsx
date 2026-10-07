@@ -13,7 +13,7 @@ import { TarotOffer } from "./TarotOffer";
 import { CheckoutCard } from "./CheckoutCard";
 import { PaymentStatus } from "./PaymentStatus";
 import { DeliveryCard } from "./DeliveryCard";
-import { CallScreen, IncomingCall, PixPopup } from "./VideoCall";
+import { CallScreen, IncomingCall, PixPopup, VoiceCall } from "./VideoCall";
 import { Particles } from "./Particles";
 
 interface Props {
@@ -264,6 +264,18 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           </>
         )}
         {previewLabel && <div className="preview-banner">{previewLabel}</div>}
+        {engine.voice && (
+          <VoiceCall
+            key={engine.voice.id + engine.voice.nodeId}
+            character={funnel.character}
+            url={engine.voice.url}
+            phase={engine.voice.phase}
+            endedSeconds={engine.voice.seconds}
+            onAnswer={engine.answerVoice}
+            onDecline={engine.declineVoice}
+            onEnd={(sec) => void engine.endVoice(sec)}
+          />
+        )}
         {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}
         {engine.call?.phase === "pix" && (
           <PixPopup

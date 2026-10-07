@@ -1626,3 +1626,52 @@
     opacity: 0.35;
   }
 }
+
+/* ---------- Ligação de voz ---------- */
+.voice-call .call-bg {
+  filter: blur(26px) brightness(0.45);
+}
+.voice-call .call-top {
+  padding-top: max(80px, env(safe-area-inset-top));
+}
+.voice-timer {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  font-size: 17px;
+}
+.voice-wave {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 3px solid rgba(34, 197, 94, 0.55);
+  animation: voiceWave 1.1s ease-in-out infinite;
+}
+@keyframes voiceWave {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.35;
+  }
+}
+.voice-actions {
+  justify-content: center;
+  gap: 56px;
+}
+.call-btn.mute {
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+  font-size: 26px;
+}
+.call-btn.mute.on {
+  background: #fff;
+}
+.voice-unblock {
+  margin-top: 18px;
+}
+.voice-call.ended .call-status {
+  color: #fca5a5;
+}

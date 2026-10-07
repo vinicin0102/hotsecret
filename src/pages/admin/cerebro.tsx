@@ -60,8 +60,16 @@ interface Brain {
   offers: Offer[];
   audios: Audio[];
   images: (Audio & { kind?: "image" | "video" })[];
+  voiceCalls?: VoiceCallItem[];
   maxReplies: number;
   fallbackMessage: string;
+}
+interface VoiceCallItem {
+  id: string;
+  url: string;
+  when?: string;
+  offerId?: string;
+  endText?: string;
 }
 interface Product {
   id: string;
@@ -244,7 +252,7 @@ function ConnectionCard() {
 }
 
 function TestChat({ brain }: { brain: Brain }) {
-  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; video?: string; offer?: string }[]>([]);
+  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; video?: string; offer?: string; voice?: boolean }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -267,11 +275,12 @@ function TestChat({ brain }: { brain: Brain }) {
         offer: { name: string; price: number; headline: string; style?: string } | null;
         end: boolean;
         failure?: string;
+        voiceCall?: { id: string } | null;
       }>(`/api/admin/brains/${brain.id}/test`, {
         body: {
           history: next.map((h) => ({
             role: h.role,
-            text: h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
+            text: h.voice ? "[ligou para o lead (ligação de voz)]" : h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
           })),
         },
       });
@@ -284,6 +293,7 @@ function TestChat({ brain }: { brain: Brain }) {
         ...(r.offer
           ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
           : []),
+        ...(r.voiceCall ? [{ role: "bot" as const, text: "📞 Ligou para o lead (no chat de verdade toca a ligação de voz)", voice: true }] : []),
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
       ];
       setHistory([...next, ...bot]);
@@ -573,7 +583,7 @@ export default function CerebroPage() {
             <button key={b.id} className={`brain-item ${b.id === draft?.id ? "active" : ""}`} onClick={() => setSelected(b.id)}>
               <b>🧠 {b.name}</b>
               <small>
-                {b.active ? "ativo" : "inativo"} · {b.offers.length} oferta(s) · {b.audios.length} áudio(s) · {(b.images ?? []).length} prévia(s)
+                {b.active ? "ativo" : "inativo"} · {b.offers.length} oferta(s) · {b.audios.length} áudio(s) · {(b.images ?? []).length} prévia(s){(b.voiceCalls ?? []).length ? ` · ${(b.voiceCalls ?? []).length} ligação(ões)` : ""}
               </small>
             </button>
           ))}
@@ -897,6 +907,81 @@ export default function CerebroPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="card">
+              <div className="card-head">
+                <h3>📞 Ligação de voz</h3>
+                <button
+                  className="btn btn-sm"
+                  onClick={() =>
+                    set("voiceCalls", [
+                      ...(draft.voiceCalls ?? []),
+                      { id: shortId("vc"), url: "", when: "", offerId: draft.offers.find((o) => o.style === "call")?.id ?? "", endText: "" },
+                    ])
+                  }
+                >
+                  + Adicionar ligação
+                </button>
+              </div>
+              <p className="hint" style={{ marginTop: -6 }}>
+                A IA pergunta se pode ligar e, quando o lead autoriza, toca uma ligação no celular dele (foto, toque e vibração). Ao atender, o seu áudio
+                toca numa tela de chamada com cronômetro, como uma ligação de verdade. Quando o áudio termina (ou ele desliga), aparece a sua mensagem e a
+                oferta escolhida — ex.: a chamada de vídeo por R$ 19,99. Uma ligação por conversa.
+              </p>
+              {(draft.voiceCalls ?? []).map((v, i) => {
+                const setV = (patch: Partial<VoiceCallItem>) =>
+                  set("voiceCalls", (draft.voiceCalls ?? []).map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                return (
+                  <div key={v.id} className="brain-row">
+                    <div className="field">
+                      <label>Áudio da ligação (o que ela fala)</label>
+                      <UploadInput value={v.url} onChange={(url) => setV({ url })} accept="audio/*" />
+                    </div>
+                    <div className="field">
+                      <label>Quando pedir para ligar</label>
+                      <input
+                        className="input"
+                        placeholder="Ex.: depois de 3 ou 4 mensagens, quando ele estiver curioso — pergunte se pode ligar rapidinho"
+                        value={v.when ?? ""}
+                        onChange={(e) => setV({ when: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid-2">
+                      <div className="field">
+                        <label>Oferta no fim da ligação</label>
+                        <select className="select" value={v.offerId ?? ""} onChange={(e) => setV({ offerId: e.target.value })}>
+                          <option value="">— nenhuma —</option>
+                          {draft.offers.map((o) => {
+                            const p = products.find((x) => x.id === o.productId);
+                            return (
+                              <option key={o.id} value={o.id}>
+                                {(o.headline || p?.name || "Oferta") + (p ? ` · ${formatBRL(p.price)}` : "")}
+                                {o.style === "call" ? " (chamada de vídeo)" : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {draft.offers.length === 0 && <p className="hint">Cadastre a oferta (ex.: chamada de vídeo) em Ofertas acima.</p>}
+                      </div>
+                      <div className="field">
+                        <label>Mensagem no fim da ligação</label>
+                        <input
+                          className="input"
+                          placeholder="Ex.: gostou de ouvir minha voz? 🥵 agora imagina me ver… faz uma chamada de vídeo comigo"
+                          value={v.endText ?? ""}
+                          onChange={(e) => setV({ endText: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="row" style={{ justifyContent: "flex-end" }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => set("voiceCalls", (draft.voiceCalls ?? []).filter((_, j) => j !== i))}>
+                        Remover ligação
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="card">

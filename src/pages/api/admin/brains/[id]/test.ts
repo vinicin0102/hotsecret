@@ -41,6 +41,7 @@ export default apiHandler({
         image: r.image,
         end: r.end,
         showOffers: !!r.showOffers,
+        voiceCall: r.voiceCall ? { id: r.voiceCall.id, url: r.voiceCall.url, when: r.voiceCall.when, offerId: r.voiceCall.offerId, endText: r.voiceCall.endText } : null,
         offer: r.offer && {
           id: r.offer.id,
           productId: r.offer.productId,

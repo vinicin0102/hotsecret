@@ -72,13 +72,23 @@ const CamIcon = () => (
   </svg>
 );
 
-export function IncomingCall({ character, onAccept, onDecline }: { character: PublicCharacter; onAccept: () => void; onDecline: () => void }) {
+export function IncomingCall({
+  character,
+  onAccept,
+  onDecline,
+  kind = "video",
+}: {
+  character: PublicCharacter;
+  onAccept: () => void;
+  onDecline: () => void;
+  kind?: "video" | "voice";
+}) {
   useRingtone(true);
   return (
-    <div className="call-overlay ringing" role="dialog" aria-label={`Chamada de vídeo de ${character.name}`}>
+    <div className="call-overlay ringing" role="dialog" aria-label={`${kind === "voice" ? "Ligação" : "Chamada de vídeo"} de ${character.name}`}>
       {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
       <div className="call-top">
-        <div className="call-kind">📹 Chamada de vídeo</div>
+        <div className="call-kind">{kind === "voice" ? "📞 Ligação de voz" : "📹 Chamada de vídeo"}</div>
         <div className="call-avatar-wrap">
           <span className="call-ring r1" />
           <span className="call-ring r2" />
@@ -103,7 +113,7 @@ export function IncomingCall({ character, onAccept, onDecline }: { character: Pu
         </div>
         <div>
           <button className="call-btn accept" onClick={onAccept} aria-label="Atender">
-            <CamIcon />
+            {kind === "voice" ? <PhoneIcon /> : <CamIcon />}
           </button>
           <span>Atender</span>
         </div>
@@ -430,6 +440,119 @@ export function CallScreen({
       <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label="Desligar">
         <PhoneIcon down />
       </button>
+    </div>
+  );
+}
+
+const fmt = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+
+/**
+ * Ligação de voz do Cérebro: toca → o lead atende → o áudio gravado toca numa tela de chamada (cronômetro, mudo, desligar)
+ * → "chamada encerrada". O áudio começa dentro do toque em "Atender" (o iPhone só libera som assim).
+ */
+export function VoiceCall({
+  character,
+  url,
+  phase,
+  endedSeconds,
+  onAnswer,
+  onDecline,
+  onEnd,
+}: {
+  character: PublicCharacter;
+  url: string;
+  phase: "ringing" | "active" | "ended";
+  endedSeconds?: number;
+  onAnswer: () => void;
+  onDecline: () => void;
+  onEnd: (seconds: number) => void;
+}) {
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const started = useRef<number>(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const ended = useRef(false);
+
+  const finish = () => {
+    if (ended.current) return;
+    ended.current = true;
+    audio.current?.pause();
+    onEnd(Math.max(0, Math.round((Date.now() - started.current) / 1000)));
+  };
+
+  const accept = () => {
+    const a = new Audio(url);
+    a.preload = "auto";
+    a.addEventListener("ended", () => setTimeout(finish, 700));
+    audio.current = a;
+    started.current = Date.now();
+    a.play().catch(() => setBlocked(true));
+    onAnswer();
+  };
+
+  useEffect(() => {
+    if (phase !== "active") return;
+    const iv = setInterval(() => setElapsed(Math.round((Date.now() - started.current) / 1000)), 500);
+    return () => clearInterval(iv);
+  }, [phase]);
+  // saiu da tela no meio da ligação: para o áudio
+  useEffect(() => () => audio.current?.pause(), []);
+
+  if (phase === "ringing") return <IncomingCall character={character} kind="voice" onAccept={accept} onDecline={onDecline} />;
+
+  return (
+    <div className={`call-overlay voice-call ${phase === "ended" ? "ended" : ""}`} role="dialog" aria-label={`Ligação com ${character.name}`}>
+      {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
+      <div className="call-top">
+        <div className="call-kind">📞 Ligação de voz</div>
+        <div className="call-avatar-wrap">
+          {phase === "active" && !muted && <span className="voice-wave" />}
+          {character.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="call-avatar" src={character.avatarUrl} alt="" />
+          ) : (
+            <div className="call-avatar">{character.name.slice(0, 1)}</div>
+          )}
+        </div>
+        <div className="call-name">{character.name}</div>
+        <div className="call-status voice-timer">{phase === "ended" ? `Chamada encerrada · ${fmt(endedSeconds ?? elapsed)}` : fmt(elapsed)}</div>
+        {blocked && phase === "active" && (
+          <button
+            className="btn btn-primary voice-unblock"
+            onClick={() => {
+              setBlocked(false);
+              audio.current?.play().catch(() => setBlocked(true));
+            }}
+          >
+            🔊 Toque para ouvir
+          </button>
+        )}
+      </div>
+      {phase === "active" && (
+        <div className="call-actions voice-actions">
+          <div>
+            <button
+              className={`call-btn mute ${muted ? "on" : ""}`}
+              onClick={() => {
+                const m = !muted;
+                setMuted(m);
+                if (audio.current) audio.current.muted = m;
+              }}
+              aria-label={muted ? "Ativar som" : "Silenciar"}
+            >
+              {muted ? "🔇" : "🔊"}
+            </button>
+            <span>{muted ? "Sem som" : "Alto-falante"}</span>
+          </div>
+          <div>
+            <button className="call-btn decline" onClick={finish} aria-label="Desligar">
+              <PhoneIcon down />
+            </button>
+            <span>Desligar</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

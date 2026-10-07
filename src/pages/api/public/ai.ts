@@ -24,7 +24,7 @@ const schema = z.object({
   /** algo que o lead fez no chat (ex.: recusou a chamada de vídeo) */
   /** call_declined: recusou a chamada · photo: o lead acabou de mandar uma foto (já gravada por /api/public/photo) */
   /** continue: o lead voltou para a IA depois dos botões de oferta (a resposta dele já está gravada) */
-  event: z.enum(["call_declined", "photo", "continue"]).optional(),
+  event: z.enum(["call_declined", "photo", "continue", "voice_declined"]).optional(),
 });
 
 type Msg = { sender: string; type: string; content: unknown };
@@ -69,6 +69,11 @@ function toTurns(messages: Msg[]): ChatTurn[] {
       case "call_declined":
         turns.push({ role: "lead", text: "[recusou a chamada de vídeo]" });
         break;
+      case "voice_call":
+        if (c.status === "ringing") turns.push({ role: "bot", text: "[ligou para o lead (ligação de voz)]" });
+        else if (c.status === "declined") turns.push({ role: "lead", text: "[recusou a ligação de voz]" });
+        else if (c.status === "ended") turns.push({ role: "lead", text: `[atendeu a ligação de voz e ouviu ${Number(c.seconds) || 0}s da sua fala]` });
+        break;
       case "payment_update":
         if (text) turns.push({ role: "bot", text: `[sistema: ${text}]` });
         break;
@@ -99,6 +104,9 @@ export default apiHandler({
 
     const text = sanitizeText(body.message, 1000);
     if (!body.start && !body.event && !text) throw new HttpError(400, "Mensagem vazia");
+    if (body.event === "voice_declined") {
+      await addConversationMessage(session.conversationId, "user", "voice_call", { status: "declined", text: "Recusou a ligação de voz" }, node.id);
+    }
     if (body.event === "call_declined") {
       await addConversationMessage(session.conversationId, "user", "call_declined", { text: "Recusou a chamada de vídeo" }, node.id);
     }
@@ -155,6 +163,9 @@ export default apiHandler({
       const kind = reply.image.kind === "video" ? "video" : "image";
       await addConversationMessage(session.conversationId, "bot", kind, { url: reply.image.url, caption: "", aiImageId: reply.image.id }, node.id);
     }
+    if (reply.voiceCall) {
+      await addConversationMessage(session.conversationId, "bot", "voice_call", { status: "ringing", callId: reply.voiceCall.id, text: "Ligação de voz" }, node.id);
+    }
     if (reply.audio) {
       await addConversationMessage(session.conversationId, "bot", "audio", { url: reply.audio.url, caption: "", aiAudioId: reply.audio.id }, node.id);
     }
@@ -194,6 +205,7 @@ export default apiHandler({
       offer,
       end: reply.end,
       showOffers: !!reply.showOffers,
+      voiceCall: reply.voiceCall ? { id: reply.voiceCall.id, url: reply.voiceCall.url } : null,
     };
   },
 });

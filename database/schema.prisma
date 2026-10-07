@@ -443,6 +443,8 @@ model Brain {
   audios          Json     @default("[]")
   /// imagens (prévias) que a IA pode enviar: [{ id, url, when }]
   images          Json     @default("[]")
+  /// ligações de voz: [{ id, url (áudio), when, offerId, endText }]
+  voiceCalls      Json     @default("[]")
   maxReplies      Int      @default(30)
   fallbackMessage String   @default("")
   createdAt       DateTime @default(now())

@@ -180,6 +180,20 @@ export function publicOfferFormat(o: BrainOffer): { style: "card" | "call" | "ta
   if (cards.length) return { style: "tarot", tarotCards: cards.map((c) => ({ id: c.id, label: c.label })), tarotBackUrl: o.tarotBackUrl || undefined };
   return { style: "card" };
 }
+/** ligação de voz: áudio gravado que toca numa tela de ligação; no fim aparece uma oferta */
+export interface BrainVoiceCall {
+  id: string;
+  url: string;
+  /** quando a IA deve pedir para ligar */
+  when?: string;
+  /** oferta do cérebro mostrada quando a ligação termina */
+  offerId?: string;
+  /** mensagem enviada no chat quando a ligação termina */
+  endText?: string;
+}
+export function brainVoiceCalls(brain: Pick<Brain, "voiceCalls">): BrainVoiceCall[] {
+  return Array.isArray(brain.voiceCalls) ? (brain.voiceCalls as unknown as BrainVoiceCall[]).filter((v) => v?.id && v?.url) : [];
+}
 export function brainAudios(brain: Pick<Brain, "audios">): BrainAudio[] {
   return Array.isArray(brain.audios) ? (brain.audios as unknown as BrainAudio[]).filter((a) => a?.id && a?.url) : [];
 }
@@ -270,7 +284,17 @@ ${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}${
 ${offers || (flowButtons ? "(nenhuma oferta por card — neste bloco os produtos são vendidos pelos BOTÕES DE OFERTA, veja a seção no fim)" : "(nenhuma oferta cadastrada — não ofereça produtos)")}
 Para mostrar o card de compra (ou ligar, nas ofertas em formato de chamada), coloque o offer_id em "offer_id" (no máximo uma oferta por resposta) e diga uma frase chamando para o botão ou avisando que vai ligar. Se o histórico mostrar que o lead recusou a chamada, não ligue de novo na mesma hora: acolha e, se houver, ofereça uma opção mais curta ou mais barata. Use "" quando não for oferecer. Não repita a mesma oferta se ela já foi mostrada e o lead não demonstrou interesse novo.
 
-# Áudios gravados
+${
+    brainVoiceCalls(brain).length
+      ? `# Ligação de voz
+Você pode LIGAR para o lead por voz: a ligação toca no celular dele e ele ouve você falando. Antes, SEMPRE pergunte se pode ligar (ex.: "posso te ligar rapidinho? 😏"). Só coloque o voice_call_id quando o lead AUTORIZAR (sim, pode, liga, bora...). Não ligue de novo se ele já atendeu ou recusou (veja o histórico).
+${brainVoiceCalls(brain)
+  .map((v) => `- voice_call_id "${v.id}": ${v.when || "quando fizer sentido na conversa"}`)
+  .join("\n")}
+
+`
+      : ""
+  }# Áudios gravados
 ${audios || "(nenhum áudio cadastrado)"}
 Para enviar um áudio, coloque o audio_id em "audio_id" (no máximo um por resposta, e não repita um áudio já enviado). Use "" quando não enviar.
 
@@ -282,7 +306,7 @@ Para mandar uma prévia (ex.: quando pedirem uma prévia, provinha, foto ou víd
 Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.${mustRulesSection(brain.mustRules)}`;
 }
 
-const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[], showOffers = false) => ({
+const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[], showOffers = false, voiceIds: string[] = []) => ({
   type: "object",
   properties: {
     messages: { type: "array", items: { type: "string" }, description: "1 a 3 mensagens curtas, na ordem de envio" },
@@ -292,8 +316,10 @@ const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[
     end: { type: "boolean" },
     // só nos blocos com a saída "Mostrar botões de oferta" ligada
     ...(showOffers ? { show_offers: { type: "boolean" } } : {}),
+    // só nos cérebros com ligação de voz cadastrada
+    ...(voiceIds.length ? { voice_call_id: { type: "string", enum: ["", ...voiceIds] } } : {}),
   },
-  required: ["messages", "offer_id", "audio_id", "image_id", "end", ...(showOffers ? ["show_offers"] : [])],
+  required: ["messages", "offer_id", "audio_id", "image_id", "end", ...(showOffers ? ["show_offers"] : []), ...(voiceIds.length ? ["voice_call_id"] : [])],
   additionalProperties: false,
 });
 
@@ -340,6 +366,8 @@ export interface BrainReply {
   end: boolean;
   /** soltar os botões de oferta do fluxo (saída "Mostrar botões de oferta") */
   showOffers?: boolean;
+  /** ligar por voz para o lead (ele autorizou) */
+  voiceCall?: BrainVoiceCall | null;
   usage?: { input: number; output: number; cacheRead: number };
   /** a IA falhou e foi usada a "Mensagem se a IA falhar" (motivo, para o painel) */
   failure?: string;
@@ -396,12 +424,12 @@ function jsonInstructions(schema: ReturnType<typeof OUTPUT_SCHEMA>, labels: Reco
   const showOffers = "show_offers" in props;
   return `# Formato da resposta (OBRIGATÓRIO)
 Responda SOMENTE com um objeto json válido, sem nenhum texto antes ou depois e sem blocos de código, exatamente com estas chaves:
-{"messages": ["mensagem 1", "mensagem 2"], "offer_id": "", "audio_id": "", "image_id": "", "end": false${showOffers ? ', "show_offers": false' : ""}}
+{"messages": ["mensagem 1", "mensagem 2"], "offer_id": "", "audio_id": "", "image_id": "", "end": false${showOffers ? ', "show_offers": false' : ""}${"voice_call_id" in props ? ', "voice_call_id": ""' : ""}}
 - messages: 1 a 3 mensagens curtas, na ordem de envio (o que o lead vai ler).
 - offer_id: "" ou um destes: ${list("offer_id")}
 - audio_id: "" ou um destes: ${list("audio_id")}
 - image_id: "" ou um destes: ${list("image_id")}
-- end: true só quando a conversa terminou de vez.
+- end: true só quando a conversa terminou de vez.${"voice_call_id" in props ? `\n- voice_call_id: "" ou um destes (só depois de o lead autorizar a ligação): ${list("voice_call_id")}` : ""}
 Use as ofertas, os áudios e as prévias de verdade: sempre que a situação combinar com o "quando" de um item, coloque o id dele (não responda só com texto). Se o lead pedir prévia, foto ou vídeo e houver prévia ainda não enviada, mande o image_id.${showOffers ? "\n- show_offers: true para soltar os botões de oferta (veja a seção BOTÕES DE OFERTA)." : ""}
 Copie o id exatamente como está entre aspas. Nunca escreva os ids dentro de messages.`;
 }
@@ -420,6 +448,7 @@ export async function runBrain(input: {
   const offers = brainOffers(input.brain);
   const audios = brainAudios(input.brain);
   const images = brainImages(input.brain);
+  const voiceCalls = brainVoiceCalls(input.brain);
   const products = new Map(
     (await prisma.product.findMany({ where: { id: { in: offers.map((o) => o.productId) } } })).map((p) => [p.id, p]),
   );
@@ -436,7 +465,13 @@ export async function runBrain(input: {
     .join("\n\n");
 
   const fallbackText = input.brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
-  const schema = OUTPUT_SCHEMA(validOffers.map((o) => o.id), audios.map((a) => a.id), images.map((a) => a.id), !!input.flowOffers);
+  const schema = OUTPUT_SCHEMA(
+    validOffers.map((o) => o.id),
+    audios.map((a) => a.id),
+    images.map((a) => a.id),
+    !!input.flowOffers,
+    voiceCalls.map((v) => v.id),
+  );
   const anthropicMessages = target.provider === "anthropic" ? await toApiMessages(input.history, true) : [];
 
   /** Uma chamada à IA. cut = a resposta veio cortada/recusada (tenta de novo). */
@@ -450,6 +485,7 @@ export async function runBrain(input: {
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
     ...Object.fromEntries(images.map((a) => [a.id, `${a.kind === "video" ? "vídeo" : "foto"}; quando: ${(a.when || "quando pedirem prévia").slice(0, 140)}`])),
+    ...Object.fromEntries(voiceCalls.map((v) => [v.id, `ligação de voz; quando: ${(v.when || "quando o lead autorizar").slice(0, 140)}`])),
   };
   // modo seguro: usado quando o filtro de conteúdo da IA bloqueia — vai só o essencial para vender (sem os textos do cérebro)
   const safeSystem = () =>
@@ -469,6 +505,7 @@ ${
     }
 ${audios.length ? `\n# Áudios\n${audios.map((a) => `- audio_id "${a.id}": ${a.when || ""}`).join("\n")}` : ""}
 ${images.length ? `\n# Prévias\n${images.map((a) => `- image_id "${a.id}" (${a.kind === "video" ? "vídeo" : "foto"}): ${a.when || ""}`).join("\n")}` : ""}
+${voiceCalls.length ? `\n# Ligação de voz (pergunte se pode ligar; só use voice_call_id quando o lead autorizar)\n${voiceCalls.map((v) => `- voice_call_id "${v.id}": ${v.when || ""}`).join("\n")}` : ""}
 ${flowOffersSection(input.flowOffers)}`;
   const safeHistory = (): ChatTurn[] => input.history.slice(-6).map((t) => ({ role: t.role, text: t.imageUrl ? "[enviou uma foto]" : t.text.slice(0, 300) }));
 
@@ -585,7 +622,9 @@ ${flowOffersSection(input.flowOffers)}`;
     messages.push(...cleanMessages);
     const audio = audios.find((a) => a.id === parsed!.audio_id) ?? null;
     const image = images.find((a) => a.id === parsed!.image_id) ?? null;
-    if (!messages.length && !offer && !audio && !image) return null;
+    const vRaw = typeof parsed.voice_call_id === "string" ? parsed.voice_call_id.trim() : "";
+    const voiceCall = vRaw ? (voiceCalls.find((v) => v.id === vRaw || v.id.toLowerCase() === vRaw.toLowerCase()) ?? null) : null;
+    if (!messages.length && !offer && !audio && !image && !voiceCall) return null;
     return {
       messages,
       offer: offer ? { ...offer, product: products.get(offer.productId)! } : null,
@@ -593,6 +632,7 @@ ${flowOffersSection(input.flowOffers)}`;
       image,
       end: parsed.end === true,
       showOffers: !!input.flowOffers && parsed.show_offers === true,
+      voiceCall,
     };
   };
 
@@ -623,7 +663,7 @@ ${flowOffersSection(input.flowOffers)}`;
       continue;
     }
     const reply = interpret(r.text);
-    if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
+    if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images, voiceCalls), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
     problem = r.text.trim() ? "resposta fora do formato" : "resposta vazia";
   }
   // sem resposta da IA (o motivo vai em "failure" → painel, Saúde da IA)
@@ -672,6 +712,7 @@ function assistReply(
   products: Map<string, Product>,
   audios: BrainAudio[],
   images: BrainMedia[],
+  voiceCalls: BrainVoiceCall[] = [],
 ): Omit<BrainReply, "usage"> {
   const lastLead = [...history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
   if (!lastLead.trim()) return reply;
@@ -679,6 +720,17 @@ function assistReply(
   const past = history.map((t) => t.text).join("\n");
   const recentBot = history.slice(-6).filter((t) => t.role === "bot").map((t) => t.text).join("\n");
   const out = { ...reply };
+
+  // ligação de voz: a IA pediu para ligar e o lead autorizou (só uma vez por conversa)
+  if (!out.voiceCall && voiceCalls.length && !/liga[cç][aã]o de voz/.test(past)) {
+    const lastBot = [...history].reverse().find((t) => t.role === "bot" && !t.text.startsWith("["))?.text ?? "";
+    const askedToCall = /(te )?lig(ar|o|ue|a[cç][aã]o)|posso te ligar/i.test(lastBot) && !/v[ií]deo/i.test(lastBot);
+    if (askedToCall && YES_INTENT.test(lastLead) && !NO_INTENT.test(lastLead)) {
+      out.voiceCall = voiceCalls[0];
+      return out;
+    }
+  }
+  if (out.voiceCall) return out;
 
   if (!out.offer && !out.showOffers) {
     const declinedCall = /recusou a chamada/.test(history.slice(-4).map((t) => t.text).join(" "));
@@ -724,6 +776,9 @@ function assistReply(
   if (!out.messages.length && !out.offer && !out.image && !out.audio) return reply;
   return out;
 }
+
+const YES_INTENT = /\b(sim|s|ss|pode|podes|liga|ligar|me liga|bora|vamos|vamo|claro|quero|aceito|ok|okay|beleza|blz|manda|t[aá]|ta bom|uhum|aham|yes|com certeza)\b/i;
+const NO_INTENT = /\b(n[aã]o|nao|agora n[aã]o|depois|nem|nunca)\b/i;
 
 const BUY_INTENT =
   /\b(quero|qro|quer|bora|vamos|vamo|sim|ss|manda|mande|me manda|liga|ligar|liga[cç][aã]o|chamada|videochamada|v[ií]deo ?chamada|quanto|pre[cç]o|valor|comprar|compro|pix|pagar|aceito|topo|pode ser|claro|fechado|fecho|bota|libera)\b/i;

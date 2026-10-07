@@ -65,6 +65,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
    * Chamada de vídeo: ringing (tocando) → pix (pop-up só com o código PIX do produto principal ou do downsell)
    * → active (vídeo, liberado só depois do pagamento). productId/offer: oferta do Cérebro.
    */
+  /** ligação de voz do Cérebro: tocando → em andamento (áudio) → encerrada */
+  const [voice, setVoice] = useState<{ nodeId: string; id: string; url: string; phase: "ringing" | "active" | "ended"; seconds?: number } | null>(null);
   const [call, setCall] = useState<{
     nodeId: string;
     phase: "ringing" | "pix" | "active";
@@ -137,7 +139,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     return runId.current === token;
   }, []);
 
-  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue") => Promise<void>>(async () => undefined);
+  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined") => Promise<void>>(async () => undefined);
   /** blocos Cérebro que já conversaram nesta sessão (voltar para eles = a IA continua a conversa) */
   const aiTalked = useRef(new Set<string>());
   /** última resposta do lead fora da IA (botão ou texto) — a IA responde a ela ao voltar para o bloco */
@@ -279,7 +281,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   /** Uma rodada do Cérebro: envia a mensagem do lead e mostra a resposta como se alguém estivesse digitando. */
   const aiTurn = useCallback(
-    async (nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue") => {
+    async (nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined") => {
       const t = transportRef.current;
       if (!t) return;
       aiTalked.current.add(nodeId);
@@ -343,6 +345,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         }
       }
       setTyping(false);
+      if (r.voiceCall) {
+        // ligação de voz (o lead autorizou): toca a tela de ligação; a conversa volta quando a ligação terminar
+        await sleep(900);
+        if (runId.current !== token) return;
+        setVoice({ nodeId, id: r.voiceCall.id, url: r.voiceCall.url, phase: "ringing" });
+        return;
+      }
       // "Mostrar botões de oferta": a IA explicou e chamou para escolher → segue para os botões ligados nessa saída
       const after = r.end ? nextNodeId(graphRef.current, nodeId, "default") : r.showOffers ? nextNodeId(graphRef.current, nodeId, AI_OFFERS_OUT) : null;
       if (after) void run(after);
@@ -796,6 +805,54 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     void startCallPix(call, productId, false);
   }, [call, startCallPix]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---------- Ligação de voz ----------
+  const answerVoice = useCallback(() => {
+    setVoice((v) => (v ? { ...v, phase: "active" } : v));
+  }, []);
+  const declineVoice = useCallback(() => {
+    const v = voice;
+    if (!v) return;
+    setVoice(null);
+    void aiTurnRef.current(v.nodeId, null, "voice_declined");
+  }, [voice]);
+  /** a ligação terminou (áudio acabou ou o lead desligou): tela "chamada encerrada", depois a mensagem e a oferta no chat */
+  const endVoice = useCallback(
+    async (seconds: number) => {
+      const v = voice;
+      const t = transportRef.current;
+      if (!v || v.phase === "ended") return;
+      setVoice({ ...v, phase: "ended", seconds });
+      const token = ++runId.current;
+      const resP = t ? t.voiceCallEnded(v.nodeId, v.id, seconds).catch(() => null) : Promise.resolve(null);
+      await sleep(1800);
+      setVoice(null);
+      const placeholder = ((getNode(graphRef.current, v.nodeId)?.content as AiContent | undefined)?.placeholder as string) || undefined;
+      const r = await resP;
+      if (runId.current !== token) return;
+      if (r?.endText) {
+        setTyping(true);
+        await sleep(Math.min(autoDelay(r.endText.length), 3000));
+        if (runId.current !== token) return;
+        setTyping(false);
+        push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.endText }, nodeId: v.nodeId, at: now() });
+      }
+      if (r?.offer) {
+        await sleep(700);
+        if (runId.current !== token) return;
+        push({
+          kind: "offer",
+          id: lid(),
+          nodeId: v.nodeId,
+          productId: r.offer.productId,
+          offer: { productId: r.offer.productId, headline: r.offer.headline, ctaLabel: r.offer.ctaLabel },
+          at: now(),
+        });
+      }
+      setAwaiting({ kind: "ai", nodeId: v.nodeId, placeholder });
+    },
+    [voice, push],
+  );
+
   const declineCall = useCallback(() => {
     if (!call) return;
     const nodeId = call.nodeId;
@@ -857,6 +914,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   );
 
   return {
+    voice,
+    answerVoice,
+    declineVoice,
+    endVoice,
     call,
     callError,
     answerCall,
