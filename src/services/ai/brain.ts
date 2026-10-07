@@ -447,7 +447,12 @@ export async function runBrain(input: {
         json: true,
         messages: mergeRoles([{ role: "system", content: system }, ...toPlainMessages(input.history, true)]),
       });
-      const cut = r.finish === "length" ? "resposta cortada (longa demais)" : r.finish === "content_filter" ? "resposta bloqueada pelo filtro da DeepSeek" : undefined;
+      const cut =
+        r.finish === "length"
+          ? "resposta cortada (longa demais)"
+          : r.finish === "content_filter"
+            ? "a DeepSeek bloqueou a resposta pelo filtro de conteúdo sensível (deixe o cérebro sugestivo, sem nada explícito)"
+            : undefined;
       return { text: r.text, usage: r.usage, cut };
     }
     const { client, model } = target;
@@ -472,7 +477,7 @@ export async function runBrain(input: {
       output: response.usage.output_tokens,
       cacheRead: response.usage.cache_read_input_tokens ?? 0,
     };
-    const cut = response.stop_reason === "refusal" ? "a IA recusou responder" : response.stop_reason === "max_tokens" ? "resposta cortada (longa demais)" : undefined;
+    const cut = response.stop_reason === "refusal" ? "o Claude recusou responder (conteúdo sensível — deixe o cérebro sugestivo, sem nada explícito)" : response.stop_reason === "max_tokens" ? "resposta cortada (longa demais)" : undefined;
     const text = response.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")?.text ?? "";
     return { text, usage, cut };
   };

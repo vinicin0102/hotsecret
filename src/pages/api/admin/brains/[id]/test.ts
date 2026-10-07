@@ -53,6 +53,7 @@ export default apiHandler({
           downsellText: r.offer.downsellText || undefined,
         },
         usage: r.usage,
+        failure: r.failure,
       };
     } catch (e) {
       throw new HttpError(502, describeAiError(e));

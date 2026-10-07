@@ -94,6 +94,12 @@ export function extractJson(text: string): unknown {
 }
 
 export function describeDeepSeekError(e: DeepSeekError): string {
+  const m = e.message.toLowerCase();
+  if (m.includes("content exists risk") || m.includes("content risk"))
+    return "A DeepSeek bloqueou a conversa pelo filtro de conteúdo sensível dela. Deixe a personalidade, o conteúdo e os exemplos sugestivos, sem nada sexual explícito.";
+  if (m.includes("model not exist") || m.includes("model_not_found") || m.includes("does not exist"))
+    return "A DeepSeek não reconheceu o modelo escolhido. Troque o modelo na Conexão com a IA.";
+  if (m.includes("insufficient balance")) return "Sem saldo na DeepSeek — recarregue em platform.deepseek.com.";
   if (e.status === 401) return "Chave da DeepSeek inválida.";
   if (e.status === 402) return "Sem saldo na DeepSeek — recarregue em platform.deepseek.com.";
   if (e.status === 429) return "Limite de uso da DeepSeek atingido. Tente em instantes.";

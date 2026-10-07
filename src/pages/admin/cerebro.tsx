@@ -266,6 +266,7 @@ function TestChat({ brain }: { brain: Brain }) {
         image: { url: string; when?: string; kind?: string } | null;
         offer: { name: string; price: number; headline: string; style?: string } | null;
         end: boolean;
+        failure?: string;
       }>(`/api/admin/brains/${brain.id}/test`, {
         body: {
           history: next.map((h) => ({
@@ -286,6 +287,8 @@ function TestChat({ brain }: { brain: Brain }) {
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
       ];
       setHistory([...next, ...bot]);
+      // a IA falhou e saiu a "Mensagem se a IA falhar": mostra o motivo (só aqui no painel)
+      if (r.failure) setError(`A IA falhou: ${r.failure}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falhou");
     } finally {
