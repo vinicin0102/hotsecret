@@ -71,3 +71,9 @@ test("depois da recusa, o downsell que a IA escolheu continua (a anotação do s
   const out = assistReply(reply(SHORT), h, [...OFFERS, SHORT], products, [], []);
   assert.equal(out.offer?.id, "of_short");
 });
+
+test("pediu chamada de vídeo e a IA mandou um pack → não manda o pack (vai a chamada)", () => {
+  assert.equal(run([lead("hola"), bot("hola"), lead("quiero una videollamada")], FOTOS), "of_call");
+  const noCall = assistReply(reply(FOTOS), [lead("oi"), bot("oi"), lead("quero uma chamada de vídeo")], [FOTOS, TAROT], PRODUCTS, [], []);
+  assert.equal(noCall.offer, null, "sem chamada no cérebro: nada de pack no lugar");
+});

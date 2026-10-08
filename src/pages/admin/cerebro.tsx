@@ -945,7 +945,7 @@ export default function CerebroPage() {
                 </button>
               </div>
               <p className="hint" style={{ marginTop: -6 }}>
-                A IA pergunta se pode ligar e, quando o lead autoriza, toca uma ligação no celular dele (foto, toque e vibração). Ao atender, o seu áudio
+                Quando o lead demonstra interesse, pede para ligar ou aceita o convite da IA, toca uma ligação no celular dele (foto, toque e vibração) — ele escolhe atender ou recusar. Ao atender, o seu áudio
                 toca numa tela de chamada com cronômetro, como uma ligação de verdade. Quando o áudio termina (ou ele desliga), aparece a sua mensagem e a
                 oferta escolhida — ex.: a chamada de vídeo por R$ 19,99. Uma ligação por conversa.
               </p>

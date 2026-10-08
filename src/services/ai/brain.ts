@@ -304,7 +304,7 @@ Como escolher a oferta certa:
 ${
     brainVoiceCalls(brain).length
       ? `# Ligação de voz
-Você pode LIGAR para o lead por voz: a ligação toca no celular dele e ele ouve você falando. Antes, SEMPRE pergunte se pode ligar (ex.: "posso te ligar rapidinho? 😏"). Só coloque o voice_call_id quando o lead AUTORIZAR (sim, pode, liga, bora...). Não ligue de novo se ele já atendeu ou recusou (veja o histórico).
+Você pode LIGAR para o lead por voz: a ligação toca no celular dele (ele escolhe atender ou recusar) e ele ouve você falando. É uma vez por conversa e vem ANTES da chamada de vídeo: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade) ou pedir para você ligar, coloque o voice_call_id e avise numa mensagem curta que vai ligar (ex.: "vou te ligar rapidinho 😏" / "te llamo un ratito 😏"). Se você convidou ("posso te ligar?") e ele aceitou, ligue na hora. Não ligue de novo se ele já atendeu ou recusou (veja o histórico).
 ${brainVoiceCalls(brain)
   .map((v) => `- voice_call_id "${v.id}": ${v.when || "quando fizer sentido na conversa"}`)
   .join("\n")}
@@ -507,7 +507,7 @@ export async function runBrain(input: {
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
     ...Object.fromEntries(images.map((a) => [a.id, `${a.kind === "video" ? "vídeo" : "foto"}; quando: ${(a.when || "quando pedirem prévia").slice(0, 140)}`])),
-    ...Object.fromEntries(voiceCalls.map((v) => [v.id, `ligação de voz; quando: ${(v.when || "quando o lead autorizar").slice(0, 140)}`])),
+    ...Object.fromEntries(voiceCalls.map((v) => [v.id, `ligação de voz; quando: ${(v.when || "quando o lead demonstrar interesse ou pedir para ligar").slice(0, 140)}`])),
   };
   // modo seguro: usado quando o filtro de conteúdo da IA bloqueia — vai só o essencial para vender (sem os textos do cérebro)
   const safeSystem = () =>
@@ -527,7 +527,7 @@ ${
     }
 ${audios.length ? `\n# Áudios\n${audios.map((a) => `- audio_id "${a.id}": ${a.when || ""}`).join("\n")}` : ""}
 ${images.length ? `\n# Prévias\n${images.map((a) => `- image_id "${a.id}" (${a.kind === "video" ? "vídeo" : "foto"}): ${a.when || ""}`).join("\n")}` : ""}
-${voiceCalls.length ? `\n# Ligação de voz (pergunte se pode ligar; só use voice_call_id quando o lead autorizar)\n${voiceCalls.map((v) => `- voice_call_id "${v.id}": ${v.when || ""}`).join("\n")}` : ""}
+${voiceCalls.length ? `\n# Ligação de voz (uma por conversa: ligue com voice_call_id quando o lead demonstrar interesse, pedir para ligar ou aceitar o convite)\n${voiceCalls.map((v) => `- voice_call_id "${v.id}": ${v.when || ""}`).join("\n")}` : ""}
 ${flowOffersSection(input.flowOffers)}`;
   const safeHistory = (): ChatTurn[] => input.history.slice(-6).map((t) => ({ role: t.role, text: t.imageUrl ? "[enviou uma foto]" : t.text.slice(0, 300) }));
 
@@ -766,17 +766,26 @@ export function assistReply(
   const recentBot = history.slice(-6).filter((t) => t.role === "bot").map((t) => t.text).join("\n");
   const out = { ...reply };
 
-  // ligação de voz: a IA pediu para ligar e o lead autorizou (só uma vez por conversa)
+  // ligação de voz (uma por conversa): toca quando o lead aceita o convite, pede para ligar ou demonstra interesse
+  // — a tela de ligação tem Atender/Recusar, então quem decide é ele
   if (!out.voiceCall && voiceCalls.length && !/liga[cç][aã]o de voz/.test(past)) {
-    const lastBot = [...history].reverse().find((t) => t.role === "bot" && !t.text.startsWith("["))?.text ?? "";
-    const askedToCall =
-      /(te )?lig(ar|o|ue|acao)|posso te ligar|te llamo|llamarte|te marco|marcarte|puedo llamarte|una llamada/i.test(plain(lastBot)) && !/video/i.test(plain(lastBot));
-    if (askedToCall && has(YES_INTENT, lastLead) && !has(NO_INTENT, lastLead)) {
-      out.voiceCall = voiceCalls[0];
-      return out;
-    }
+    const typed = lastLead.startsWith("[") ? "" : lastLead;
+    const lastBot = plain([...history].reverse().find((t) => t.role === "bot" && !t.text.startsWith("["))?.text ?? "").replace(/\bme llamo\b/g, "");
+    const invited = VOICE_ASK.test(lastBot) && !/video/.test(lastBot);
+    const agreed = invited && has(YES_INTENT, typed) && !has(NO_INTENT, typed);
+    const wantsCall = has(CALL_INTENT, typed) && !/video/.test(plain(typed)) && !has(REFUSE_INTENT, typed);
+    const namesProduct = offers.some((o) => overlap(keyWords(typed), keyWords(`${products.get(o.productId)?.name ?? ""} ${o.headline ?? ""}`)) >= 1);
+    const leadCount = history.filter((t) => t.role === "lead" && !t.text.startsWith("[")).length;
+    const interest =
+      leadCount >= 2 && has(INTEREST_INTENT, typed) && !namesProduct && !has(BUY_INTENT, typed) && !has(OPTIONS_INTENT, typed) && !has(REFUSE_INTENT, typed);
+    if (agreed || wantsCall || interest) out.voiceCall = voiceCalls[0];
   }
-  if (out.voiceCall) return out;
+  if (out.voiceCall) {
+    // a ligação já termina com a oferta dela: nada de card ou chamada de vídeo tocando junto
+    out.offer = null;
+    out.showOffers = false;
+    return out;
+  }
 
   // botões de oferta do fluxo: o lead pediu preço/opções, perguntou pelos outros packs ou citou um deles
   if (flowOffers && !out.showOffers && !has(REFUSE_INTENT, lastLead)) {
@@ -811,10 +820,17 @@ export function assistReply(
   const shownRecently = (o: BrainOffer) => lastBots.includes(`offer_id "${o.id}"`);
   // chamada de vídeo: depois de uma recusa, só convida de novo depois de 4 mensagens do lead
   const callOffer = offers.find((o) => o.style === "call" && o.videoId);
-  const declineIdx = history.map((t) => t.text).lastIndexOf("[recusou a chamada de vídeo]");
-  const leadSinceDecline = declineIdx < 0 ? Infinity : history.slice(declineIdx + 1).filter((t) => t.role === "lead" && !t.text.startsWith("[")).length;
-  const declinedOfferId = declineIdx < 0 ? null : (/offer_id "([^"]+)"/.exec([...history.slice(0, declineIdx)].reverse().find((t) => t.text.includes("ligou para o lead"))?.text ?? "")?.[1] ?? null);
-  const callBlocked = (o: BrainOffer) => o.id === declinedOfferId && leadSinceDecline < 4;
+  const leadSince = (marker: string) => {
+    const i = history.map((t) => t.text).lastIndexOf(marker);
+    return { i, n: i < 0 ? Infinity : history.slice(i + 1).filter((t) => t.role === "lead" && !t.text.startsWith("[")).length };
+  };
+  const videoDecline = leadSince("[recusou a chamada de vídeo]");
+  const declinedOfferId =
+    videoDecline.i < 0 ? null : (/offer_id "([^"]+)"/.exec([...history.slice(0, videoDecline.i)].reverse().find((t) => t.text.includes("ligou para o lead"))?.text ?? "")?.[1] ?? null);
+  // recusou a ligação de voz: nenhuma chamada toca logo em seguida
+  const voiceDecline = leadSince("[recusou a ligação de voz]");
+  const callBlocked = (o: BrainOffer) =>
+    (o.id === declinedOfferId && videoDecline.n < 4) || (o.style === "call" && !!o.videoId && voiceDecline.n < 4);
   const asOffer = (o: BrainOffer) => ({ ...o, product: products.get(o.productId)! });
 
   if (out.offer) {
@@ -822,7 +838,8 @@ export function assistReply(
     // oferta errada: o lead citou outro produto pelo nome → manda o que ele pediu
     if (named && named.id !== o.id && namedScore >= 1) o = named;
     const explicit = o.id === named?.id || buy || (o.style === "call" && has(CALL_INTENT, leadText));
-    if (callBlocked(o) && !has(CALL_INTENT, leadText)) out.offer = null; // acabou de recusar esta chamada
+    if (has(CALL_INTENT, leadText) && o.style !== "call" && o.id !== named?.id) out.offer = null; // pediu ligação: um pack não é o que ele pediu
+    else if (callBlocked(o) && !has(CALL_INTENT, leadText)) out.offer = null; // acabou de recusar esta chamada
     else if (shownRecently(o) && !explicit) out.offer = null; // não repete a mesma oferta em sequência
     else if (leadMsgs.length <= 1 && !asked && !explicit) out.offer = null; // cedo demais: ainda nem conversaram
     else out.offer = asOffer(o);
@@ -867,7 +884,10 @@ export function assistReply(
 
 // as intenções são testadas no texto sem acentos (português e espanhol)
 const YES_INTENT =
-  /\b(sim|s|ss|pode|podes|liga|ligar|me liga|bora|vamos|vamo|claro|quero|aceito|ok|okay|okey|beleza|blz|manda|ta|ta bom|uhum|aham|yes|com certeza|si|sip|dale|va|vale|orale|andale|por supuesto|llamame|llama|marcame|quiero|acepto|bueno|sale|simon|obvio)\b/i;
+  /\b(sim|s|ss|pode|podes|liga|ligar|me liga|bora|vamos|vamo|claro|quero|aceito|ok|okay|okey|beleza|blz|manda|ta|ta bom|uhum|aham|yes|com certeza|si+|sisi|sip|dale|va|vale|orale|andale|por supuesto|llamame|llama|marcame|quiero|acepto|bueno|sale|simon|obvio|de una|joya|metele|listo|porfa|por favor)\b/i;
+/** a última fala do atendente convidou para uma ligação (pt + es, sem acentos) */
+const VOICE_ASK =
+  /\b((te )?lig(ar|o|ue|acao|acaozinha)|posso te ligar|te llamo|te llame|llamarte|te puedo llamar|puedo llamarte|llamad(a|ita)|te marco|marcarte)\b/;
 const NO_INTENT = /\b(nao|agora nao|depois|nem|nunca|no|ahorita no|despues|luego|nel)\b/i;
 
 const BUY_INTENT =
