@@ -3,12 +3,13 @@ export function formatBRL(cents: number | null | undefined): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export type Currency = "BRL" | "MXN";
+export type Currency = "BRL" | "MXN" | "ARS";
 export const CURRENCIES: Record<Currency, { label: string; locale: string; symbol: string }> = {
   BRL: { label: "Real (R$)", locale: "pt-BR", symbol: "R$" },
   MXN: { label: "Peso mexicano (MXN)", locale: "es-MX", symbol: "$" },
+  ARS: { label: "Peso argentino (ARS)", locale: "es-AR", symbol: "$" },
 };
-export const asCurrency = (v: unknown): Currency => (v === "MXN" ? "MXN" : "BRL");
+export const asCurrency = (v: unknown): Currency => (v === "MXN" || v === "ARS" ? v : "BRL");
 
 /** Valor em centavos na moeda do produto. locale: idioma de exibição (o painel usa pt-BR → "MX$ 199,00"). */
 export function formatMoney(cents: number | null | undefined, currency: unknown = "BRL", locale = "pt-BR"): string {

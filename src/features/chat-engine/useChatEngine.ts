@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, OfferContent, PublicFunnel, TarotCard } from "@/types/flow";
 import { AI_OFFERS_OUT, autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
-import type { ChatTransport, CheckoutForm, PublicPaymentInfo, ServerMessage } from "./transport";
+import type { ChatTransport, CheckoutForm, PayerData, PublicPaymentInfo, ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
 import { compressPhoto } from "./photo";
 import { asChatLocale, chatTexts } from "@/features/i18n/chat";
@@ -54,6 +54,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   // o grafo público chega sem o conteúdo pago; ele é mesclado após o pagamento aprovado
   const [graph, setGraph] = useState<FlowGraph>(funnel.graph);
   const graphRef = useRef<FlowGraph>(funnel.graph);
+  const funnelProducts = useRef(funnel.products);
+  funnelProducts.current = funnel.products;
   const unlocking = useRef<Promise<void> | null>(null);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [typing, setTyping] = useState(false);
@@ -77,7 +79,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     /** produto que está sendo pago no pop-up */
     payProductId?: string;
     downsell?: boolean;
+    /** o gateway pede os dados do comprador antes de gerar o pagamento */
+    needPayer?: boolean;
   } | null>(null);
+  /** dados do comprador já informados nesta conversa (só em memória; reaproveitados no downsell/upsell) */
+  const [payer, setPayer] = useState<PayerData | null>(null);
+  const payerRef = useRef<PayerData | null>(null);
   /** produtos comprados como upsell dentro da chamada (não seguem o ramo da oferta principal) */
   const upsellProducts = useRef(new Set<string>());
   /** produtos pagos pelo pop-up da chamada: a entrega é o próprio vídeo (sem botão de acesso no chat) */
@@ -503,7 +510,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     async (offerNodeId: string, form: CheckoutForm, opts?: { silent?: boolean }) => {
       const t = transportRef.current;
       if (!t) throw new Error("Sem conexão");
+      const productId = form.productId ?? (getNode(graphRef.current, offerNodeId)?.content as { productId?: string } | undefined)?.productId;
+      if (!form.payer && payerRef.current && productId && funnelProducts.current[productId]?.payerForm) form = { ...form, payer: payerRef.current };
       const payment = await t.checkout(offerNodeId, form);
+      if (form.payer) {
+        payerRef.current = form.payer;
+        setPayer(form.payer);
+      }
       setPayments((p) => ({ ...p, [payment.id]: payment }));
       // chamada de vídeo: o PIX aparece só no pop-up/na chamada, não como card no chat
       if (opts?.silent) return payment;
@@ -791,6 +804,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
       }
       setCheckoutOpened(true);
+      // dados do comprador ainda não informados: o pop-up mostra o formulário antes de gerar
+      if (product?.payerForm && !payerRef.current && transportRef.current?.mode === "live") {
+        setCall({ ...c, phase: "pix", payProductId: productId, downsell, needPayer: true });
+        return;
+      }
       const mainOfNode = (getNode(graphRef.current, nodeId)?.content as OfferContent | undefined)?.productId;
       try {
         await submitCheckout(nodeId, { method: "PIX", ...(productId !== mainOfNode ? { productId } : {}) }, { silent: true });
@@ -893,6 +911,18 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     if (!paid) push({ kind: "offer", id: lid(), nodeId, ...(call.productId ? { productId: call.productId, offer: call.offer } : {}), at: now() });
   }, [call, payments, push]);
 
+  /** formulário do pop-up da chamada: gera o pagamento com os dados do comprador */
+  const submitCallPayer = useCallback(
+    async (data: PayerData) => {
+      const c = call;
+      if (!c?.payProductId) return;
+      const mainOfNode = (getNode(graphRef.current, c.nodeId)?.content as OfferContent | undefined)?.productId;
+      await submitCheckout(c.nodeId, { method: "PIX", payer: data, ...(c.payProductId !== mainOfNode ? { productId: c.payProductId } : {}) }, { silent: true });
+      setCall((cur) => (cur && cur.nodeId === c.nodeId ? { ...cur, needPayer: false } : cur));
+    },
+    [call, submitCheckout],
+  );
+
   /** entra (ou volta) na chamada já paga */
   const enterCall = useCallback((nodeId: string, productId: string) => {
     const node = getNode(graphRef.current, nodeId);
@@ -923,6 +953,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     call,
     callError,
     answerCall,
+    submitCallPayer,
+    payer,
     declineCall,
     enterCall,
     hangUp,

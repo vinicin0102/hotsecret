@@ -5,9 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 import { formatBRL, formatMoney } from "@/lib/format";
 
-/** preço como a IA deve falar: R$ 19,90 ou $199.00 MXN */
+/** preço como a IA deve falar: R$ 19,90 · $199.00 MXN · $ 19.990,00 ARS */
 const money = (cents: number | null | undefined, currency?: string | null) =>
-  currency === "MXN" ? `${formatMoney(cents, "MXN", "es-MX")} MXN` : formatBRL(cents);
+  currency === "MXN"
+    ? `${formatMoney(cents, "MXN", "es-MX")} MXN`
+    : currency === "ARS"
+      ? `${formatMoney(cents, "ARS", "es-AR")} ARS`
+      : formatBRL(cents);
 import type { TarotCard } from "@/types/flow";
 import { readStoredImage } from "@/services/storage";
 import {
@@ -448,8 +452,8 @@ export async function runBrain(input: {
   context?: string;
   /** ofertas do fluxo ligadas na saída "Mostrar botões de oferta" (undefined = saída não ligada) */
   flowOffers?: FlowOfferInfo[];
-  /** idioma do fluxo (país): es-MX = responde em espanhol do México */
-  language?: "pt-BR" | "es-MX";
+  /** idioma do fluxo (país): es-MX = espanhol do México, es-AR = espanhol da Argentina */
+  language?: "pt-BR" | "es-MX" | "es-AR";
 }): Promise<BrainReply> {
   const target = await aiClient();
   const offers = brainOffers(input.brain);
@@ -465,14 +469,14 @@ export async function runBrain(input: {
     input.goal ? `# Objetivo neste momento da conversa\n${input.goal}` : "",
     input.context ? `# Sobre este lead\n${input.context}` : "",
     flowOffersSection(input.flowOffers),
-    input.language === "es-MX" ? LANGUAGE_ES_MX : "",
+    input.language === "es-MX" ? LANGUAGE_ES_MX : input.language === "es-AR" ? LANGUAGE_ES_AR : "",
     // lembrete no fim (o objetivo do bloco não passa por cima das regras obrigatórias)
     input.goal && mustRulesList(input.brain.mustRules).length ? "Siga o objetivo acima sem quebrar nenhuma das REGRAS OBRIGATÓRIAS." : "",
   ]
     .filter(Boolean)
     .join("\n\n");
 
-  const es = input.language === "es-MX";
+  const es = input.language === "es-MX" || input.language === "es-AR";
   const fallbackText = input.brain.fallbackMessage || (es ? "Mmm, me perdí 😅 ¿me lo repites?" : "Hmm, me perdi aqui 😅 pode repetir?");
   const schema = OUTPUT_SCHEMA(
     validOffers.map((o) => o.id),
@@ -501,7 +505,7 @@ export async function runBrain(input: {
     `Você é ${input.brain.name || "a atendente"}, conversando com um lead em um chat de vendas pelo celular. Fale de forma simpática, curta e provocante, sem nenhum conteúdo sexual explícito.
 - Mensagens curtas (1 a 3), linguagem natural, no máximo 1 emoji por mensagem.
 - Nunca diga que é uma IA. Use só os preços listados. O pagamento é pelo botão da oferta (PIX).
-- Se o lead pedir algo que uma oferta entrega ou disser que quer, mostre essa oferta (offer_id) na mesma resposta.${es ? "\n- IDIOMA: responda SEMPRE em espanhol do México (es-MX)." : ""}
+- Se o lead pedir algo que uma oferta entrega ou disser que quer, mostre essa oferta (offer_id) na mesma resposta.${es ? `\n- IDIOMA: responda SEMPRE em espanhol ${input.language === "es-AR" ? "da Argentina (es-AR, com voseo)" : "do México (es-MX)"}.` : ""}
 
 # Ofertas
 ${
@@ -834,6 +838,11 @@ const LANGUAGE_ES_MX = `# IDIOMA (OBRIGATÓRIO)
 Este chat é do México. Escreva TODAS as mensagens em espanhol do México (es-MX), natural e coloquial como no WhatsApp mexicano (ex.: "ahorita", "qué onda", "va", "órale" quando combinar), mesmo que a personalidade, o conteúdo e as regras acima estejam em português — traduza a ideia, nunca escreva em português.
 Os preços estão em pesos mexicanos: fale como "$199 pesos" ou "$199 MXN", exatamente com os valores listados. O pagamento é por transferência (não existe PIX no México): nunca fale em PIX.`;
 
+/** Fluxo da Argentina: espanhol rioplatense (voseo) e pesos argentinos. */
+const LANGUAGE_ES_AR = `# IDIOMA (OBRIGATÓRIO)
+Este chat é da Argentina. Escreva TODAS as mensagens em espanhol da Argentina (es-AR), natural e coloquial como no WhatsApp argentino, com voseo ("vos", "querés", "mirá", "dale", "che" quando combinar), mesmo que a personalidade, o conteúdo e as regras acima estejam em português — traduza a ideia, nunca escreva em português.
+Os preços estão em pesos argentinos: fale como "$19.990 pesos" ou "$19.990 ARS", exatamente com os valores listados. O pagamento é por transferência (não existe PIX na Argentina): nunca fale em PIX.`;
+
 /** Falhas passageiras que valem uma nova tentativa. */
 function isRetryableAiError(e: unknown): boolean {
   if (e instanceof DeepSeekError) return e.status === 0 || e.status === 429 || e.status >= 500;
@@ -877,7 +886,7 @@ Use o jeito de falar da personalidade e só fatos do conteúdo/produtos. Separe 
 };
 
 /** Gera a sugestão de um campo do cérebro com a IA em uso (o painel mostra para o dono aceitar ou não). */
-export async function improveBrainField(field: ImproveField, draft: BrainDraftForImprove, about?: string, language?: "pt-BR" | "es-MX"): Promise<string> {
+export async function improveBrainField(field: ImproveField, draft: BrainDraftForImprove, about?: string, language?: "pt-BR" | "es-MX" | "es-AR"): Promise<string> {
   const target = await aiClient(55_000);
   const ids = (draft.offers ?? []).map((o) => o.productId).filter(Boolean);
   const prods = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } } }) : [];
@@ -894,7 +903,9 @@ export async function improveBrainField(field: ImproveField, draft: BrainDraftFo
     "Você é especialista em vendas por chat (estilo WhatsApp) e em configurar atendentes virtuais que vendem conversando. " +
     (language === "es-MX"
       ? "Escreva TUDO em espanhol do México (es-MX), natural e coloquial, para leads mexicanos (preços em pesos, pagamento por transferência, nada de PIX). "
-      : "Escreva em português do Brasil. ") +
+      : language === "es-AR"
+        ? "Escreva TUDO em espanhol da Argentina (es-AR, com voseo), natural e coloquial, para leads argentinos (preços em pesos argentinos, pagamento por transferência, nada de PIX). "
+        : "Escreva em português do Brasil. ") +
     "Responda SOMENTE com o texto pedido, pronto para colar no campo, sem introdução, sem comentários e sem blocos de código.";
   const prompt = `# Cérebro atual
 Nome: ${draft.name || "(sem nome)"}

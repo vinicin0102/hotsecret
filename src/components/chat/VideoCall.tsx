@@ -2,8 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicCharacter, PublicProduct } from "@/types/flow";
-import type { CallVideo, ChatTransport, PublicPaymentInfo } from "@/features/chat-engine/transport";
+import type { CallVideo, ChatTransport, PayMethod, PayerData, PublicPaymentInfo } from "@/features/chat-engine/transport";
 import { PaymentStatus } from "./PaymentStatus";
+import { PayerForm } from "./PayerForm";
 
 /** Toque de celular sintetizado (sem arquivo) + vibração, enquanto a chamada está tocando. */
 function useRingtone(active: boolean) {
@@ -134,6 +135,7 @@ export function PixPopup({
   error,
   onClose,
   onSimulate,
+  payerForm,
 }: {
   character: PublicCharacter;
   product: PublicProduct | undefined;
@@ -143,11 +145,20 @@ export function PixPopup({
   error: string | null;
   onClose: () => void;
   onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
+  /** o gateway pede os dados do comprador antes de gerar o pagamento */
+  payerForm?: {
+    loadMethods: () => Promise<PayMethod[] | null>;
+    initial: PayerData | null;
+    onSubmit: (payer: PayerData) => Promise<unknown>;
+  };
 }) {
   const [copied, setCopied] = useState(false);
   const { t, money } = useChatI18n();
   const code = payment?.pixQrCode ?? "";
   const failed = payment?.status === "FAILED";
+  // transferência do gateway (ex.: SPEI): favorecido e passos vêm da própria Zenith
+  const details = payment?.nextAction?.details ?? {};
+  const gatewaySteps = payment?.nextAction?.instructions?.steps ?? [];
   const copy = async () => {
     if (!code) return;
     setCopied(true);
@@ -185,7 +196,16 @@ export function PixPopup({
             </b>
           </div>
         )}
-        {error ? (
+        {payerForm && !payment ? (
+          <PayerForm
+            loadMethods={payerForm.loadMethods}
+            initial={payerForm.initial}
+            submitLabel={t.continue}
+            busyLabel={t.generatingKey}
+            onSubmit={payerForm.onSubmit}
+            onNoForm={() => undefined}
+          />
+        ) : error ? (
           <div className="error-text">{error}</div>
         ) : !payment ? (
           <div className="pix-wait">
@@ -196,7 +216,7 @@ export function PixPopup({
         ) : (
           <>
             <div className="pix-label">
-              {t.keyOf} {character.name.trim().split(/\s+/)[0]}
+              {details.clabe ? t.transferDetails.clabe : t.keyOf} {details.beneficiary ? `· ${details.beneficiary}` : character.name.trim().split(/\s+/)[0]}
             </div>
             <div className="pix-code-box" id="pix-code-text" onClick={copy}>
               {code}
@@ -205,14 +225,20 @@ export function PixPopup({
               {copied ? t.keyCopied : t.copyKey}
             </button>
             <ol className="pix-steps">
-              <li>{t.step1}</li>
-              <li>{t.step2}</li>
+              {gatewaySteps.length ? (
+                gatewaySteps.map((s, i) => <li key={i}>{s}</li>)
+              ) : (
+                <>
+                  <li>{t.step1}</li>
+                  <li>{t.step2}</li>
+                </>
+              )}
               <li>{t.step3}</li>
             </ol>
             <div className="pix-wait">
               <span className="once-spin" /> {t.waitingPay}
             </div>
-            {onSimulate && payment && (
+            {onSimulate && payment && (payment.provider === "sandbox" || payment.provider === "preview") && (
               <div className="row" style={{ justifyContent: "center", marginTop: 8 }}>
                 <button className="btn btn-sm" onClick={() => onSimulate(payment.id, "APPROVED")}>
                   {t.simApprove}
@@ -422,7 +448,7 @@ export function CallScreen({
             <PaymentStatus
               payment={upsellPayment}
               productName={upsell.product.name}
-              onSimulate={onSimulate ? (s) => onSimulate(upsellPayment.id, s) : undefined}
+              onSimulate={onSimulate && (upsellPayment.provider === "sandbox" || upsellPayment.provider === "preview") ? (s) => onSimulate(upsellPayment.id, s) : undefined}
               previewMode={previewMode}
             />
           ) : (

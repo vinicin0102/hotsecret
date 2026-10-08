@@ -24,6 +24,42 @@ export interface PublicPaymentInfo {
   offerNodeId: string | null;
   productId: string;
   provider: string;
+  /** código do método no catálogo do gateway (ex.: spei) */
+  methodCode?: string | null;
+  /** instruções do gateway: CLABE/beneficiário e passos (transferência) */
+  nextAction?: PaymentNextAction | null;
+}
+
+export interface PaymentNextAction {
+  type: string;
+  details?: Record<string, string>;
+  instructions?: { title?: string; steps?: string[] };
+  url?: string;
+}
+
+/** Campo pedido pelo catálogo do gateway (Zenith). */
+export interface PayField {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  autocomplete?: string;
+  maxLength?: number;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+}
+export interface PayMethod {
+  code: string;
+  displayName: string;
+  iconUrl: string | null;
+  fields: PayField[];
+}
+
+/** Dados do comprador para gateways que pedem (nunca dados de cartão). */
+export interface PayerData {
+  methodCode?: string;
+  email: string;
+  customer: Record<string, string>;
 }
 
 export interface ServerMessage {
@@ -39,6 +75,8 @@ export interface CheckoutForm {
   method: "PIX" | "CARD";
   /** ofertas do Cérebro (IA): produto escolhido */
   productId?: string;
+  /** dados do comprador (produtos com payerForm) */
+  payer?: PayerData;
 }
 
 /** Vídeo da chamada (só é pedido quando o lead atende). */
@@ -81,6 +119,8 @@ export interface ChatTransport {
   track(events: ClientEvent[]): void;
   flush(): Promise<void>;
   checkout(offerNodeId: string, form: CheckoutForm): Promise<PublicPaymentInfo>;
+  /** formas de pagamento do produto no catálogo do gateway (null = não pede dados) */
+  paymentMethods(productId: string): Promise<PayMethod[] | null>;
   poll(since: string | null): Promise<{ payments: PublicPaymentInfo[]; messages: ServerMessage[]; serverTime: string }>;
   delivery(productId?: string | null): Promise<{ url: string | null; productName: string }>;
   /** conteúdo pago liberado pelos pagamentos aprovados */
@@ -105,6 +145,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** corpo da resposta de erro (ex.: fields com o erro de cada campo) */
+    public data: Record<string, unknown> = {},
   ) {
     super(message);
   }
@@ -117,7 +159,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? "Erro de conexão");
+  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? "Erro de conexão", data as Record<string, unknown>);
   return data as T;
 }
 
@@ -140,6 +182,10 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       await chain;
       const r = await post<{ payment: PublicPaymentInfo }>("/api/public/checkout", { token: getToken(), offerNodeId, ...form, ...metaCookies() });
       return r.payment;
+    },
+    async paymentMethods(productId) {
+      const r = await post<{ methods: PayMethod[] | null }>("/api/public/payment-methods", { token: getToken(), productId });
+      return r.methods;
     },
     poll(since) {
       return post("/api/public/state", { token: getToken(), since: since ?? undefined });
@@ -211,7 +257,7 @@ export function createPreviewTransport(
   /** ofertas ligadas na saída "Mostrar botões de oferta" do bloco (undefined = saída não ligada) */
   aiFlowOffers: (nodeId: string) => { productId: string; headline?: string; button?: string }[] | undefined = () => undefined,
   /** país do fluxo (idioma da IA no preview) */
-  language: "pt-BR" | "es-MX" = "pt-BR",
+  language: "pt-BR" | "es-MX" | "es-AR" = "pt-BR",
 ): ChatTransport {
   const opened = new Set<string>();
   const aiHistory = new Map<string, { role: "lead" | "bot"; text: string }[]>();
@@ -237,6 +283,10 @@ export function createPreviewTransport(
       };
       payments.set(p.id, p);
       return p;
+    },
+    // pré-visualização: nada é cobrado, então não pede dados do comprador
+    async paymentMethods() {
+      return null;
     },
     async poll() {
       return { payments: [...payments.values()], messages: [], serverTime: new Date().toISOString() };

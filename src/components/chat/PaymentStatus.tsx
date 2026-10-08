@@ -81,9 +81,34 @@ export function PaymentStatus({
           )}
           {payment.status === "REFUNDED" && <div className="status-line status-failed">{t.refunded}</div>}
 
-          {pending && payment.method === "PIX" && (
+          {pending && payment.nextAction?.type === "bank_transfer" && (
             <>
-              {qr && payment.currency !== "MXN" && (
+              <p style={{ fontSize: 13 }}>{payment.nextAction.instructions?.title || t.copyInstructions}</p>
+              <dl className="transfer-details">
+                {Object.entries(payment.nextAction.details ?? {}).map(([k, v]) => (
+                  <div key={k}>
+                    <dt>{t.transferDetails[k] ?? k}</dt>
+                    <dd>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              {payment.pixQrCode && (
+                <button className="btn btn-gold btn-block" style={{ marginTop: 10 }} onClick={copy}>
+                  {copied ? t.copied : `${t.copyCode}`}
+                </button>
+              )}
+              {!!payment.nextAction.instructions?.steps?.length && (
+                <ol className="pix-steps">
+                  {payment.nextAction.instructions.steps.map((st, i) => (
+                    <li key={i}>{st}</li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+          {pending && payment.method === "PIX" && payment.nextAction?.type !== "bank_transfer" && (
+            <>
+              {qr && (payment.currency ?? "BRL") === "BRL" && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img className="qr" src={qr} alt="QR Code PIX" />
               )}
@@ -94,7 +119,7 @@ export function PaymentStatus({
               </button>
             </>
           )}
-          {pending && payment.method === "CARD" && payment.redirectUrl && (
+          {pending && payment.redirectUrl && (payment.method === "CARD" || payment.nextAction?.type === "redirect") && (
             <a className="btn btn-primary btn-block" href={payment.redirectUrl} target="_blank" rel="noopener noreferrer">
               {t.openSecure}
             </a>

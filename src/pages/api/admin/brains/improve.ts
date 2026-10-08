@@ -10,7 +10,7 @@ const t = (n: number) => z.string().max(n).optional();
 const schema = z.object({
   field: z.enum(["persona", "knowledge", "mustRules", "examples"]),
   about: t(2000),
-  language: z.enum(["pt-BR", "es-MX"]).optional(),
+  language: z.enum(["pt-BR", "es-MX", "es-AR"]).optional(),
   draft: z.object({
     name: t(200),
     persona: t(12000),

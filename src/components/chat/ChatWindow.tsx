@@ -173,7 +173,13 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         const product = item.productId ? funnel.products[item.productId] : productOf(item.nodeId);
         if (!product) return null;
         return (
-          <CheckoutCard key={item.id} product={product} onSubmit={(form) => engine.submitCheckout(item.nodeId, { ...form, productId: item.productId })} />
+          <CheckoutCard
+            key={item.id}
+            product={product}
+            onSubmit={(form) => engine.submitCheckout(item.nodeId, { ...form, productId: item.productId })}
+            loadMethods={transport ? () => transport.paymentMethods(product.id) : undefined}
+            initialPayer={engine.payer}
+          />
         );
       }
       case "payment": {
@@ -293,6 +299,11 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             downsell={engine.call.downsell}
             downsellText={(engine.call.offer ?? (getNode(engine.graph, engine.call.nodeId)?.content as OfferContent | undefined))?.downsellText}
             error={engine.callError}
+            payerForm={
+              engine.call.needPayer && transport
+                ? { loadMethods: () => transport.paymentMethods(engine.call!.payProductId ?? ""), initial: engine.payer, onSubmit: engine.submitCallPayer }
+                : undefined
+            }
             onClose={engine.hangUp}
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
           />

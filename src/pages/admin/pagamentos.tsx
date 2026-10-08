@@ -28,6 +28,7 @@ interface Resp {
   sandbox: boolean;
   totals: Record<string, { count: number; amount: number }>;
   totalsMXN?: Record<string, { count: number; amount: number }>;
+  totalsARS?: Record<string, { count: number; amount: number }>;
   payments: Row[];
 }
 
@@ -53,6 +54,14 @@ export default function Payments() {
             label="Aprovados México (MXN)"
             value={formatMoney(data.totalsMXN.APPROVED?.amount ?? 0, "MXN")}
             hint={`${data.totalsMXN.APPROVED?.count ?? 0} pagamentos`}
+            gold
+          />
+        )}
+        {data?.totalsARS && Object.keys(data.totalsARS).length > 0 && (
+          <AnalyticsCard
+            label="Aprovados Argentina (ARS)"
+            value={formatMoney(data.totalsARS.APPROVED?.amount ?? 0, "ARS")}
+            hint={`${data.totalsARS.APPROVED?.count ?? 0} pagamentos`}
             gold
           />
         )}

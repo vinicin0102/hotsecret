@@ -4,7 +4,7 @@ import { UploadInput } from "@/components/admin/UploadInput";
 import { Modal } from "@/components/ui/Modal";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/client";
-import { centsToInput, CURRENCIES, formatMoney, parseMoneyToCents } from "@/lib/format";
+import { asCurrency, centsToInput, CURRENCIES, formatMoney, parseMoneyToCents, type Currency } from "@/lib/format";
 
 interface Product {
   id: string;
@@ -38,7 +38,7 @@ type Form = {
   metaCapiToken: string;
   metaCapiConfigured?: boolean;
   removeCapiToken?: boolean;
-  currency: "BRL" | "MXN";
+  currency: Currency;
   active: boolean;
 };
 const EMPTY: Form = { name: "", description: "", imageUrl: "", videoUrl: "", originalPrice: "", price: "", checkoutUrl: "", deliveryUrl: "", metaPixelId: "", metaCapiToken: "", currency: "BRL", active: true };
@@ -140,7 +140,7 @@ export default function Products() {
                     metaPixelId: p.metaPixelId ?? "",
                     metaCapiToken: "",
                     metaCapiConfigured: p.metaCapiConfigured,
-                    currency: p.currency === "MXN" ? "MXN" : "BRL",
+                    currency: asCurrency(p.currency),
                     active: p.active,
                   })
                 }
@@ -177,22 +177,23 @@ export default function Products() {
           </div>
           <div className="field">
             <label htmlFor="pr-currency">Moeda</label>
-            <select id="pr-currency" className="select" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value === "MXN" ? "MXN" : "BRL" })}>
-              {(Object.keys(CURRENCIES) as ("BRL" | "MXN")[]).map((c) => (
+            <select id="pr-currency" className="select" value={form.currency} onChange={(e) => setForm({ ...form, currency: asCurrency(e.target.value) })}>
+              {(Object.keys(CURRENCIES) as Currency[]).map((c) => (
                 <option key={c} value={c}>
                   {CURRENCIES[c].label}
                 </option>
               ))}
             </select>
             {form.currency === "MXN" && <span className="hint">Para fluxos do México. Use este produto nas ofertas de um fluxo com País = México.</span>}
+            {form.currency === "ARS" && <span className="hint">Para fluxos da Argentina. Use este produto nas ofertas de um fluxo com País = Argentina.</span>}
           </div>
           <div className="grid-2">
             <div className="field">
-              <label>Preço original ({form.currency === "MXN" ? "MXN" : "R$"})</label>
+              <label>Preço original ({form.currency === "BRL" ? "R$" : form.currency})</label>
               <input className="input" inputMode="decimal" placeholder="27,00" value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} />
             </div>
             <div className="field">
-              <label>Preço promocional ({form.currency === "MXN" ? "MXN" : "R$"})</label>
+              <label>Preço promocional ({form.currency === "BRL" ? "R$" : form.currency})</label>
               <input className="input" inputMode="decimal" placeholder="9,90" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
             </div>
           </div>

@@ -10,7 +10,7 @@ const schema = z.object({
   history: z.array(z.object({ role: z.enum(["lead", "bot"]), text: z.string().max(2000) })).max(60),
   goal: z.string().max(2000).optional(),
   /** idioma do teste/preview (país do fluxo) */
-  language: z.enum(["pt-BR", "es-MX"]).optional(),
+  language: z.enum(["pt-BR", "es-MX", "es-AR"]).optional(),
   /** preview do fluxo: ofertas ligadas na saída "Mostrar botões de oferta" */
   flowOffers: z
     .array(z.object({ productId: z.string().max(64), headline: z.string().max(200).optional(), button: z.string().max(200).optional() }))

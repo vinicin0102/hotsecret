@@ -12,6 +12,7 @@ import { activeProviderName, sandboxAllowed } from "@/services/payments";
 import { createLiveTransport, createPreviewTransport, type ChatTransport } from "@/features/chat-engine/transport";
 import type { ResumeState } from "@/features/chat-engine/useChatEngine";
 import { initPixels } from "@/features/chat-engine/pixels";
+import { asChatLocale } from "@/features/i18n/chat";
 import type { OfferContent, PublicFunnel } from "@/types/flow";
 
 interface Props {
@@ -101,7 +102,7 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
       (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
       (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined,
       (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined),
-      funnel.locale === "es-MX" ? "es-MX" : "pt-BR");
+      asChatLocale(funnel.locale));
     }
     if (!token) return null;
     return createLiveTransport(() => token, { sandbox });
@@ -124,7 +125,7 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
     );
   }
 
-  const es = funnel.locale === "es-MX";
+  const es = asChatLocale(funnel.locale) !== "pt-BR";
   return (
     <>
       <Head>

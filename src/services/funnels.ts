@@ -12,6 +12,8 @@ import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY } from "@/types/flow";
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
 import { brainOffers } from "./ai/brain";
+import { providerNameForCurrency } from "./payments/index";
+import { asCurrency } from "@/lib/format";
 
 type NodeRow = { id: string; type: string; content: unknown; settings: unknown; positionX: number; positionY: number };
 type EdgeRow = { id: string; sourceNode: string; targetNode: string; condition: string };
@@ -100,7 +102,7 @@ export function getFunnelSettings(raw: unknown): Required<FunnelSettings> {
     tracking: s.tracking ?? {},
     appearance: s.appearance ?? {},
     recovery: { ...DEFAULT_RECOVERY, ...(s.recovery ?? {}) },
-    locale: s.locale === "es-MX" ? "es-MX" : "pt-BR",
+    locale: s.locale === "es-MX" || s.locale === "es-AR" ? s.locale : "pt-BR",
   };
 }
 
@@ -205,6 +207,8 @@ async function buildPublicFunnel(
       currency: p.currency,
       externalCheckoutUrl: p.checkoutUrl ?? null,
       metaPixelId: p.metaPixelId ?? null,
+      // gateway que pede os dados do comprador (catálogo da Zenith) antes de gerar o pagamento
+      ...(providerNameForCurrency(asCurrency(p.currency)) === "zenith" ? { payerForm: true } : {}),
     };
   }
   const c = funnel.character;

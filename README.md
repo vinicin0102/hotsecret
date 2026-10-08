@@ -65,6 +65,24 @@ O sandbox é **bloqueado em produção**, a não ser que `ALLOW_SANDBOX_PAYMENTS
 4. Um pagamento **só é aprovado** quando o webhook tem assinatura válida **e** a consulta à API do
    Mercado Pago confirma o status — chegar à tela final nunca aprova nada.
 
+### Zenith Payments API (México e Argentina)
+
+Produtos em **MXN** ou **ARS** cobram pelo gateway da moeda (`PAYMENT_PROVIDER_MXN`, `PAYMENT_PROVIDER_ARS`);
+o PIX do Brasil continua em `PAYMENT_PROVIDER`.
+
+1. `ZENITH_PUBLIC_KEY` e `ZENITH_SECRET_KEY` — só no servidor (variáveis de ambiente da Vercel, marcadas
+   como *Sensitive*). Nunca vão para o navegador, URL, payload ou log.
+2. `ZENITH_ENVIRONMENT=sandbox` (padrão). Cobrança real só com `ZENITH_ENVIRONMENT=production`.
+3. `PAYMENT_PROVIDER_MXN=zenith` (e/ou `PAYMENT_PROVIDER_ARS=zenith`) liga a Zenith para a moeda.
+4. Os métodos vêm de `GET /integrations/payment-methods` em tempo real; o formulário do chat pede
+   exatamente os `customerFields`/`fields` do método e o payload segue `requiredPayloadFields`.
+   Métodos de cartão (`secureCard`) ficam de fora: exigem os campos hospedados do Zenith Elements.
+5. Cada compra tem uma `Idempotency-Key` (UUID) persistida com o corpo exato; timeout/5xx deixam a
+   intenção como incerta e o próximo toque reenvia **a mesma chave e o mesmo corpo**.
+6. Pagamento só é aprovado pelo webhook assinado em `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/zenith`
+   (id do evento único, `referenceId`, `amount` e `currency` conferidos). **Pendente:** enquanto o esquema
+   de assinatura não estiver implementado, todo webhook da Zenith é recusado (nenhum pagamento é aprovado).
+
 ## Deploy na Vercel
 
 1. Importe o repositório e crie um banco Postgres (Neon / Vercel Postgres / Supabase).

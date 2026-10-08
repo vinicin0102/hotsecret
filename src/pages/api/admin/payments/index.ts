@@ -29,8 +29,9 @@ export default apiHandler({
       provider: activeProviderName(),
       sandbox: activeProviderName() === "sandbox" && sandboxAllowed(),
       // totais por moeda (reais e pesos não se somam)
-      totals: Object.fromEntries(totals.filter((t) => t.currency !== "MXN").map((t) => [t.status, { count: t._count, amount: t._sum.amount ?? 0 }])),
+      totals: Object.fromEntries(totals.filter((t) => t.currency === "BRL").map((t) => [t.status, { count: t._count, amount: t._sum.amount ?? 0 }])),
       totalsMXN: Object.fromEntries(totals.filter((t) => t.currency === "MXN").map((t) => [t.status, { count: t._count, amount: t._sum.amount ?? 0 }])),
+      totalsARS: Object.fromEntries(totals.filter((t) => t.currency === "ARS").map((t) => [t.status, { count: t._count, amount: t._sum.amount ?? 0 }])),
       payments: payments.map((p) => ({
         id: p.id,
         status: p.status,

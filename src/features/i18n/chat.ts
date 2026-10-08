@@ -2,8 +2,8 @@
 import { createContext, useContext } from "react";
 import { formatMoney } from "@/lib/format";
 
-export type ChatLocale = "pt-BR" | "es-MX";
-export const asChatLocale = (v: unknown): ChatLocale => (v === "es-MX" ? "es-MX" : "pt-BR");
+export type ChatLocale = "pt-BR" | "es-MX" | "es-AR";
+export const asChatLocale = (v: unknown): ChatLocale => (v === "es-MX" || v === "es-AR" ? v : "pt-BR");
 
 const pt = {
   // cabeçalho
@@ -113,6 +113,25 @@ const pt = {
   photoOpenFail: "Não consegui abrir essa foto 😕 tenta outra?",
   photoNotSent: "Foto não enviada, tenta de novo.",
   photoNotSentReason: "Foto não enviada:",
+  // dados do comprador (gateways que pedem, ex.: Zenith)
+  payerTitle: "Seus dados para o pagamento",
+  payerNote: "Usados só para gerar o seu pagamento.",
+  payWith: "Pagar com",
+  email: "E-mail",
+  continue: "CONTINUAR",
+  loadingMethods: "Carregando formas de pagamento…",
+  fieldErrors: { required: "Obrigatório", invalid_email: "E-mail inválido", invalid_date: "Data inválida", too_long: "Texto longo demais", invalid_option: "Escolha uma opção" } as Record<string, string>,
+  fieldLabels: {
+    firstName: "Nome",
+    lastName: "Sobrenome",
+    documentType: "Tipo de documento",
+    documentNumber: "Número do documento",
+    birthDate: "Data de nascimento",
+    birthCountry: "País de nascimento",
+    phone: "Telefone",
+  } as Record<string, string>,
+  // instruções de transferência devolvidas pelo gateway
+  transferDetails: { clabe: "CLABE", cvu: "CVU", cbu: "CBU", alias: "Alias", beneficiary: "Favorecido", bank: "Banco", reference: "Referência" } as Record<string, string>,
 };
 export type ChatTexts = typeof pt;
 
@@ -214,10 +233,52 @@ const es: ChatTexts = {
   photoOpenFail: "No pude abrir esa foto 😕 ¿intentas con otra?",
   photoNotSent: "La foto no se envió, inténtalo de nuevo.",
   photoNotSentReason: "La foto no se envió:",
+  payerTitle: "Tus datos para el pago",
+  payerNote: "Solo se usan para generar tu pago.",
+  payWith: "Pagar con",
+  email: "Correo electrónico",
+  continue: "CONTINUAR",
+  loadingMethods: "Cargando métodos de pago…",
+  fieldErrors: { required: "Obligatorio", invalid_email: "Correo inválido", invalid_date: "Fecha inválida", too_long: "Demasiado largo", invalid_option: "Elige una opción" },
+  fieldLabels: {
+    firstName: "Nombre",
+    lastName: "Apellido",
+    documentType: "Tipo de documento",
+    documentNumber: "Número de documento",
+    birthDate: "Fecha de nacimiento",
+    birthCountry: "País de nacimiento",
+    phone: "Teléfono",
+  },
+  transferDetails: { clabe: "CLABE", cvu: "CVU", cbu: "CBU", alias: "Alias", beneficiary: "Beneficiario", bank: "Banco", reference: "Referencia" },
+};
+
+/** Argentina: mesmo espanhol, com voseo onde o chat fala com o lead. */
+const esAR: ChatTexts = {
+  ...es,
+  typeAnswer: "Escribí tu respuesta...",
+  chooseAbove: "Elegí una opción arriba",
+  takePhoto: "Sacá o enviá una foto",
+  privateC: "Solo vos la estás viendo.",
+  tarotHint: "Tocá una carta para descubrir ✨",
+  tapToHear: "🔊 Tocá para escuchar",
+  tapToHearVideo: "🔇 Tocá para escuchar",
+  viewOnceTap: "Se ve una sola vez · tocá para verlo",
+  viewOnceRetry: "No abrió. Tocá para intentar de nuevo",
+  copyInstructions: "Copiá los datos de abajo y pagá desde la app de tu banco:",
+  generateError: "No se pudo generar el pago. Intentá de nuevo.",
+  callNotApproved: "Pago no aprobado. Cerrá e intentá de nuevo.",
+  step1: "Abrí la app de tu banco y elegí transferencia",
+  step2: "Pegá los datos y confirmá el pago",
+  photoOpenFail: "No pude abrir esa foto 😕 ¿probás con otra?",
+  photoNotSent: "La foto no se envió, intentá de nuevo.",
+  netFail: "Uy, se me cortó internet 😅 ¿me lo mandás de nuevo?",
+  tarotFailed: "No pude abrir tus cartas ahora. Recargá la página.",
+  downsellDefault: "Está bien 🥺 ¿qué tal una llamada más cortita?",
+  fieldErrors: { ...es.fieldErrors, invalid_option: "Elegí una opción" },
 };
 
 export function chatTexts(locale: ChatLocale): ChatTexts {
-  return locale === "es-MX" ? es : pt;
+  return locale === "es-MX" ? es : locale === "es-AR" ? esAR : pt;
 }
 
 export interface ChatI18n {

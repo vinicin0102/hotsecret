@@ -37,7 +37,9 @@ export function FunnelSettingsModal({
   const [tracking, setTracking] = useState<TrackingIds>({ ...(meta.settings?.tracking ?? {}) });
   const [recovery, setRecovery] = useState<RecoverySettings>({ ...DEFAULT_RECOVERY, ...(meta.settings?.recovery ?? {}) });
   const [appearance, setAppearance] = useState<ChatAppearance>({ bgDim: 35, ...(meta.settings?.appearance ?? {}) });
-  const [locale, setLocale] = useState<"pt-BR" | "es-MX">(meta.settings?.locale === "es-MX" ? "es-MX" : "pt-BR");
+  const [locale, setLocale] = useState<"pt-BR" | "es-MX" | "es-AR">(
+    meta.settings?.locale === "es-MX" || meta.settings?.locale === "es-AR" ? meta.settings.locale : "pt-BR",
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -107,6 +109,7 @@ export function FunnelSettingsModal({
             [
               ["pt-BR", "🇧🇷 Brasil — português, R$"],
               ["es-MX", "🇲🇽 México — espanhol, MXN"],
+              ["es-AR", "🇦🇷 Argentina — espanhol, ARS"],
             ] as const
           ).map(([v, label]) => (
             <button key={v} type="button" className={locale === v ? "active" : ""} onClick={() => setLocale(v)}>
@@ -117,7 +120,9 @@ export function FunnelSettingsModal({
         <span className="hint">
           {locale === "es-MX"
             ? "As telas do chat ficam em espanhol e a IA responde em espanhol do México. Use nas ofertas produtos com moeda MXN (Produtos → Moeda). Mensagens, botões e textos que você escreve nos blocos e no cérebro aparecem como você escreveu — escreva-os em espanhol."
-            : "Chat e IA em português, preços em reais."}
+            : locale === "es-AR"
+              ? "As telas do chat ficam em espanhol (com voseo) e a IA responde em espanhol da Argentina. Use nas ofertas produtos com moeda ARS (Produtos → Moeda). Escreva os textos dos blocos e do cérebro em espanhol."
+              : "Chat e IA em português, preços em reais."}
         </span>
       </div>
 

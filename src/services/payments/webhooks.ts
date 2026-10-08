@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getProvider } from "./index";
 import { applyPaymentStatus } from "./service";
 import type { WebhookRequest } from "./types";
+import { handleZenithWebhook } from "./zenith-webhook";
 
 export interface WebhookOutcome {
   status: number;
@@ -11,6 +12,8 @@ export interface WebhookOutcome {
 
 /** Processa um webhook de pagamento: valida assinatura, consulta o gateway e aplica o status. */
 export async function handlePaymentWebhook(providerName: string, req: WebhookRequest): Promise<WebhookOutcome> {
+  // Zenith: o webhook assinado é a fonte da verdade (não há consulta ativa)
+  if (providerName === "zenith") return handleZenithWebhook(req);
   let provider;
   try {
     provider = getProvider(providerName);

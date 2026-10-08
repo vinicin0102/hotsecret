@@ -9,9 +9,12 @@ import { absoluteUrl } from "@/lib/paths";
 import type { LeadSession } from "@/lib/auth";
 import { trackEvent } from "../tracking";
 import { addTagToLead, ensureTag } from "../tags";
-import { activeProviderName, getProvider } from "./index";
+import { getProvider, providerNameForCurrency } from "./index";
+import { createZenithCheckout, type ZenithPayerInput } from "./zenith-checkout";
+import { asCurrency } from "@/lib/format";
 import { sendMetaPurchase } from "../meta-capi";
 import { brainOffers } from "../ai/brain";
+import { publicNextAction } from "./zenith";
 
 const ALLOWED_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
   CREATED: ["PENDING", "APPROVED", "FAILED"],
@@ -39,6 +42,9 @@ export function publicPayment(p: Payment) {
     pixQrCode: p.pixQrCode,
     pixQrCodeBase64: p.pixQrCodeBase64,
     redirectUrl: p.redirectUrl,
+    methodCode: p.methodCode,
+    /** instruções do gateway (ex.: CLABE, beneficiário e passos do SPEI) */
+    nextAction: publicNextAction(p.nextAction),
     offerNodeId: p.offerNodeId,
     productId: p.productId,
     provider: p.provider,
@@ -60,6 +66,8 @@ interface CheckoutInput {
   method: PaymentMethod;
   /** bloco Cérebro: produto da oferta que a IA mostrou */
   productId?: string;
+  /** dados do comprador pedidos pelo catálogo do gateway (Zenith) */
+  payer?: ZenithPayerInput;
 }
 
 /**
@@ -110,6 +118,14 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
   const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
   if (!product || !product.active) throw new HttpError(400, "Produto indisponível");
 
+  const currency = asCurrency(product.currency);
+  const providerName = providerNameForCurrency(currency);
+  const es = currency !== "BRL";
+  if (providerName === "zenith") {
+    const funnel = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { slug: true } });
+    return createZenithCheckout({ session, product, offerNodeId: input.offerNodeId, funnelSlug: funnel?.slug ?? "" }, input.payer);
+  }
+
   // Reaproveita um pagamento pendente recente (evita cobranças duplicadas por duplo clique).
   const recent = await prisma.payment.findFirst({
     where: {
@@ -124,22 +140,13 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
   if (recent && (recent.pixQrCode || recent.redirectUrl || recent.provider === "sandbox")) return recent;
 
   let provider;
-  const currency = product.currency === "MXN" ? "MXN" : "BRL";
   try {
-    if (currency === "MXN") {
-      // pesos: gateway próprio do México (PAYMENT_PROVIDER_MXN); o PIX/ZuckPay só cobra em reais
-      const mx = process.env.PAYMENT_PROVIDER_MXN || (activeProviderName() === "sandbox" ? "sandbox" : "");
-      if (!mx) throw new Error("gateway do México (MXN) não configurado");
-      provider = getProvider(mx);
-    } else {
-      provider = getProvider();
-    }
+    // reais: PIX (PAYMENT_PROVIDER); outras moedas: gateway próprio (PAYMENT_PROVIDER_<MOEDA>)
+    if (!providerName) throw new Error(`gateway da moeda ${currency} não configurado`);
+    provider = getProvider(providerName);
   } catch (err) {
     console.error("[checkout] gateway não configurado", err);
-    throw new HttpError(
-      503,
-      currency === "MXN" ? "Pagos no disponibles por el momento. Intenta de nuevo más tarde." : "Pagamentos indisponíveis no momento. Tente novamente mais tarde.",
-    );
+    throw new HttpError(503, es ? "Pagos no disponibles por el momento. Intenta de nuevo más tarde." : "Pagamentos indisponíveis no momento. Tente novamente mais tarde.");
   }
   const payer = payerIdentity(randomBytes(6).toString("hex"));
   const payment = await prisma.payment.create({
@@ -233,8 +240,8 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
   });
 
   if (payment.conversationId && (status === "APPROVED" || status === "FAILED" || status === "REFUNDED")) {
-    // pagamento em pesos = fluxo do México (mensagem em espanhol)
-    const es = payment.currency === "MXN";
+    // pagamento em pesos (México/Argentina) = mensagem em espanhol
+    const es = payment.currency !== "BRL";
     const text =
       status === "APPROVED"
         ? es

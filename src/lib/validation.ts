@@ -136,7 +136,7 @@ export const funnelMetaSchema = z.object({
       recovery: recoverySchema.optional(),
       tracking: trackingIdsSchema.optional(),
       /** país do fluxo: idioma do chat/IA (pt-BR Brasil, es-MX México) */
-      locale: z.enum(["pt-BR", "es-MX"]).optional(),
+      locale: z.enum(["pt-BR", "es-MX", "es-AR"]).optional(),
       appearance: z
         .object({
           bgVideoUrl: optUrl,
@@ -165,7 +165,7 @@ export const productSchema = z.object({
   videoUrl: optUrl.nullable(),
   originalPrice: z.number().int().min(0).max(100_000_00).nullable().optional(),
   price: z.number().int().min(100, "Preço mínimo 1,00").max(100_000_00),
-  currency: z.enum(["BRL", "MXN"]).default("BRL"),
+  currency: z.enum(["BRL", "MXN", "ARS"]).default("BRL"),
   checkoutUrl: optUrl.nullable(),
   deliveryUrl: optUrl.nullable(),
   active: z.boolean().default(true),
@@ -277,12 +277,25 @@ export const experimentSchema = z.object({
     .max(5),
 });
 
+/** nomes de campos de cartão (PAN, validade, CVC) — recusados no checkout */
+export const CARD_FIELD = /^(card|pan$|cvc|cvv|cvn|expir|exp(month|year)|securitycode)/i;
+
 export const checkoutSchema = z.object({
   token: z.string().min(10).max(2000),
   offerNodeId: id,
   /** ofertas do Cérebro: produto escolhido pela IA */
   productId: z.string().max(64).optional(),
   method: z.enum(["PIX", "CARD"]).default("PIX"),
+  /** dados do comprador pedidos pelo catálogo do gateway (Zenith). Nunca dados de cartão. */
+  payer: z
+    .object({
+      methodCode: z.string().max(40).regex(/^[\w.-]+$/).optional(),
+      email: z.string().trim().max(200),
+      customer: z.record(z.string().max(40).regex(/^[A-Za-z][\w]{0,39}$/), z.string().max(200)).refine((o) => Object.keys(o).length <= 30)
+        // dados de cartão só existem nos campos hospedados do Zenith Elements — nunca passam por aqui
+        .refine((o) => !Object.keys(o).some((k) => CARD_FIELD.test(k)), "card_data_not_allowed"),
+    })
+    .optional(),
   // cookies do pixel da Meta (para a API de Conversões)
   fbp: z.string().max(200).regex(/^fb\.\d\.\d+\.\d+$/).optional().catch(undefined),
   fbc: z.string().max(400).regex(/^fb\.\d\.\d+\.[\w-]+$/).optional().catch(undefined),

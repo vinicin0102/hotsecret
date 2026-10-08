@@ -7,6 +7,8 @@ export class HttpError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** dados extras na resposta (ex.: erros por campo de um formulário) */
+    public extra?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -28,7 +30,7 @@ export function apiHandler(handlers: Partial<Record<Method, Handler>>) {
       if (!res.headersSent) res.status(200).json(result ?? { ok: true });
     } catch (err) {
       if (res.headersSent) return;
-      if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
+      if (err instanceof HttpError) return res.status(err.status).json({ ...err.extra, error: err.message });
       if (err instanceof ZodError) {
         return res.status(400).json({ error: "Dados inválidos", issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })) });
       }

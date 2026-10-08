@@ -286,6 +286,17 @@ model Payment {
   customerName      String
   customerEmail     String
   customerCpf       String?
+  /// Zenith: chave de idempotência (UUID) desta intenção de compra — reutilizada só em retries do mesmo corpo
+  idempotencyKey    String?       @unique
+  /// Zenith: corpo exato (bytes) enviado ao gateway; texto e não JSONB, que reordenaria as chaves.
+  /// Guardado só enquanto o resultado é incerto (timeout/5xx) e apagado ao final.
+  providerRequest   String?
+  /// true = a criação no gateway teve resultado incerto; reenviar com a mesma chave antes de criar outra
+  uncertain         Boolean       @default(false)
+  /// código do método do catálogo do gateway (ex.: spei)
+  methodCode        String?
+  /// instruções de pagamento devolvidas pelo gateway (ex.: CLABE e passos do SPEI)
+  nextAction        Json?
   approvedAt        DateTime?
   lastSyncedAt      DateTime?
   createdAt         DateTime      @default(now())
@@ -301,6 +312,18 @@ model Payment {
   @@index([status, createdAt])
   @@index([funnelId, createdAt])
   @@map("payments")
+}
+
+/// Eventos de webhook já processados (consumidor idempotente: o mesmo id nunca é aplicado duas vezes)
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  provider  String
+  eventId   String
+  paymentId String?
+  createdAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@map("webhook_events")
 }
 
 model WebhookLog {

@@ -214,8 +214,8 @@ export interface FunnelSettings {
   tracking?: TrackingIds;
   delay?: FunnelDelay;
   recovery?: RecoverySettings;
-  /** país do fluxo: pt-BR (Brasil) ou es-MX (México) — idioma do chat e da IA */
-  locale?: "pt-BR" | "es-MX";
+  /** país do fluxo: pt-BR (Brasil), es-MX (México) ou es-AR (Argentina) — idioma do chat e da IA */
+  locale?: "pt-BR" | "es-MX" | "es-AR";
 }
 
 /** Produto exposto ao front público (sem link de entrega). */
@@ -228,12 +228,14 @@ export interface PublicProduct {
   videoUrl?: string | null;
   originalPrice: number | null;
   price: number;
-  /** BRL ou MXN */
+  /** BRL, MXN ou ARS */
   currency?: string;
   /** checkout externo opcional (link do produto) */
   externalCheckoutUrl: string | null;
   /** pixel da Meta só desta oferta (só o ID, público) */
   metaPixelId?: string | null;
+  /** o gateway pede dados do comprador antes de gerar o pagamento (Zenith: México/Argentina) */
+  payerForm?: boolean;
 }
 
 export interface PublicCharacter {
@@ -257,8 +259,8 @@ export interface PublicFunnel {
   delay?: FunnelDelay;
   tracking?: TrackingIds;
   appearance?: ChatAppearance;
-  /** pt-BR ou es-MX */
-  locale?: "pt-BR" | "es-MX";
+  /** pt-BR, es-MX ou es-AR */
+  locale?: "pt-BR" | "es-MX" | "es-AR";
 }
 
 export const DEFAULT_RECOVERY: RecoverySettings = {
