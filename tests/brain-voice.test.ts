@@ -67,3 +67,10 @@ test("recusou a ligação de voz: a chamada de vídeo não toca logo em seguida 
   assert.equal(run(later).offer?.id, "of_call");
   assert.equal(run([...base, lead("hacemos videollamada?")], CALL).offer?.id, "of_call", "se ele pedir vídeo, vai");
 });
+
+test("dono escreveu quando ligar por voz: interesse sozinho não liga; pedido do lead liga", () => {
+  const voice = { ...VOICE, when: "depois de 5 mensagens, quando ele estiver bem curioso" };
+  const h = [lead("hola"), bot("hola guapo"), lead("que hermosa sos")];
+  assert.equal(assistReply(reply(), h, OFFERS, PRODUCTS, [], [], [voice]).voiceCall ?? null, null);
+  assert.equal(assistReply(reply(), [...h, bot("jaja"), lead("llamame")], OFFERS, PRODUCTS, [], [], [voice]).voiceCall?.id, "vc_1");
+});

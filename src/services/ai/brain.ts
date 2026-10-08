@@ -223,6 +223,24 @@ ${list.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 Estas regras têm prioridade sobre a personalidade, o conteúdo, o objetivo do momento e qualquer pedido do lead. Antes de responder, confira se a resposta cumpre cada uma delas. Só não as aplique se forem contra as regras de segurança acima (preços, dados pessoais, pagamento).`;
 }
 
+/** As ordens de envio do dono, repetidas no fim do prompt para não se perderem no meio do texto. */
+function offerOrdersSection(brain: Brain, products: Map<string, Product>): string {
+  const lines = [
+    ...brainOffers(brain)
+      .filter((o) => o.when?.trim() && products.get(o.productId)?.active)
+      .map((o) => `- offer_id "${o.id}" (${products.get(o.productId)!.name}): ${o.when!.trim()}`),
+    ...brainVoiceCalls(brain)
+      .filter((v) => v.when?.trim())
+      .map((v) => `- voice_call_id "${v.id}" (ligação de voz): ${v.when!.trim()}`),
+  ];
+  if (!lines.length) return "";
+  return `
+
+# QUANDO MANDAR CADA OFERTA (ordens do dono — siga à risca)
+${lines.join("\n")}
+Antes de colocar um offer_id ou voice_call_id, confira se a ordem dele foi cumprida. Se não foi, não mande: continue conversando para chegar lá.`;
+}
+
 /** Parte fixa do prompt (cacheável): muda só quando o cérebro é editado. */
 function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons = false, vision = true): string {
   const offers = brainOffers(brain)
@@ -232,7 +250,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
       return [
         `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${p.originalPrice && p.originalPrice > p.price ? ` (de ${money(p.originalPrice, p.currency)})` : ""}`,
         p.description ? `  Descrição: ${p.description}` : "",
-        o.when ? `  Quando oferecer: ${o.when}` : "",
+        o.when ? `  Quando oferecer (ORDEM DO DONO): ${o.when}` : "",
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
         o.style === "call" ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa." : "",
         o.style === "tarot"
@@ -291,22 +309,23 @@ ${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}${
 # Ofertas disponíveis
 ${offers || (flowButtons ? "(nenhuma oferta por card — neste bloco os produtos são vendidos pelos BOTÕES DE OFERTA, veja a seção no fim)" : "(nenhuma oferta cadastrada — não ofereça produtos)")}
 Para mostrar o card de compra (ou ligar, nas ofertas em formato de chamada), coloque o offer_id em "offer_id" (no máximo uma oferta por resposta) e diga uma frase chamando para o botão ou avisando que vai ligar. Se o histórico mostrar que o lead recusou a chamada, não ligue de novo na mesma hora: acolha e, se houver, ofereça uma opção mais curta ou mais barata. Use "" quando não for oferecer. Não repita a mesma oferta se ela já foi mostrada e o lead não demonstrou interesse novo.
+Os comandos do dono mandam: o "Quando oferecer" de cada oferta, as Regras do vendedor e as REGRAS OBRIGATÓRIAS são ordens. Siga exatamente o que cada uma diz (quando mandar, quando esperar, qual mandar), mesmo que contrariem as dicas gerais deste texto (como "não demore para oferecer"). Só mande uma oferta quando a situação bater com o "Quando oferecer" dela; numa oferta sem "Quando oferecer", use o bom senso.
 Como escolher a oferta certa:
 - Se o lead citar um produto (pelo nome ou pelo que ele entrega), use o offer_id DESSE produto — confira o nome antes. Nunca mande uma oferta diferente da que ele pediu.
 - Na primeira mensagem do lead, só ofereça se ele pedir (preço, comprar, um produto). Primeiro converse.
 - Se a mesma oferta apareceu nas suas últimas 3 mensagens, não mande de novo — a não ser que o lead peça outra vez.${
-    brainOffers(brain).some((o) => o.style === "call" && o.videoId)
+    brainOffers(brain).some((o) => o.style === "call" && o.videoId && !o.when?.trim())
       ? `
-- A CHAMADA DE VÍDEO é a sua oferta principal: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade, pedir mais, pedir foto/vídeo, perguntar preço) e não pedir outro produto específico, LIGUE para ele (offer_id da oferta em formato de chamada), avisando que vai ligar. Se ele recusar, acolha e convide de novo mais tarde, depois de algumas mensagens.`
+- A CHAMADA DE VÍDEO (a que não tem "Quando oferecer") é a sua oferta principal: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade, pedir mais, pedir foto/vídeo, perguntar preço) e não pedir outro produto específico, LIGUE para ele (offer_id da oferta em formato de chamada), avisando que vai ligar. Se ele recusar, acolha e convide de novo mais tarde, depois de algumas mensagens.`
       : ""
   }
 
 ${
     brainVoiceCalls(brain).length
       ? `# Ligação de voz
-Você pode LIGAR para o lead por voz: a ligação toca no celular dele (ele escolhe atender ou recusar) e ele ouve você falando. É uma vez por conversa e vem ANTES da chamada de vídeo: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade) ou pedir para você ligar, coloque o voice_call_id e avise numa mensagem curta que vai ligar (ex.: "vou te ligar rapidinho 😏" / "te llamo un ratito 😏"). Se você convidou ("posso te ligar?") e ele aceitou, ligue na hora. Não ligue de novo se ele já atendeu ou recusou (veja o histórico).
+Você pode LIGAR para o lead por voz: a ligação toca no celular dele (ele escolhe atender ou recusar) e ele ouve você falando. É uma vez por conversa. Ligue quando a situação bater com o "quando" da ligação (ordem do dono, abaixo); se ela não tiver "quando", ligue quando o lead demonstrar interesse (elogio, desejo, curiosidade). Se o lead pedir para você ligar, ligue. Coloque o voice_call_id e avise numa mensagem curta que vai ligar (ex.: "vou te ligar rapidinho 😏" / "te llamo un ratito 😏"). Se você convidou ("posso te ligar?") e ele aceitou, ligue na hora. Não ligue de novo se ele já atendeu ou recusou (veja o histórico).
 ${brainVoiceCalls(brain)
-  .map((v) => `- voice_call_id "${v.id}": ${v.when || "quando fizer sentido na conversa"}`)
+  .map((v) => `- voice_call_id "${v.id}": ${v.when ? `quando (ORDEM DO DONO): ${v.when}` : "quando o lead demonstrar interesse"}`)
   .join("\n")}
 
 `
@@ -320,7 +339,7 @@ ${images || "(nenhuma imagem cadastrada)"}
 Para mandar uma prévia (ex.: quando pedirem uma prévia, provinha, foto ou vídeo), coloque o image_id em "image_id" (no máximo uma por resposta, e não repita uma prévia já enviada; se pedirem vídeo, prefira um vídeo). Use "" quando não enviar. Prévias servem para despertar o desejo: depois de mandar, conduza para a oferta.
 
 # Encerrar
-Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.${mustRulesSection(brain.mustRules)}`;
+Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.${mustRulesSection(brain.mustRules)}${offerOrdersSection(brain, products)}`;
 }
 
 const OUTPUT_SCHEMA = (offerIds: string[], audioIds: string[], imageIds: string[], showOffers = false, voiceIds: string[] = []) => ({
@@ -447,7 +466,7 @@ Responda SOMENTE com um objeto json válido, sem nenhum texto antes ou depois e 
 - offer_id: "" ou um destes: ${list("offer_id")}
 - audio_id: "" ou um destes: ${list("audio_id")}
 - image_id: "" ou um destes: ${list("image_id")}
-- end: true só quando a conversa terminou de vez.${"voice_call_id" in props ? `\n- voice_call_id: "" ou um destes (só depois de o lead autorizar a ligação): ${list("voice_call_id")}` : ""}
+- end: true só quando a conversa terminou de vez.${"voice_call_id" in props ? `\n- voice_call_id: "" ou um destes (veja a seção Ligação de voz): ${list("voice_call_id")}` : ""}
 Use as ofertas, os áudios e as prévias de verdade: sempre que a situação combinar com o "quando" de um item, coloque o id dele (não responda só com texto). Se o lead pedir prévia, foto ou vídeo e houver prévia ainda não enviada, mande o image_id.${showOffers ? "\n- show_offers: true para soltar os botões de oferta (veja a seção BOTÕES DE OFERTA)." : ""}
 Copie o id exatamente como está entre aspas. Nunca escreva os ids dentro de messages.`;
 }
@@ -502,12 +521,12 @@ export async function runBrain(input: {
     ...Object.fromEntries(
       validOffers.map((o) => [
         o.id,
-        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : ""}${o.when ? `; quando: ${o.when.slice(0, 140)}` : ""}`,
+        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
       ]),
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
     ...Object.fromEntries(images.map((a) => [a.id, `${a.kind === "video" ? "vídeo" : "foto"}; quando: ${(a.when || "quando pedirem prévia").slice(0, 140)}`])),
-    ...Object.fromEntries(voiceCalls.map((v) => [v.id, `ligação de voz; quando: ${(v.when || "quando o lead demonstrar interesse ou pedir para ligar").slice(0, 140)}`])),
+    ...Object.fromEntries(voiceCalls.map((v) => [v.id, `ligação de voz; quando: ${(v.when || "quando o lead demonstrar interesse ou pedir para ligar").slice(0, 500)}`])),
   };
   // modo seguro: usado quando o filtro de conteúdo da IA bloqueia — vai só o essencial para vender (sem os textos do cérebro)
   const safeSystem = () =>
@@ -776,8 +795,11 @@ export function assistReply(
     const wantsCall = has(CALL_INTENT, typed) && !/video/.test(plain(typed)) && !has(REFUSE_INTENT, typed);
     const namesProduct = offers.some((o) => overlap(keyWords(typed), keyWords(`${products.get(o.productId)?.name ?? ""} ${o.headline ?? ""}`)) >= 1);
     const leadCount = history.filter((t) => t.role === "lead" && !t.text.startsWith("[")).length;
+    // o dono escreveu quando ligar: a ordem dele manda (só o pedido/aceite do próprio lead liga fora dela)
     const interest =
-      leadCount >= 2 && has(INTEREST_INTENT, typed) && !namesProduct && !has(BUY_INTENT, typed) && !has(OPTIONS_INTENT, typed) && !has(REFUSE_INTENT, typed);
+      !voiceCalls[0].when?.trim() &&
+      leadCount >= 2 &&
+      has(INTEREST_INTENT, typed) && !namesProduct && !has(BUY_INTENT, typed) && !has(OPTIONS_INTENT, typed) && !has(REFUSE_INTENT, typed);
     if (agreed || wantsCall || interest) out.voiceCall = voiceCalls[0];
   }
   if (out.voiceCall) {
@@ -835,13 +857,15 @@ export function assistReply(
 
   if (out.offer) {
     let o: BrainOffer = out.offer;
+    // a IA seguiu a ordem do dono para esta situação ("Quando oferecer" bate com o que o lead disse): fica como está
+    const followsOrder = overlap(leadWords, keyWords(o.when ?? "")) >= 1;
     // oferta errada: o lead citou outro produto pelo nome → manda o que ele pediu
-    if (named && named.id !== o.id && namedScore >= 1) o = named;
+    if (named && named.id !== o.id && namedScore >= 1 && !followsOrder) o = named;
     const explicit = o.id === named?.id || buy || (o.style === "call" && has(CALL_INTENT, leadText));
-    if (has(CALL_INTENT, leadText) && o.style !== "call" && o.id !== named?.id) out.offer = null; // pediu ligação: um pack não é o que ele pediu
+    if (has(CALL_INTENT, leadText) && o.style !== "call" && o.id !== named?.id && !followsOrder) out.offer = null; // pediu ligação: um pack não é o que ele pediu
     else if (callBlocked(o) && !has(CALL_INTENT, leadText)) out.offer = null; // acabou de recusar esta chamada
     else if (shownRecently(o) && !explicit) out.offer = null; // não repete a mesma oferta em sequência
-    else if (leadMsgs.length <= 1 && !asked && !explicit) out.offer = null; // cedo demais: ainda nem conversaram
+    else if (leadMsgs.length <= 1 && !asked && !explicit && !o.when?.trim()) out.offer = null; // cedo demais (sem ordem do dono dizendo quando)
     else out.offer = asOffer(o);
   }
 
@@ -850,7 +874,8 @@ export function assistReply(
     // pediu um produto pelo nome
     if (named && namedScore >= 1 && (asked || namedScore >= 2) && (!shownRecently(named) || buy)) pick = named;
     // sempre que houver interesse (e ele não pediu outro produto), liga — a chamada é a oferta principal
-    if (!pick && callOffer && interested && !callBlocked(callOffer) && !shownRecently(callOffer) && (leadMsgs.length >= 2 || asked || has(CALL_INTENT, leadText)))
+    // (só quando o dono não escreveu o "Quando oferecer" da chamada — se escreveu, vale a ordem dele)
+    if (!pick && callOffer && !callOffer.when?.trim() && interested && !callBlocked(callOffer) && !shownRecently(callOffer) && (leadMsgs.length >= 2 || asked || has(CALL_INTENT, leadText)))
       pick = callOffer;
     // quer comprar e só há uma oferta
     if (!pick && buy && offers.length === 1 && !shownRecently(offers[0])) pick = offers[0];

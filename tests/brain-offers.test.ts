@@ -4,7 +4,8 @@ import type { Product } from "@prisma/client";
 import { assistReply, type BrainOffer, type BrainReply, type ChatTurn } from "../src/services/ai/brain";
 
 // cérebro com chamada de vídeo (oferta principal) + dois packs
-const CALL: BrainOffer = { id: "of_call", productId: "p_call", style: "call", videoId: "v1", when: "quando ele quiser algo ao vivo" };
+// sem "Quando oferecer": vale o padrão (liga sempre que houver interesse)
+const CALL: BrainOffer = { id: "of_call", productId: "p_call", style: "call", videoId: "v1" };
 const FOTOS: BrainOffer = { id: "of_fotos", productId: "p_fotos", style: "card" };
 const TAROT: BrainOffer = { id: "of_tarot", productId: "p_tarot", style: "tarot" };
 const OFFERS = [CALL, FOTOS, TAROT];
@@ -76,4 +77,29 @@ test("pediu chamada de vídeo e a IA mandou um pack → não manda o pack (vai a
   assert.equal(run([lead("hola"), bot("hola"), lead("quiero una videollamada")], FOTOS), "of_call");
   const noCall = assistReply(reply(FOTOS), [lead("oi"), bot("oi"), lead("quero uma chamada de vídeo")], [FOTOS, TAROT], PRODUCTS, [], []);
   assert.equal(noCall.offer, null, "sem chamada no cérebro: nada de pack no lugar");
+});
+
+// ---------- os comandos do dono ("Quando oferecer") mandam ----------
+const withWhen = (o: BrainOffer, when: string) => ({ ...o, when });
+const runWith = (offers: BrainOffer[], history: ChatTurn[], offer?: BrainOffer) =>
+  assistReply(reply(offer), history, offers, PRODUCTS, [], []).offer?.id ?? null;
+
+test("dono escreveu quando ligar: interesse sozinho não força a chamada", () => {
+  const call = withWhen(CALL, "só depois que ele comprar o pack de fotos");
+  assert.equal(runWith([call, FOTOS, TAROT], [lead("hola"), bot("hola"), lead("que hermosa eres, me encantas")]), null);
+  // a IA seguiu a ordem e ligou: fica
+  assert.equal(runWith([call, FOTOS, TAROT], [lead("hola"), bot("hola"), lead("que hermosa eres")], call), "of_call");
+});
+
+test("dono mandou oferecer na primeira mensagem: a IA obedece e a oferta não é cortada", () => {
+  const fotos = withWhen(FOTOS, "logo na primeira mensagem, mande o pack");
+  assert.equal(runWith([CALL, fotos, TAROT], [lead("hola")], fotos), "of_fotos");
+});
+
+test("ordem do dono para o pedido do lead: a oferta da ordem não é trocada pela citada", () => {
+  // "quando pedirem tarot, mande primeiro o pack de fotos"
+  const fotos = withWhen(FOTOS, "quando pedirem tarot ou lectura, mande primeiro este pack");
+  assert.equal(runWith([CALL, fotos, TAROT], [lead("hola"), bot("hola"), lead("quiero la lectura de tarot")], fotos), "of_fotos");
+  // sem ordem do dono, continua trocando para o que ele pediu
+  assert.equal(runWith([CALL, FOTOS, TAROT], [lead("hola"), bot("hola"), lead("quiero la lectura de tarot")], FOTOS), "of_tarot");
 });
