@@ -287,6 +287,22 @@ test("catálogo: só SPEI por padrão; com todos liberados, SPEI antes do OXXO e
   }
 });
 
+test("produção: campos 'Nome completo' e 'E-mail' do catálogo não aparecem em dobro no formulário", () => {
+  const PROD_FIELDS: ZenithMethod = {
+    ...SPEI,
+    customerFields: [
+      { name: "customerName", label: "Nome completo", type: "text", required: true },
+      { name: "customerEmail", label: "E-mail", type: "email", required: true },
+    ],
+    requiredPayloadFields: OXXO.requiredPayloadFields,
+  };
+  assert.deepEqual(zenithFormFields(PROD_FIELDS).map((f) => f.name), ["name"], "só nome completo (o e-mail é o campo fixo)");
+  const p = buildZenithCheckoutPayload({ ...payloadInput({ name: "Ana Silva" }), method: PROD_FIELDS });
+  assert.equal(p.customerName, "Ana Silva");
+  assert.equal(p.customerEmail, "comprador@gmail.com");
+  assert.equal(p.metadata, undefined, "nada inventado fora do que o catálogo pede");
+});
+
 test("nome e sobrenome reais (a Zenith recusa nomes fictícios)", () => {
   for (const ok of ["Ana Silva", "Juan Pérez Pérez", "María de la Cruz", "José Ortega y Gasset"]) assert.equal(validPersonName(ok), true, ok);
   for (const bad of ["Ana", "A Silva", "Ana Ana", "aaaa bbbb", "Juan 2", "Test User", "Ana S."]) assert.equal(validPersonName(bad), false, bad);

@@ -9,6 +9,9 @@
 //   a mesma intenção é reenviada com a mesma chave (a Zenith devolve a cobrança já criada).
 // - Pagamento só é confirmado por webhook assinado com ZENITH_WEBHOOK_SECRET (ver zenith-events.ts).
 
+import { validPersonName } from "@/lib/person-name";
+export { validPersonName };
+
 const DEFAULT_BASE_URL = "https://api.zenithworld.com.br";
 const CATALOG_TTL_MS = 5 * 60_000;
 
@@ -209,10 +212,21 @@ export function usableZenithMethods(catalog: ZenithCatalog, amount: number): Zen
 }
 
 /** Campos que o comprador preenche (customerFields + fields do método). */
+/** campos de nome/e-mail do comprador publicados pelo catálogo (viram os nossos "nome completo" e "e-mail") */
+const NAME_FIELD = /^(customer[_-]?)?(full[_-]?)?name$|^nome([_-]?completo)?$|^nombre([_-]?completo)?$/i;
+const EMAIL_FIELD = /^(customer[_-]?)?e[_-]?mail$|^correo$/i;
+const isIdentityField = (f: ZenithField) => NAME_FIELD.test(f.name) || EMAIL_FIELD.test(f.name) || f.type === "email";
+
+/** O catálogo publica um campo de nome completo do comprador (ex.: SPEI em produção). */
+function catalogAsksFullName(method: ZenithMethod): boolean {
+  return [...(method.customerFields ?? []), ...(method.fields ?? [])].some((f) => f?.name && NAME_FIELD.test(f.name));
+}
+
+/** Campos específicos do método (nome e e-mail ficam nos campos fixos do formulário — nunca em dobro). */
 export function zenithInputFields(method: ZenithMethod): ZenithField[] {
   const seen = new Set<string>();
   return [...(method.customerFields ?? []), ...(method.fields ?? [])].filter((f) => {
-    if (!f?.name || seen.has(f.name)) return false;
+    if (!f?.name || seen.has(f.name) || isIdentityField(f)) return false;
     // campo de cartão nunca é coletado aqui (só nos campos hospedados do Zenith Elements)
     if (/^(card|pan$|cvc|cvv|cvn|expir|exp(month|year)|securitycode)/i.test(f.name)) return false;
     seen.add(f.name);
@@ -228,7 +242,7 @@ const endsWith = (path: string, name: string) => path === name || path.endsWith(
  */
 export function needsFullName(method: ZenithMethod): boolean {
   const names = new Set(zenithInputFields(method).map((f) => f.name));
-  return !names.has("firstName") && !names.has("name") && (method.requiredPayloadFields ?? []).some((p) => endsWith(p, "customerName"));
+  return !names.has("firstName") && (catalogAsksFullName(method) || (method.requiredPayloadFields ?? []).some((p) => endsWith(p, "customerName")));
 }
 
 const FULL_NAME_FIELD: ZenithField = { name: "name", label: "Nombre completo", type: "text", required: true, autocomplete: "name", maxLength: 140 };
@@ -333,24 +347,6 @@ export function buildZenithCheckoutPayload(input: ZenithPayloadInput): Record<st
   }
   if (Object.keys(errors).length) throw new ZenithValidationError(errors);
   return payload;
-}
-
-/**
- * Nome e sobrenome reais (a Zenith recusa nomes ausentes, repetidos, com números, só iniciais ou fictícios):
- * pelo menos duas palavras com letras, nenhuma de uma letra só, sem dígitos e sem repetição tipo "aaaa".
- */
-export function validPersonName(v: string): boolean {
-  const name = v.trim().replace(/\s+/g, " ");
-  if (/\d/.test(name) || !/^[\p{L}' .-]+$/u.test(name)) return false;
-  const words = name.split(" ").filter((w) => /\p{L}/u.test(w));
-  const letters = (w: string) => w.replace(/[^\p{L}]/gu, "");
-  // pelo menos nome + sobrenome; inicial isolada não vale (o conectivo "y"/"e" sim: "Ortega y Gasset")
-  if (words.filter((w) => letters(w).length >= 2).length < 2) return false;
-  if (words.some((w) => letters(w).length < 2 && !/^[ye]$/i.test(letters(w)))) return false;
-  if (/(\p{L})\1{2,}/iu.test(name)) return false;
-  // "Ana Ana" é fictício; sobrenome repetido depois do nome ("Juan Pérez Pérez") é comum no México
-  if (words.length === 2 && words[0].toLowerCase() === words[1].toLowerCase()) return false;
-  return !/\b(teste?|test|fulano|cliente|nombre|apellido|asdf|qwerty|prueba)\b/i.test(name);
 }
 
 function validIsoDate(v: string): boolean {

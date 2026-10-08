@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicProduct } from "@/types/flow";
-import type { CheckoutForm, PayMethod, PayerData } from "@/features/chat-engine/transport";
+import type { CheckoutForm, PayMethods, PayerData } from "@/features/chat-engine/transport";
 import { PayerForm } from "./PayerForm";
 
 /**
@@ -16,7 +16,7 @@ export function CheckoutCard({
 }: {
   product: PublicProduct;
   onSubmit: (form: CheckoutForm) => Promise<unknown>;
-  loadMethods?: () => Promise<PayMethod[] | null>;
+  loadMethods?: () => Promise<PayMethods | null>;
   initialPayer?: PayerData | null;
 }) {
   const [error, setError] = useState<string | null>(null);

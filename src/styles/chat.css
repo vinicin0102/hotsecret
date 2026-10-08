@@ -1804,3 +1804,25 @@
 .pix-box .next-action {
   width: 100%;
 }
+
+/* Comprador já identificado na conversa: um toque gera o pagamento */
+.payer-ready {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.payer-ready b {
+  color: #fff;
+}
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--gold, #d8a85c);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 13px;
+}

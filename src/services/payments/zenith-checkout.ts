@@ -166,6 +166,14 @@ export async function createZenithCheckout(
       idempotencyKey: randomUUID(),
     },
   });
+  // guarda o nome/e-mail que o lead digitou (sem sobrescrever o que já existe): na próxima compra vêm preenchidos
+  const lead = await prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, email: true } });
+  if (lead && (!lead.name || !lead.email)) {
+    await prisma.lead.update({
+      where: { id: session.leadId },
+      data: { ...(!lead.name && name !== "Cliente" ? { name: name.slice(0, 140) } : {}), ...(!lead.email ? { email: payer.email.trim().toLowerCase().slice(0, 200) } : {}) },
+    });
+  }
   // bytes exatos desta intenção: todo retry reenvia esta mesma string com a mesma chave
   const withBody = await prisma.payment.update({ where: { id: payment.id }, data: { providerRequest: JSON.stringify(build(payment.id)) } });
   await trackEvent({

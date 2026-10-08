@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { validPersonName } from "@/lib/person-name";
 import { useChatI18n } from "@/features/i18n/chat";
-import { ApiError, type PayField, type PayMethod, type PayerData } from "@/features/chat-engine/transport";
+import { ApiError, type PayField, type PayMethod, type PayMethods, type PayerData } from "@/features/chat-engine/transport";
 
 /**
  * Dados do comprador que o gateway pede (campos vindos do catálogo em tempo real — nada fixo aqui).
@@ -13,14 +14,17 @@ export function PayerForm({
   busyLabel,
   onSubmit,
   onNoForm,
+  autoSubmit,
 }: {
-  loadMethods: () => Promise<PayMethod[] | null>;
+  loadMethods: () => Promise<PayMethods | null>;
   initial?: PayerData | null;
   submitLabel: string;
   busyLabel: string;
   onSubmit: (payer: PayerData) => Promise<unknown>;
   /** o gateway não pede dados (ex.: pré-visualização) */
   onNoForm: () => void;
+  /** com nome e e-mail já conhecidos, gera sozinho (pop-up da chamada, como o PIX) */
+  autoSubmit?: boolean;
 }) {
   const { t } = useChatI18n();
   const [methods, setMethods] = useState<PayMethod[] | null | undefined>(undefined);
@@ -31,6 +35,11 @@ export function PayerForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** o lead tocou em "Cambiar" (ou o servidor recusou um dado): mostra os campos */
+  const [editing, setEditing] = useState(false);
+  /** os dados vieram prontos (conversa/compra anterior) — digitar no formulário nunca ativa o atalho */
+  const [known, setKnown] = useState(!!initial?.email);
+  const autoSent = useRef(false);
   const load = useRef(loadMethods);
   load.current = loadMethods;
   const noForm = useRef(onNoForm);
@@ -40,10 +49,15 @@ export function PayerForm({
     let alive = true;
     load
       .current()
-      .then((m) => {
+      .then((r) => {
         if (!alive) return;
-        if (m === null) return noForm.current();
+        if (r === null) return noForm.current();
+        const m = r.methods;
         setMethods(m);
+        // o que o lead já informou vem preenchido (sem apagar o que ele digitou)
+        if (r.prefill?.email) setEmail((cur) => cur || r.prefill!.email!);
+        if (r.prefill?.name) setValues((cur) => (cur.name ? cur : { ...cur, name: r.prefill!.name! }));
+        if (r.prefill?.email || r.prefill?.name) setKnown(true);
         // já vem marcado o primeiro (o catálogo vem com as opções digitais antes das presenciais)
         setCode((cur) => (cur && m.some((x) => x.code === cur) ? cur : (m[0]?.code ?? "")));
       })
@@ -70,8 +84,17 @@ export function PayerForm({
 
   const label = (f: PayField) => (/^[A-Z]{2,6}$/.test(f.label) ? f.label : (t.fieldLabels[f.name] ?? f.label));
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  // dados reais que o lead já informou (pergunta do fluxo ou compra anterior) cobrem tudo o que o método pede
+  const ready =
+    known &&
+    !editing &&
+    !!method &&
+    emailOk &&
+    visible.every((f) => (f.name === "name" ? validPersonName(values.name ?? "") : !!(values[f.name] ?? "").trim()));
+
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!method) return;
     const customer: Record<string, string> = {};
     const errs: Record<string, string> = {};
@@ -90,11 +113,22 @@ export function PayerForm({
       await onSubmit({ methodCode: method.code, email: email.trim(), customer });
     } catch (err) {
       const fields = err instanceof ApiError ? (err.data.fields as Record<string, string> | undefined) : undefined;
-      if (fields) setErrors(fields);
+      if (fields) {
+        setErrors(fields);
+        setEditing(true); // dado recusado: abre os campos para corrigir
+      }
       setError(err instanceof Error ? err.message : t.generateError);
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (autoSubmit && ready && !autoSent.current) {
+      autoSent.current = true;
+      void submit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmit, ready]);
 
   if (loadError) return <div className="error-text">{loadError}</div>;
   if (methods === undefined) {
@@ -108,6 +142,24 @@ export function PayerForm({
   if (!methods.length) return <div className="error-text">{t.offerUnavailable}</div>;
 
   const errText = (name: string) => (errors[name] ? <span className="payer-err">{t.fieldErrors[errors[name]] ?? t.fieldErrors.required}</span> : null);
+
+  if (ready) {
+    // igual ao PIX: um toque gera os dados de pagamento, a nome de quem já se identificou na conversa
+    return (
+      <form className="payer-form" onSubmit={submit} noValidate>
+        <div className="payer-ready">
+          {t.payingAs} <b>{values.name || email}</b>
+          <button type="button" className="link-btn" onClick={() => setEditing(true)} disabled={busy}>
+            {t.change}
+          </button>
+        </div>
+        {error && <div className="error-text">{error}</div>}
+        <button className="btn btn-primary btn-block cta-glow" type="submit" disabled={busy}>
+          {busy ? busyLabel : submitLabel}
+        </button>
+      </form>
+    );
+  }
 
   return (
     <form className="payer-form" onSubmit={submit} noValidate>

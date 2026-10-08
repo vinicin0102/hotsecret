@@ -14,11 +14,13 @@ export default apiHandler({
   POST: async (req) => {
     rateLimit(req, "payment-methods", 30, 60_000);
     const body = schema.parse(req.body);
-    await requireLeadSession(body.token);
+    const session = await requireLeadSession(body.token);
     const product = await prisma.product.findUnique({ where: { id: body.productId } });
     if (!product || !product.active) throw new HttpError(404, "Producto no disponible");
     if (providerNameForCurrency(asCurrency(product.currency)) !== "zenith") return { methods: null };
     const methods = await zenithMethodsFor(product);
-    return { methods: methods.map(publicZenithMethod) };
+    // nome/e-mail que o próprio lead já informou (pergunta do fluxo ou compra anterior) vêm preenchidos
+    const lead = await prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, email: true } });
+    return { methods: methods.map(publicZenithMethod), prefill: { name: lead?.name ?? undefined, email: lead?.email ?? undefined } };
   },
 });

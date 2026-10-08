@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicCharacter, PublicProduct } from "@/types/flow";
-import type { CallVideo, ChatTransport, PayMethod, PayerData, PublicPaymentInfo } from "@/features/chat-engine/transport";
+import type { CallVideo, ChatTransport, PayMethods, PayerData, PublicPaymentInfo } from "@/features/chat-engine/transport";
 import { PaymentStatus } from "./PaymentStatus";
 import { PayerForm } from "./PayerForm";
 import { NextActionView } from "./NextAction";
@@ -148,7 +148,7 @@ export function PixPopup({
   onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
   /** o gateway pede os dados do comprador antes de gerar o pagamento */
   payerForm?: {
-    loadMethods: () => Promise<PayMethod[] | null>;
+    loadMethods: () => Promise<PayMethods | null>;
     initial: PayerData | null;
     onSubmit: (payer: PayerData) => Promise<unknown>;
   };
@@ -202,6 +202,7 @@ export function PixPopup({
             busyLabel={t.generatingKey}
             onSubmit={payerForm.onSubmit}
             onNoForm={() => undefined}
+            autoSubmit
           />
         ) : error ? (
           <div className="error-text">{error}</div>

@@ -57,6 +57,12 @@ export interface PayMethod {
   fields: PayField[];
 }
 
+/** Formas de pagamento do produto + nome/e-mail que o lead já informou. */
+export interface PayMethods {
+  methods: PayMethod[];
+  prefill?: { name?: string; email?: string };
+}
+
 /** Dados do comprador para gateways que pedem (nunca dados de cartão). */
 export interface PayerData {
   methodCode?: string;
@@ -122,7 +128,7 @@ export interface ChatTransport {
   flush(): Promise<void>;
   checkout(offerNodeId: string, form: CheckoutForm): Promise<PublicPaymentInfo>;
   /** formas de pagamento do produto no catálogo do gateway (null = não pede dados) */
-  paymentMethods(productId: string): Promise<PayMethod[] | null>;
+  paymentMethods(productId: string): Promise<PayMethods | null>;
   poll(since: string | null): Promise<{ payments: PublicPaymentInfo[]; messages: ServerMessage[]; serverTime: string }>;
   delivery(productId?: string | null): Promise<{ url: string | null; productName: string }>;
   /** conteúdo pago liberado pelos pagamentos aprovados */
@@ -197,8 +203,8 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       return r.payment;
     },
     async paymentMethods(productId) {
-      const r = await post<{ methods: PayMethod[] | null }>("/api/public/payment-methods", { token: getToken(), productId });
-      return r.methods;
+      const r = await post<{ methods: PayMethod[] | null; prefill?: PayMethods["prefill"] }>("/api/public/payment-methods", { token: getToken(), productId });
+      return r.methods ? { methods: r.methods, prefill: r.prefill } : null;
     },
     poll(since) {
       return post("/api/public/state", { token: getToken(), since: since ?? undefined });
