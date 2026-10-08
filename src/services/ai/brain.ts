@@ -676,12 +676,27 @@ ${flowOffersSection(input.flowOffers)}`;
       continue;
     }
     const reply = interpret(r.text);
-    if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images, voiceCalls), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
+    if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images, voiceCalls, input.flowOffers), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
     problem = r.text.trim() ? "resposta fora do formato" : "resposta vazia";
   }
   // sem resposta da IA (o motivo vai em "failure" → painel, Saúde da IA)
 
   // a IA não respondeu: se o lead quer comprar, a oferta sai mesmo assim (a venda não para)
+  const lastLeadText = [...input.history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
+  const callAsked = has(CALL_INTENT, lastLeadText) && validOffers.some((o) => o.style === "call" && o.videoId);
+  if (input.flowOffers && !callAsked && (has(BUY_INTENT, lastLeadText) || has(OPTIONS_INTENT, lastLeadText) || has(OTHERS_INTENT, lastLeadText)) && !has(REFUSE_INTENT, lastLeadText)) {
+    // botões de oferta do fluxo ligados no bloco: soltam mesmo sem a IA
+    return {
+      messages: [input.language === "es-AR" ? "mirá las opciones acá abajo 👇" : es ? "mira las opciones aquí abajo 👇" : "escolhe aqui embaixo 👇"],
+      offer: null,
+      audio: null,
+      image: null,
+      end: false,
+      showOffers: true,
+      usage,
+      failure: `${problem || "sem resposta"} — botões de oferta soltos automaticamente`,
+    };
+  }
   const sale = salesFallback(input.history, validOffers);
   if (sale) {
     const isCall = sale.style === "call" && !!sale.videoId;
@@ -733,6 +748,7 @@ function assistReply(
   audios: BrainAudio[],
   images: BrainMedia[],
   voiceCalls: BrainVoiceCall[] = [],
+  flowOffers?: FlowOfferInfo[],
 ): Omit<BrainReply, "usage"> {
   const lastLead = [...history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
   if (!lastLead.trim()) return reply;
@@ -752,6 +768,18 @@ function assistReply(
     }
   }
   if (out.voiceCall) return out;
+
+  // botões de oferta do fluxo: o lead pediu preço/opções, perguntou pelos outros packs ou citou um deles
+  if (flowOffers && !out.showOffers && !has(REFUSE_INTENT, lastLead)) {
+    const named = flowOffers.some((o) => overlap(said, keyWords(`${o.name} ${o.button ?? ""}`)) >= 1);
+    const wantsCall = has(CALL_INTENT, lastLead) && offers.some((o) => o.style === "call" && o.videoId);
+    const others = has(OTHERS_INTENT, lastLead);
+    if (named || others || (!out.offer && !wantsCall && (has(OPTIONS_INTENT, lastLead) || has(BUY_INTENT, lastLead)))) {
+      out.showOffers = true;
+      // pedido pelos packs do fluxo: o card de oferta do cérebro que a IA não escolheu não entra junto
+      if (named && !reply.offer) return out;
+    }
+  }
 
   if (!out.offer && !out.showOffers) {
     const declinedCall = /recusou a chamada/.test(history.slice(-4).map((t) => t.text).join(" "));
@@ -806,6 +834,14 @@ const NO_INTENT = /\b(nao|agora nao|depois|nem|nunca|no|ahorita no|despues|luego
 const BUY_INTENT =
   /\b(quero|qro|quer|bora|vamos|vamo|sim|ss|manda|mande|me manda|liga|ligar|ligacao|chamada|videochamada|video ?chamada|quanto|preco|valor|comprar|compro|pix|pagar|aceito|topo|pode ser|claro|fechado|fecho|bota|libera|quiero|kiero|dale|si|llamame|llamada|videollamada|cuanto|precio|costo|cuesta|pago|acepto|me interesa|mandame|sale|orale|andale)\b/i;
 const CALL_INTENT = /(liga|ligar|ligacao|chamada|videochamada|call|ao vivo|me liga|llamame|llamar|llamada|videollamada|marcame|en vivo)/i;
+/** pedido de opções/preço (pt + es, sem acentos) */
+const OPTIONS_INTENT =
+  /\b(packs?|pacotes?|paquetes?|opcoes|opcao|opciones|opcion|catalogo|o que (voce )?tem|que tienes|quais|cuales|precos?|precios?|valores?|quanto|cuanto|cuestan?|custa|tabela|lista)\b/i;
+/** pedido pelos OUTROS produtos (vale mesmo com um card de oferta na resposta) */
+const OTHERS_INTENT =
+  /\b(outros?|outras?|demais|mais (packs?|opcoes|conteudos?|coisas)|otros?|otras?|demas|mas (packs?|paquetes|opciones|contenido|cosas)|que mas|algo mas|tem mais|tienes mas|hay mas)\b/i;
+/** recusa clara (o "no" no meio de uma pergunta não conta) */
+const REFUSE_INTENT = /^\s*(nao|no|nel|nem)\b|\b(agora nao|ahorita no|nao quero|no quiero|no gracias|nao obrigad[oa]|depois|despues|luego)\b/i;
 
 /** Quando a IA falha: escolhe a oferta pelo que o lead acabou de dizer (ou pela última proposta do atendente). */
 function salesFallback(history: ChatTurn[], offers: BrainOffer[]): BrainOffer | null {
