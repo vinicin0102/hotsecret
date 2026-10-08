@@ -38,15 +38,21 @@ function QrImage({ code }: { code: string }) {
  * bank_transfer (CLABE, banco, referência...), voucher (referência OXXO), qr_code, redirect e app_approval,
  * com o título e os passos enviados. A confirmação do pagamento vem só do servidor.
  */
+/** chaves da conta de destino de uma transferência (México: CLABE; Argentina: CVU/CBU/alias) */
+const ACCOUNT_KEYS = ["clabe", "cvu", "cbu", "alias"];
+
 export function NextActionView({ action, amount, compact }: { action: PaymentNextAction; amount?: string; compact?: boolean }) {
   const { t } = useChatI18n();
   const { copied, copy } = useCopy();
   const label = (k: string) => t.transferDetails[k] ?? k;
-  const rows: [string, string][] = [
-    ...Object.entries(action.details ?? {}),
-    ...(action.type === "app_approval" ? Object.entries(action.app ?? {}) : []),
-  ];
-  const code = (action.type === "voucher" || action.type === "qr_code") && action.code ? action.code : null;
+  const transfer = action.type === "bank_transfer";
+  // transferência: a conta a copiar (CLABE) vai em destaque; banco e beneficiário não aparecem —
+  // só a referência, quando o gateway mandar, porque ela liga o depósito ao pedido
+  const accountKey = transfer ? ACCOUNT_KEYS.find((k) => action.details?.[k]) : undefined;
+  const rows: [string, string][] = transfer
+    ? Object.entries(action.details ?? {}).filter(([k]) => k === "reference")
+    : [...Object.entries(action.details ?? {}), ...(action.type === "app_approval" ? Object.entries(action.app ?? {}) : [])];
+  const code = (action.type === "voucher" || action.type === "qr_code") && action.code ? action.code : accountKey ? action.details![accountKey] : null;
   const steps = action.instructions?.steps ?? [];
 
   return (
@@ -56,17 +62,17 @@ export function NextActionView({ action, amount, compact }: { action: PaymentNex
       {code && (
         <>
           {action.type === "qr_code" && <QrImage code={code} />}
-          <div className="next-action-code-label">{action.type === "voucher" ? t.voucherReference : t.paymentCode}</div>
+          <div className="next-action-code-label">{accountKey ? label(accountKey) : action.type === "voucher" ? t.voucherReference : t.paymentCode}</div>
           <button type="button" className="next-action-code" onClick={() => copy("code", code)}>
             {code}
           </button>
           <button type="button" className="btn btn-gold btn-block" onClick={() => copy("code", code)}>
-            {copied === "code" ? t.copied : action.type === "voucher" ? t.copyReference : t.copyCode}
+            {copied === "code" ? t.copied : accountKey ? `${t.copyWord} ${label(accountKey)}` : action.type === "voucher" ? t.copyReference : t.copyCode}
           </button>
         </>
       )}
 
-      {rows.length > 0 && (
+      {(rows.length > 0 || (amount && transfer)) && (
         <dl className="transfer-details">
           {rows.map(([k, v]) => (
             <div key={k} onClick={() => copy(k, v)} role="button" tabIndex={0} title={t.copyCode}>
