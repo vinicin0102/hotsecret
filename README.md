@@ -79,9 +79,10 @@ o PIX do Brasil continua em `PAYMENT_PROVIDER`.
    Métodos de cartão (`secureCard`) ficam de fora: exigem os campos hospedados do Zenith Elements.
 5. Cada compra tem uma `Idempotency-Key` (UUID) persistida com o corpo exato; timeout/5xx deixam a
    intenção como incerta e o próximo toque reenvia **a mesma chave e o mesmo corpo**.
-6. Pagamento só é aprovado pelo webhook assinado em `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/zenith`
-   (id do evento único, `referenceId`, `amount` e `currency` conferidos). **Pendente:** enquanto o esquema
-   de assinatura não estiver implementado, todo webhook da Zenith é recusado (nenhum pagamento é aprovado).
+6. Pagamento só é aprovado pelo webhook assinado em `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/zenith`:
+   `X-Zenith-Timestamp` (±300 s) e `X-Zenith-Signature` = HMAC-SHA256 hex de `"<timestamp>." + corpo bruto`
+   com `ZENITH_WEBHOOK_SECRET`. O evento `payment.captured` aprova o pedido do `referenceId` uma única vez
+   (id do evento único) e só se `amount` e `currency` baterem com o pedido. Sem o segredo, todo webhook é recusado.
 
 ## Deploy na Vercel
 

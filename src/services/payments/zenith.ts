@@ -7,7 +7,7 @@
 //   Nunca vão para o navegador, URL, payload ou log.
 // - Timeout, falha de rede e 5xx = resultado INCERTO: a cobrança pode ter sido criada. Antes de criar outra,
 //   a mesma intenção é reenviada com a mesma chave (a Zenith devolve a cobrança já criada).
-// - Pagamento só é confirmado por webhook assinado (ver zenith-webhook.ts).
+// - Pagamento só é confirmado por webhook assinado com ZENITH_WEBHOOK_SECRET (ver zenith-events.ts).
 
 const DEFAULT_BASE_URL = "https://api.zenithworld.com.br";
 const CATALOG_TTL_MS = 5 * 60_000;
@@ -202,6 +202,24 @@ export function zenithInputFields(method: ZenithMethod): ZenithField[] {
   });
 }
 
+const endsWith = (path: string, name: string) => path === name || path.endsWith(`.${name}`);
+
+/**
+ * O catálogo exige o nome do comprador (customerName em qualquer caminho) mas não publica campos de nome
+ * (ex.: SPEI em produção): o formulário pede "nome completo".
+ */
+export function needsFullName(method: ZenithMethod): boolean {
+  const names = new Set(zenithInputFields(method).map((f) => f.name));
+  return !names.has("firstName") && !names.has("name") && (method.requiredPayloadFields ?? []).some((p) => endsWith(p, "customerName"));
+}
+
+const FULL_NAME_FIELD: ZenithField = { name: "name", label: "Nombre completo", type: "text", required: true, autocomplete: "name", maxLength: 140 };
+
+/** Campos do formulário: os do catálogo + nome completo quando o catálogo exige o nome sem publicar o campo. */
+export function zenithFormFields(method: ZenithMethod): ZenithField[] {
+  return [...(needsFullName(method) ? [FULL_NAME_FIELD] : []), ...zenithInputFields(method)];
+}
+
 /** Onde o campo vai no payload: o caminho publicado em requiredPayloadFields, senão metadata.<nome>. */
 function payloadPath(method: ZenithMethod, name: string): string {
   const req = method.requiredPayloadFields ?? [];
@@ -272,7 +290,15 @@ export function buildZenithCheckoutPayload(input: ZenithPayloadInput): Record<st
   const first = String(input.customer.firstName ?? "").trim();
   const last = String(input.customer.lastName ?? "").trim();
   const name = [first, last].filter(Boolean).join(" ") || String(input.customer.name ?? "").trim();
-  if (name) payload.customerName = name.slice(0, 140);
+  if (needsFullName(method) && !name) errors.name = "required";
+  else if (name.length > 140) errors.name = "too_long";
+  if (name) payload.customerName = name;
+  // o catálogo pode pedir nome/e-mail também em outro caminho (ex.: metadata.customerName em produção)
+  for (const path of method.requiredPayloadFields ?? []) {
+    if (path.startsWith("headers.") || getPath(payload, path) !== undefined) continue;
+    if (endsWith(path, "customerName") && name) setPath(payload, path, name);
+    else if (endsWith(path, "customerEmail") && payload.customerEmail) setPath(payload, path, payload.customerEmail);
+  }
   payload.returnUrl = input.returnUrl;
   payload.cancelUrl = input.cancelUrl;
 
@@ -283,7 +309,7 @@ export function buildZenithCheckoutPayload(input: ZenithPayloadInput): Record<st
     const v = getPath(payload, path);
     if (v === undefined || v === null || v === "") {
       const field = path.split(".").pop() || path;
-      errors[field === "customerName" ? "firstName" : field === "customerEmail" ? "email" : field] = "required";
+      errors[field === "customerName" ? (needsFullName(method) ? "name" : "firstName") : field === "customerEmail" ? "email" : field] = "required";
     }
   }
   if (Object.keys(errors).length) throw new ZenithValidationError(errors);

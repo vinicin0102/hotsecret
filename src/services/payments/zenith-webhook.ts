@@ -1,5 +1,6 @@
 // Webhook da Zenith: a ÚNICA fonte de confirmação de pagamento.
-// Ordem: corpo bruto → timestamp → HMAC → id único do evento (idempotente) → referenceId/amount/currency → status.
+// Ordem: corpo bruto → timestamp (±300s) → HMAC (ZENITH_WEBHOOK_SECRET) → referenceId/amount/currency →
+// id único do evento (idempotente) → status. Falha ao aplicar = 500 (a Zenith reenvia).
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applyPaymentStatus } from "./service";
@@ -48,6 +49,7 @@ export async function handleZenithWebhook(req: WebhookRequest, store: ZenithWebh
   if (result !== "unknown_payment") {
     await prisma.webhookLog.update({ where: { id: log.id }, data: { paymentId: event.referenceId } }).catch(() => undefined);
   }
-  if (result.endsWith("_mismatch")) console.warn("[zenith] webhook ignorado:", result, event.id);
+  // evento autêntico que não bate com o pedido: nada é aprovado e fica registrado para conferência
+  if (result.endsWith("_mismatch") || result.endsWith("_missing")) console.warn("[zenith] webhook ignorado:", result, event.id, event.type);
   return { status: 200, body: { ok: true, result } };
 }

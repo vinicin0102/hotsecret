@@ -19,7 +19,7 @@ import {
   ZenithError,
   ZenithValidationError,
   zenithCopyValue,
-  zenithInputFields,
+  zenithFormFields,
   type ZenithMethod,
 } from "./zenith";
 
@@ -59,7 +59,7 @@ export function publicZenithMethod(m: ZenithMethod) {
     code: m.code,
     displayName: m.displayName ?? m.code,
     iconUrl: m.iconUrl?.startsWith("https://") ? m.iconUrl : null,
-    fields: zenithInputFields(m).map((f) => ({
+    fields: zenithFormFields(m).map((f) => ({
       name: f.name,
       label: f.label ?? f.name,
       type: f.type ?? "text",
@@ -135,7 +135,7 @@ export async function createZenithCheckout(
   }
 
   // 3) Nova intenção: chave UUID persistida junto com o corpo exato
-  const name = [payer.customer.firstName, payer.customer.lastName].filter(Boolean).join(" ").trim() || "Cliente";
+  const name = [payer.customer.firstName, payer.customer.lastName].filter(Boolean).join(" ").trim() || payer.customer.name?.trim() || "Cliente";
   const payment = await prisma.payment.create({
     data: {
       leadId: session.leadId,

@@ -1,5 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import {
   buildZenithCheckoutPayload,
   clearZenithCatalogCache,
@@ -7,6 +8,8 @@ import {
   publicNextAction,
   sendZenithIntent,
   usableZenithMethods,
+  needsFullName,
+  zenithFormFields,
   ZenithValidationError,
   type ZenithMethod,
 } from "../src/services/payments/zenith";
@@ -222,13 +225,76 @@ test("cartão nunca passa pelo backend: campos de PAN/validade/CVC são recusado
   assert.equal(checkoutSchema.safeParse({ ...base, payer: { email: "a@b.co", customer: ANA } }).success, true);
 });
 
-// ---------- webhook ----------
+// ---------- produção (catálogo sem campos de nome) ----------
 
-const EVENT = {
-  id: "evt_1",
-  type: "checkout.paid",
-  data: { checkout: { id: "checkout_1", referenceId: "pay_1", amount: 10990, currency: "MXN", status: "paid" }, payment: { status: "paid" } },
-};
+test("produção: SPEI pede só nome e e-mail — nome completo no formulário e espelhado em metadata", () => {
+  process.env.ZENITH_ENVIRONMENT = "production";
+  try {
+    const PROD: ZenithMethod = {
+      ...SPEI,
+      customerFields: [],
+      requiredPayloadFields: ["headers.Idempotency-Key", "amount", "currency", "country", "environment", "paymentMethod", "referenceId", "customerName", "customerEmail", "returnUrl", "cancelUrl", "metadata.customerName", "metadata.customerEmail"],
+    };
+    assert.equal(needsFullName(PROD), true);
+    assert.deepEqual(zenithFormFields(PROD).map((f) => f.name), ["name"]);
+    assert.equal(needsFullName(SPEI), false, "sandbox publica firstName/lastName");
+    const p = buildZenithCheckoutPayload({ ...payloadInput({ name: "Ana Silva" }), method: PROD });
+    // igual ao exemplo oficial de produção
+    assert.deepEqual(p, {
+      amount: 10990,
+      currency: "MXN",
+      country: "MX",
+      environment: "production",
+      paymentMethod: "spei",
+      referenceId: "pedido-123",
+      customerEmail: "comprador@gmail.com",
+      customerName: "Ana Silva",
+      metadata: { customerName: "Ana Silva", customerEmail: "comprador@gmail.com" },
+      returnUrl: "https://sualoja.com/obrigado",
+      cancelUrl: "https://sualoja.com/carrinho",
+    });
+    assert.throws(() => buildZenithCheckoutPayload({ ...payloadInput({}), method: PROD }), (e) => e instanceof ZenithValidationError && e.fields.name === "required");
+  } finally {
+    delete process.env.ZENITH_ENVIRONMENT;
+  }
+});
+
+// ---------- webhook (assinatura da documentação oficial) ----------
+
+const SECRET = "whsec_teste_local";
+const sign = (body: string, ts = Math.floor(Date.now() / 1000), secret = SECRET) => ({
+  headers: {
+    "x-zenith-timestamp": String(ts),
+    "x-zenith-signature": createHmac("sha256", secret).update(`${ts}.`).update(body).digest("hex"),
+  },
+  query: {},
+  rawBody: body,
+});
+
+const EVENT = { id: "evt_1", type: "payment.captured", data: { referenceId: "pay_1", amount: 10990, currency: "MXN", checkoutId: "checkout_1" } };
+const RAW = JSON.stringify(EVENT);
+
+test("webhook: assinatura HMAC de \"<timestamp>.<corpo bruto>\" com ZENITH_WEBHOOK_SECRET", () => {
+  assert.deepEqual(verifyZenithSignature(sign(RAW), SECRET), { ok: true });
+  assert.equal(verifyZenithSignature(sign(RAW), undefined).ok, false, "sem segredo: recusa");
+  assert.equal(verifyZenithSignature(sign(RAW, undefined, "outro"), SECRET).ok, false, "segredo errado");
+  assert.equal(verifyZenithSignature({ ...sign(RAW), rawBody: RAW.replace("10990", "1") }, SECRET).ok, false, "corpo alterado");
+  assert.equal(verifyZenithSignature(sign(RAW, Math.floor(Date.now() / 1000) - 301), SECRET).ok, false, "timestamp velho");
+  assert.equal(verifyZenithSignature(sign(RAW, Math.floor(Date.now() / 1000) + 301), SECRET).ok, false, "timestamp no futuro");
+  assert.equal(verifyZenithSignature({ headers: {}, query: {}, rawBody: RAW }, SECRET).ok, false, "sem cabeçalhos");
+  const reformatted = JSON.stringify(EVENT, null, 2); // mesmo JSON, bytes diferentes: vale o corpo bruto
+  assert.equal(verifyZenithSignature({ ...sign(RAW), rawBody: reformatted }, SECRET).ok, false);
+});
+
+test("webhook: payment.captured vira aprovação; outros tipos são lidos pelo nome", () => {
+  const ev = parseZenithEvent(RAW)!;
+  assert.deepEqual(ev, { id: "evt_1", type: "payment.captured", referenceId: "pay_1", amount: 10990, currency: "MXN", status: "APPROVED", checkoutId: "checkout_1" });
+  assert.equal(parseZenithEvent(JSON.stringify({ ...EVENT, type: "payment.failed" }))!.status, "FAILED");
+  assert.equal(parseZenithEvent(JSON.stringify({ ...EVENT, type: "payment.refunded" }))!.status, "REFUNDED");
+  assert.equal(parseZenithEvent(JSON.stringify({ ...EVENT, type: "checkout.created" }))!.status, "PENDING");
+  assert.equal(parseZenithEvent("{nao json"), null);
+  assert.equal(parseZenithEvent(JSON.stringify({ id: "x", type: "payment.captured", data: {} })), null, "sem referenceId");
+});
 
 function memoryStore(payment = { id: "pay_1", provider: "zenith", amount: 10990, currency: "MXN", providerPaymentId: "checkout_1" as string | null }) {
   const processed = new Set<string>();
@@ -249,14 +315,9 @@ function memoryStore(payment = { id: "pay_1", provider: "zenith", amount: 10990,
   return { store, applied, failOnce: () => (failNext = true) };
 }
 
-test("webhook sem esquema de assinatura confirmado: recusado (fail-closed)", () => {
-  const r = verifyZenithSignature({ headers: {}, query: {}, rawBody: JSON.stringify(EVENT) });
-  assert.equal(r.ok, false);
-});
-
 test("webhook repetido: aplicado uma única vez", async () => {
   const { store, applied } = memoryStore();
-  const ev = parseZenithEvent(JSON.stringify(EVENT))!;
+  const ev = parseZenithEvent(RAW)!;
   assert.equal(await consumeZenithEvent(ev, store), "applied");
   assert.equal(await consumeZenithEvent(ev, store), "duplicate");
   assert.equal(await consumeZenithEvent(ev, store), "duplicate");
@@ -265,20 +326,20 @@ test("webhook repetido: aplicado uma única vez", async () => {
 
 test("webhook: amount, currency, referenceId e checkout precisam bater com o pedido", async () => {
   const { store, applied } = memoryStore();
-  const ev = parseZenithEvent(JSON.stringify(EVENT))!;
+  const ev = parseZenithEvent(RAW)!;
   assert.equal(await consumeZenithEvent({ ...ev, amount: 1 }, store), "amount_mismatch");
+  assert.equal(await consumeZenithEvent({ ...ev, amount: null }, store), "amount_missing");
   assert.equal(await consumeZenithEvent({ ...ev, currency: "BRL" }, store), "currency_mismatch");
+  assert.equal(await consumeZenithEvent({ ...ev, currency: null }, store), "currency_missing");
   assert.equal(await consumeZenithEvent({ ...ev, referenceId: "outro" }, store), "unknown_payment");
   assert.equal(await consumeZenithEvent({ ...ev, checkoutId: "checkout_9" }, store), "checkout_mismatch");
-  assert.equal(await consumeZenithEvent({ ...ev, id: "evt_p", status: "pending" }, store), "pending_ignored");
+  assert.equal(await consumeZenithEvent({ ...ev, id: "evt_p", status: "PENDING" }, store), "pending_ignored");
   assert.deepEqual(applied, []);
-  assert.equal(parseZenithEvent("{nao json"), null);
-  assert.equal(parseZenithEvent(JSON.stringify({ id: "x" })), null);
 });
 
 test("webhook: falha ao aplicar libera o id para a Zenith reenviar", async () => {
   const { store, applied, failOnce } = memoryStore();
-  const ev = parseZenithEvent(JSON.stringify(EVENT))!;
+  const ev = parseZenithEvent(RAW)!;
   failOnce();
   await assert.rejects(consumeZenithEvent(ev, store));
   assert.equal(await consumeZenithEvent(ev, store), "applied");

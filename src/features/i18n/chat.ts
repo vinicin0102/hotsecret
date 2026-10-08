@@ -130,6 +130,7 @@ const pt = {
   loadingMethods: "Carregando formas de pagamento…",
   fieldErrors: { required: "Obrigatório", invalid_email: "E-mail inválido", invalid_date: "Data inválida", too_long: "Texto longo demais", invalid_option: "Escolha uma opção" } as Record<string, string>,
   fieldLabels: {
+    name: "Nome completo",
     firstName: "Nome",
     lastName: "Sobrenome",
     documentType: "Tipo de documento",
@@ -256,6 +257,7 @@ const es: ChatTexts = {
   loadingMethods: "Cargando métodos de pago…",
   fieldErrors: { required: "Obligatorio", invalid_email: "Correo inválido", invalid_date: "Fecha inválida", too_long: "Demasiado largo", invalid_option: "Elige una opción" },
   fieldLabels: {
+    name: "Nombre completo",
     firstName: "Nombre",
     lastName: "Apellido",
     documentType: "Tipo de documento",
