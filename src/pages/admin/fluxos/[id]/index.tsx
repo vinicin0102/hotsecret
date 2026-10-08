@@ -68,7 +68,7 @@ function Builder() {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [savedJson, setSavedJson] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [products, setProducts] = useState<(SidebarProduct & { description: string | null; imageUrl: string | null; videoUrl?: string | null; originalPrice: number | null; checkoutUrl: string | null })[]>([]);
+  const [products, setProducts] = useState<(SidebarProduct & { description: string | null; imageUrl: string | null; videoUrl?: string | null; originalPrice: number | null; checkoutUrl: string | null; currency?: string })[]>([]);
   const [tags, setTags] = useState<SidebarTag[]>([]);
   const [brains, setBrains] = useState<SidebarBrain[]>([]);
   const [videos, setVideos] = useState<{ id: string; name: string }[]>([]);
@@ -442,7 +442,8 @@ function Builder() {
             products: Object.fromEntries(
               products.map((p) => [
                 p.id,
-                { id: p.id, name: p.name, description: p.description, imageUrl: p.imageUrl, videoUrl: p.videoUrl, originalPrice: p.originalPrice, price: p.price, externalCheckoutUrl: null },
+                // a moeda do produto entra na pré-visualização (sem ela o preço caía em BRL)
+                { id: p.id, name: p.name, description: p.description, imageUrl: p.imageUrl, videoUrl: p.videoUrl, originalPrice: p.originalPrice, price: p.price, currency: p.currency, externalCheckoutUrl: null },
               ]),
             ),
           }}

@@ -260,7 +260,7 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
 
 /** Preview do construtor: nenhum dado é gravado; pagamentos são simulados localmente. */
 export function createPreviewTransport(
-  products: Record<string, { price: number }>,
+  products: Record<string, { price: number; currency?: string }>,
   graphOfferProduct: (nodeId: string) => string | undefined,
   nodeUrl: (nodeId: string) => string | undefined = () => undefined,
   /** preview do Cérebro: cérebro e objetivo do bloco (conversa de teste pelo painel, nada é gravado) */
@@ -280,12 +280,25 @@ export function createPreviewTransport(
     async flush() {},
     async checkout(offerNodeId, form) {
       const productId = form.productId ?? graphOfferProduct(offerNodeId) ?? "";
+      const currency = products[productId]?.currency ?? "BRL";
+      // pesos: transferência com CLABE de exemplo (no Brasil, o PIX copia e cola de exemplo)
+      const pesos = currency !== "BRL";
       const p: PublicPaymentInfo = {
         id: `preview_${++seq}`,
         status: "PENDING",
         method: form.method,
         amount: products[productId]?.price ?? 0,
-        pixQrCode: form.method === "PIX" ? "00020126PREVIEW-HOTSECRET-PIX-CODE5204000053039865802BR" : null,
+        currency,
+        ...(pesos
+          ? {
+              nextAction: {
+                type: "bank_transfer",
+                details: { clabe: "000000000000000000", beneficiary: "Vista previa" },
+                instructions: { title: language === "es-AR" ? "Así pagás por transferencia" : "Cómo pagar por SPEI", steps: [] },
+              },
+            }
+          : {}),
+        pixQrCode: form.method !== "PIX" ? null : pesos ? "000000000000000000" : "00020126PREVIEW-HOTSECRET-PIX-CODE5204000053039865802BR",
         pixQrCodeBase64: null,
         redirectUrl: null,
         offerNodeId,
