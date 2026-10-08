@@ -152,18 +152,29 @@ export class ApiError extends Error {
   }
 }
 
+/** idioma do chat público: a API devolve os erros para o lead nesse idioma */
+let chatLocale = "pt-BR";
+
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(withBase(path), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(withBase(path), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-chat-locale": chatLocale },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, connectionError());
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? "Erro de conexão", data as Record<string, unknown>);
+  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? connectionError(), data as Record<string, unknown>);
   return data as T;
 }
 
-export function createLiveTransport(getToken: () => string | null, opts: { sandbox: boolean }): ChatTransport {
+const connectionError = () => (chatLocale.startsWith("es") ? "Error de conexión. Inténtalo de nuevo." : "Erro de conexão");
+
+export function createLiveTransport(getToken: () => string | null, opts: { sandbox: boolean; locale?: string }): ChatTransport {
+  chatLocale = opts.locale ?? "pt-BR";
   let chain: Promise<void> = Promise.resolve();
   return {
     mode: "live",
@@ -205,11 +216,11 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       await chain;
       const res = await fetch(withBase(`/api/public/photo?nodeId=${encodeURIComponent(nodeId)}`), {
         method: "POST",
-        headers: { "Content-Type": photo.type || "image/jpeg", "x-lead-token": getToken() ?? "" },
+        headers: { "Content-Type": photo.type || "image/jpeg", "x-lead-token": getToken() ?? "", "x-chat-locale": chatLocale },
         body: photo,
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new ApiError(res.status, data.error ?? "Não foi possível enviar a foto");
+      if (!res.ok || !data.url) throw new ApiError(res.status, data.error ?? connectionError());
       return data.url;
     },
     async tarot(nodeId, productId) {

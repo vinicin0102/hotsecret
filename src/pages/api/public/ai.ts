@@ -10,7 +10,11 @@ import { addConversationMessage } from "@/services/payments/service";
 import { trackEvent } from "@/services/tracking";
 import { describeAiError, publicOfferFormat, runBrain, type ChatTurn, type FlowOfferInfo } from "@/services/ai/brain";
 import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatMoney } from "@/lib/format";
+
+/** preço do histórico na moeda certa (a IA nunca deve ver R$ numa oferta em pesos) */
+const priceForAi = (cents: number, currency: unknown) =>
+  currency === "MXN" ? `${formatMoney(cents, "MXN", "es-MX")} MXN` : currency === "ARS" ? `${formatMoney(cents, "ARS", "es-AR")} ARS` : formatBRL(cents);
 import type { AiContent } from "@/types/flow";
 
 export const config = { maxDuration: 60 };
@@ -60,11 +64,11 @@ function toTurns(messages: Msg[]): ChatTurn[] {
       case "offer":
         turns.push({
           role: "bot",
-          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? formatBRL(c.price) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
+          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? priceForAi(c.price, c.currency) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
         });
         break;
       case "checkout":
-        turns.push({ role: "lead", text: "[tocou no botão para comprar e gerou o PIX]" });
+        turns.push({ role: "lead", text: "[tocou no botão para comprar e gerou o pagamento]" });
         break;
       case "call_declined":
         turns.push({ role: "lead", text: "[recusou a chamada de vídeo]" });
@@ -150,7 +154,11 @@ export default apiHandler({
       reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language });
     } catch (e) {
       console.error("[ai]", e);
-      const msg = brain.fallbackMessage || "Hmm, me perdi aqui 😅 pode repetir?";
+      const lang = await prisma.funnel
+        .findUnique({ where: { id: session.funnelId }, select: { settings: true } })
+        .then((f) => getFunnelSettings(f?.settings).locale)
+        .catch(() => "pt-BR");
+      const msg = brain.fallbackMessage || (lang === "pt-BR" ? "Hmm, me perdi aqui 😅 pode repetir?" : "Mmm, me perdí 😅 ¿me lo repites?");
       await addConversationMessage(session.conversationId, "bot", "text", { text: msg }, node.id);
       // o motivo aparece no painel (Cérebro → Conexão com a IA)
       await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "ai_error", nodeId: node.id, data: { error: describeAiError(e), brain: brain.name } });

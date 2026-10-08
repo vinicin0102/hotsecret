@@ -1,6 +1,6 @@
 // Textos do chat público por país do fluxo: Brasil (pt-BR) e México (es-MX).
 import { createContext, useContext } from "react";
-import { formatMoney } from "@/lib/format";
+import { asCurrency, formatMoney } from "@/lib/format";
 
 export type ChatLocale = "pt-BR" | "es-MX" | "es-AR";
 export const asChatLocale = (v: unknown): ChatLocale => (v === "es-MX" || v === "es-AR" ? v : "pt-BR");
@@ -8,7 +8,14 @@ export const asChatLocale = (v: unknown): ChatLocale => (v === "es-MX" || v === 
 const pt = {
   // cabeçalho
   typing: "digitando...",
+  online: "online",
   botNotice: "Esta é uma conversa automatizada. Ofertas e pagamentos são sempre identificados de forma clara.",
+  // rótulos de acessibilidade
+  aBack: "Voltar",
+  aInfo: "Informações",
+  aContinueVideo: "Continuar vídeo",
+  aWatchOnce: "Assistir vídeo de visualização única",
+  aPlayVideo: "Reproduzir vídeo",
   // janela
   today: "Hoje",
   privateA: "Esta conversa é",
@@ -77,6 +84,7 @@ const pt = {
   cardFaceDown: "virada",
   // chamadas
   videoCall: "📹 Chamada de vídeo",
+  videoCallFrom: "📹 Chamada de vídeo de",
   voiceCall: "📞 Ligação de voz",
   calling: "chamando",
   decline: "Recusar",
@@ -137,7 +145,13 @@ export type ChatTexts = typeof pt;
 
 const es: ChatTexts = {
   typing: "escribiendo...",
+  online: "en línea",
   botNotice: "Esta es una conversación automatizada. Las ofertas y los pagos siempre se identifican con claridad.",
+  aBack: "Volver",
+  aInfo: "Información",
+  aContinueVideo: "Continuar video",
+  aWatchOnce: "Ver video de una sola vez",
+  aPlayVideo: "Reproducir video",
   today: "Hoy",
   privateA: "Esta conversación es",
   privateB: "privada",
@@ -198,6 +212,7 @@ const es: ChatTexts = {
   card: "Carta",
   cardFaceDown: "boca abajo",
   videoCall: "📹 Videollamada",
+  videoCallFrom: "📹 Videollamada de",
   voiceCall: "📞 Llamada de voz",
   calling: "llamando",
   decline: "Rechazar",
@@ -284,11 +299,19 @@ export function chatTexts(locale: ChatLocale): ChatTexts {
 export interface ChatI18n {
   locale: ChatLocale;
   t: ChatTexts;
-  /** preço na moeda do produto, no formato do país do fluxo */
+  /** preço na moeda do produto, no formato do país do fluxo ("$109.90 MXN", "R$ 19,90") */
   money: (cents: number | null | undefined, currency?: string | null) => string;
 }
 export function makeChatI18n(locale: ChatLocale): ChatI18n {
-  return { locale, t: chatTexts(locale), money: (cents, currency) => formatMoney(cents, currency ?? "BRL", locale) };
+  return {
+    locale,
+    t: chatTexts(locale),
+    // pesos usam "$" igual ao dólar: o código da moeda deixa claro o que é cobrado
+    money: (cents, currency) => {
+      const c = asCurrency(currency);
+      return c === "BRL" ? formatMoney(cents, c, locale) : `${formatMoney(cents, c, locale)} ${c}`;
+    },
+  };
 }
 export const ChatI18nContext = createContext<ChatI18n>(makeChatI18n("pt-BR"));
 export const useChatI18n = () => useContext(ChatI18nContext);

@@ -105,7 +105,7 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
       asChatLocale(funnel.locale));
     }
     if (!token) return null;
-    return createLiveTransport(() => token, { sandbox });
+    return createLiveTransport(() => token, { sandbox, locale: asChatLocale(funnel.locale) });
     // um transporte por rodada de conversa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [funnel, token, sandbox, draftPreview, round]);

@@ -269,3 +269,5 @@ export const DEFAULT_RECOVERY: RecoverySettings = {
   message: "Ei... você estava quase lá 👀\n\nSeu acesso ainda está reservado.",
   buttonLabel: "CONTINUAR",
 };
+/** mensagem de recuperação padrão nos fluxos em espanhol (quando o dono não escreveu a dele) */
+export const DEFAULT_RECOVERY_ES = { message: "Oye... ya casi lo tenías 👀\n\nTu acceso sigue reservado.", buttonLabel: "CONTINUAR" };

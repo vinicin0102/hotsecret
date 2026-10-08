@@ -204,7 +204,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             label={c.buttonLabel}
             onOpen={async () => {
               engine.track("delivery_viewed", item.nodeId);
-              if (!transport) throw new Error("Sem conexão");
+              if (!transport) throw new Error(t.cantOpen);
               return transport.delivery(item.productId ?? c.productId);
             }}
           />
@@ -243,7 +243,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
       case "call":
         return (
           <div key={item.id} className="msg-row system">
-            <div className="bubble system">📹 Chamada de vídeo de {funnel.character.name}</div>
+            <div className="bubble system">{t.videoCallFrom} {funnel.character.name}</div>
           </div>
         );
       case "recovery":

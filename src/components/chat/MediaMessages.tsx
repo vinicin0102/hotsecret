@@ -109,7 +109,7 @@ function ViewOnceVideo({
         />
         <span className="once-badge">1</span>
         {paused && (
-          <button type="button" className="video-play" aria-label="Continuar vídeo">
+          <button type="button" className="video-play" aria-label={t.aContinueVideo}>
             <PlayIcon />
           </button>
         )}
@@ -121,7 +121,7 @@ function ViewOnceVideo({
     <>
       <div className="video-msg video-once-cover" onClick={open} style={thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})` } : undefined}>
         <span className="once-badge">1</span>
-        <button type="button" className="video-play" aria-label="Assistir vídeo de visualização única" disabled={phase === "loading"}>
+        <button type="button" className="video-play" aria-label={t.aWatchOnce} disabled={phase === "loading"}>
           {phase === "loading" ? <span className="once-spin" /> : <PlayIcon />}
         </button>
         <div className="once-label">{error ? t.viewOnceRetry : t.viewOnceTap}</div>
@@ -164,6 +164,7 @@ function PlainVideo({
   autoplay?: boolean;
   onPlay?: () => void;
 }) {
+  const { t } = useChatI18n();
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(!!autoplay);
@@ -215,7 +216,7 @@ function PlainVideo({
           onEnded={() => setPlaying(false)}
         />
         {!playing && (
-          <button type="button" className="video-play" aria-label="Reproduzir vídeo">
+          <button type="button" className="video-play" aria-label={t.aPlayVideo}>
             <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
               <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />
             </svg>

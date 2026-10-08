@@ -1,6 +1,7 @@
 // Foto enviada pelo lead no chat (câmera ou galeria). O navegador comprime antes de enviar.
 import type { NextApiRequest, NextApiResponse } from "next";
 import { assertSameOrigin, HttpError, rateLimit } from "@/lib/api";
+import { isSpanishChat, leadError } from "@/lib/lead-errors";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
@@ -49,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (err) {
     const status = err instanceof HttpError ? err.status : 500;
     if (status === 500) console.error("[photo]", err);
-    res.status(status).json({ error: err instanceof Error && status !== 500 ? err.message : "Não foi possível enviar a foto" });
+    const es = isSpanishChat(req.headers["x-chat-locale"]);
+    res.status(status).json({ error: err instanceof Error && status !== 500 ? leadError(err.message, es) : es ? "No se pudo enviar la foto" : "Não foi possível enviar a foto" });
   }
 }

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { ZodError } from "zod";
+import { isSpanishChat, leadError } from "./lead-errors";
 import { ADMIN_COOKIE, hasRole, verifyAdminSession, type AdminSession, type Role } from "./auth";
 import { checkRateLimit } from "./rate-limit";
 
@@ -30,15 +31,18 @@ export function apiHandler(handlers: Partial<Record<Method, Handler>>) {
       if (!res.headersSent) res.status(200).json(result ?? { ok: true });
     } catch (err) {
       if (res.headersSent) return;
-      if (err instanceof HttpError) return res.status(err.status).json({ ...err.extra, error: err.message });
+      // chat público em espanhol (México/Argentina): o lead recebe o erro em espanhol
+      const es = isSpanishChat(req.headers["x-chat-locale"]);
+      const msg = (m: string) => leadError(m, es);
+      if (err instanceof HttpError) return res.status(err.status).json({ ...err.extra, error: msg(err.message) });
       if (err instanceof ZodError) {
-        return res.status(400).json({ error: "Dados inválidos", issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })) });
+        return res.status(400).json({ error: msg("Dados inválidos"), issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })) });
       }
       const code = (err as { code?: string })?.code;
-      if (code === "P2002") return res.status(409).json({ error: "Registro duplicado (valor já em uso)." });
-      if (code === "P2025") return res.status(404).json({ error: "Registro não encontrado." });
+      if (code === "P2002") return res.status(409).json({ error: msg("Registro duplicado (valor já em uso).") });
+      if (code === "P2025") return res.status(404).json({ error: msg("Registro não encontrado.") });
       console.error("[api]", req.method, req.url, err);
-      return res.status(500).json({ error: "Erro interno" });
+      return res.status(500).json({ error: msg("Erro interno") });
     }
   };
 }

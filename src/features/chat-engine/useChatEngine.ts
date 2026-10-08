@@ -509,7 +509,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const submitCheckout = useCallback(
     async (offerNodeId: string, form: CheckoutForm, opts?: { silent?: boolean }) => {
       const t = transportRef.current;
-      if (!t) throw new Error("Sem conexão");
+      if (!t) throw new Error(tx.netFail);
       const productId = form.productId ?? (getNode(graphRef.current, offerNodeId)?.content as { productId?: string } | undefined)?.productId;
       if (!form.payer && payerRef.current && productId && funnelProducts.current[productId]?.payerForm) form = { ...form, payer: payerRef.current };
       const payment = await t.checkout(offerNodeId, form);

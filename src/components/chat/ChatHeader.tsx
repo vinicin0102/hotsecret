@@ -22,7 +22,7 @@ export function ChatHeader({ character, typing, onBack }: { character: PublicCha
   return (
     <>
       <header className="chat-header">
-        <button className="back" aria-label="Voltar" onClick={() => (onBack ? onBack() : history.back())}>
+        <button className="back" aria-label={t.aBack} onClick={() => (onBack ? onBack() : history.back())}>
           ←
         </button>
         <Avatar character={character} />
@@ -34,12 +34,13 @@ export function ChatHeader({ character, typing, onBack }: { character: PublicCha
             ) : (
               <>
                 {character.showOnline && <span className="dot" />}
-                {character.status}
+                {/* status padrão "online" no idioma do fluxo; texto próprio do dono aparece como escrito */}
+                {/^online$/i.test(character.status.trim()) ? t.online : character.status}
               </>
             )}
           </div>
         </div>
-        <button className="info" aria-label="Informações" onClick={() => setInfo((v) => !v)}>
+        <button className="info" aria-label={t.aInfo} onClick={() => setInfo((v) => !v)}>
           i
         </button>
       </header>

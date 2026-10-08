@@ -2,6 +2,7 @@
 // SE checkout iniciado E pagamento não aprovado → após N minutos → mensagem automática no chat.
 import { prisma } from "@/lib/prisma";
 import { getFunnelSettings } from "./funnels";
+import { DEFAULT_RECOVERY, DEFAULT_RECOVERY_ES } from "@/types/flow";
 import { addConversationMessage } from "./payments/service";
 import { trackEvent } from "./tracking";
 import { ensureTag, addTagToLead } from "./tags";
@@ -12,7 +13,7 @@ async function recoverConversation(conversationId: string): Promise<boolean> {
     include: { funnel: { select: { settings: true } } },
   });
   if (!conv || !conv.checkoutStartedAt || conv.recoverySentAt || !conv.funnel) return false;
-  const { recovery } = getFunnelSettings(conv.funnel.settings);
+  const { recovery, locale } = getFunnelSettings(conv.funnel.settings);
   if (!recovery.enabled) return false;
   if (Date.now() - conv.checkoutStartedAt.getTime() < recovery.delayMinutes * 60 * 1000) return false;
 
@@ -26,8 +27,10 @@ async function recoverConversation(conversationId: string): Promise<boolean> {
   });
   if (count === 0) return false;
 
+  // fluxo em espanhol com a mensagem padrão (em português) sem editar: vai a padrão em espanhol
+  const text = locale !== "pt-BR" && recovery.message === DEFAULT_RECOVERY.message ? DEFAULT_RECOVERY_ES.message : recovery.message;
   await addConversationMessage(conversationId, "bot", "recovery", {
-    text: recovery.message,
+    text,
     buttonLabel: recovery.buttonLabel,
     offerNodeId: conv.checkoutNodeId,
   }, conv.checkoutNodeId);
