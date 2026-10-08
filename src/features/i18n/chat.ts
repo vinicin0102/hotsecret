@@ -128,7 +128,7 @@ const pt = {
   email: "E-mail",
   continue: "CONTINUAR",
   loadingMethods: "Carregando formas de pagamento…",
-  fieldErrors: { required: "Obrigatório", invalid_email: "E-mail inválido", invalid_date: "Data inválida", too_long: "Texto longo demais", invalid_option: "Escolha uma opção" } as Record<string, string>,
+  fieldErrors: { required: "Obrigatório", invalid_email: "Use seu e-mail real", invalid_name: "Escreva seu nome e sobrenome reais", invalid_date: "Data inválida", too_long: "Texto longo demais", invalid_option: "Escolha uma opção" } as Record<string, string>,
   fieldLabels: {
     name: "Nome completo",
     firstName: "Nome",
@@ -140,7 +140,12 @@ const pt = {
     phone: "Telefone",
   } as Record<string, string>,
   // instruções de transferência devolvidas pelo gateway
-  transferDetails: { clabe: "CLABE", cvu: "CVU", cbu: "CBU", alias: "Alias", beneficiary: "Favorecido", bank: "Banco", reference: "Referência" } as Record<string, string>,
+  transferDetails: { clabe: "CLABE", cvu: "CVU", cbu: "CBU", alias: "Alias", beneficiary: "Favorecido", bank: "Banco", bankName: "Banco", reference: "Referência", name: "Aplicativo", message: "Mensagem" } as Record<string, string>,
+  voucherReference: "Referência para pagar",
+  copyReference: "Copiar referência",
+  securePayment: "Pagamento seguro",
+  paymentCode: "Código de pagamento",
+  amountLabel: "Valor",
 };
 export type ChatTexts = typeof pt;
 
@@ -255,7 +260,7 @@ const es: ChatTexts = {
   email: "Correo electrónico",
   continue: "CONTINUAR",
   loadingMethods: "Cargando métodos de pago…",
-  fieldErrors: { required: "Obligatorio", invalid_email: "Correo inválido", invalid_date: "Fecha inválida", too_long: "Demasiado largo", invalid_option: "Elige una opción" },
+  fieldErrors: { required: "Obligatorio", invalid_email: "Usa tu correo real", invalid_name: "Escribe tu nombre y apellido reales", invalid_date: "Fecha inválida", too_long: "Demasiado largo", invalid_option: "Elige una opción" },
   fieldLabels: {
     name: "Nombre completo",
     firstName: "Nombre",
@@ -266,7 +271,12 @@ const es: ChatTexts = {
     birthCountry: "País de nacimiento",
     phone: "Teléfono",
   },
-  transferDetails: { clabe: "CLABE", cvu: "CVU", cbu: "CBU", alias: "Alias", beneficiary: "Beneficiario", bank: "Banco", reference: "Referencia" },
+  transferDetails: { clabe: "CLABE", cvu: "CVU", cbu: "CBU", alias: "Alias", beneficiary: "Beneficiario", bank: "Banco", bankName: "Banco", reference: "Referencia", name: "Aplicación", message: "Mensaje" },
+  voucherReference: "Referencia para pagar",
+  copyReference: "Copiar referencia",
+  securePayment: "Pago seguro",
+  paymentCode: "Código de pago",
+  amountLabel: "Monto",
 };
 
 /** Argentina: mesmo espanhol, com voseo onde o chat fala com o lead. */
@@ -291,7 +301,7 @@ const esAR: ChatTexts = {
   netFail: "Uy, se me cortó internet 😅 ¿me lo mandás de nuevo?",
   tarotFailed: "No pude abrir tus cartas ahora. Recargá la página.",
   downsellDefault: "Está bien 🥺 ¿qué tal una llamada más cortita?",
-  fieldErrors: { ...es.fieldErrors, invalid_option: "Elegí una opción" },
+  fieldErrors: { ...es.fieldErrors, invalid_option: "Elegí una opción", invalid_name: "Escribí tu nombre y apellido reales", invalid_email: "Usá tu correo real" },
 };
 
 export function chatTexts(locale: ChatLocale): ChatTexts {

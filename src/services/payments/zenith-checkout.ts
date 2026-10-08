@@ -12,6 +12,7 @@ import { addConversationMessage, applyPaymentStatus } from "./service";
 import {
   buildZenithCheckoutPayload,
   fetchZenithCatalog,
+  getZenithCheckoutStatus,
   mapZenithStatus,
   sendZenithIntent,
   usableZenithMethods,
@@ -30,6 +31,13 @@ export interface ZenithPayerInput {
   /** valores dos campos do catálogo (customerFields + fields) */
   customer: Record<string, string>;
 }
+
+/** recusas de dados do comprador → campo do formulário e motivo */
+const CUSTOMER_FIELD_ERRORS: Record<string, [string, string]> = {
+  CUSTOMER_NAME_REQUIRED: ["name", "required"],
+  CUSTOMER_NAME_INVALID: ["name", "invalid_name"],
+  CUSTOMER_EMAIL_INVALID: ["email", "invalid_email"],
+};
 
 const T = {
   unavailable: "Pagos no disponibles por el momento. Intenta de nuevo más tarde.",
@@ -58,7 +66,6 @@ export function publicZenithMethod(m: ZenithMethod) {
   return {
     code: m.code,
     displayName: m.displayName ?? m.code,
-    iconUrl: m.iconUrl?.startsWith("https://") ? m.iconUrl : null,
     fields: zenithFormFields(m).map((f) => ({
       name: f.name,
       label: f.label ?? f.name,
@@ -122,7 +129,12 @@ export async function createZenithCheckout(
     take: 3,
   });
   const pending = recent.find((p) => p.status === "PENDING" && p.nextAction);
-  if (pending) return pending; // o comprador já tem os dados de pagamento
+  if (pending) {
+    // o comprador já tem os dados de pagamento — a menos que esse checkout tenha sido encerrado na Zenith
+    const state = pending.providerPaymentId ? await getZenithCheckoutStatus(pending.providerPaymentId).catch(() => null) : null;
+    if (!state || mapZenithStatus(state) !== "FAILED") return pending;
+    await applyPaymentStatus(pending.id, "FAILED", "api_status");
+  }
 
   // 2) Resultado incerto anterior: reenviar a MESMA intenção (mesma chave, mesmo corpo) antes de criar outra
   const uncertain = recent.find((p) => p.status === "CREATED" && p.uncertain && p.idempotencyKey && p.providerRequest);
@@ -186,6 +198,9 @@ async function send(payment: Payment, ctx: { session: LeadSession; product: Prod
     // nada foi criado: encerra a intenção e apaga os dados pessoais do corpo guardado
     await prisma.payment.update({ where: { id: payment.id }, data: { uncertain: false, providerRequest: null } });
     await applyPaymentStatus(payment.id, "FAILED", "gateway_error");
+    // nome/e-mail recusados pela Zenith: o formulário marca o campo (corrigir = nova intenção, nova chave)
+    const field = CUSTOMER_FIELD_ERRORS[outcome.error.code ?? ""];
+    if (field) throw new HttpError(422, T.invalid, { code: "invalid_fields", fields: { [field[0]]: field[1] } });
     throw new HttpError(502, T.rejected, { code: "rejected" });
   }
 
@@ -194,6 +209,7 @@ async function send(payment: Payment, ctx: { session: LeadSession; product: Prod
     where: { id: payment.id },
     data: {
       providerPaymentId: r.checkoutId,
+      gatewayPaymentId: r.paymentId,
       nextAction: (r.nextAction ?? undefined) as Prisma.InputJsonValue | undefined,
       // o valor que o comprador copia (CLABE...) aparece onde o chat já mostra o código de pagamento
       pixQrCode: zenithCopyValue(r.nextAction),

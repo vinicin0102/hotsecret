@@ -74,15 +74,24 @@ o PIX do Brasil continua em `PAYMENT_PROVIDER`.
    como *Sensitive*). Nunca vão para o navegador, URL, payload ou log.
 2. `ZENITH_ENVIRONMENT=sandbox` (padrão). Cobrança real só com `ZENITH_ENVIRONMENT=production`.
 3. `PAYMENT_PROVIDER_MXN=zenith` (e/ou `PAYMENT_PROVIDER_ARS=zenith`) liga a Zenith para a moeda.
-4. Os métodos vêm de `GET /integrations/payment-methods` em tempo real; o formulário do chat pede
-   exatamente os `customerFields`/`fields` do método e o payload segue `requiredPayloadFields`.
-   Métodos de cartão (`secureCard`) ficam de fora: exigem os campos hospedados do Zenith Elements.
-5. Cada compra tem uma `Idempotency-Key` (UUID) persistida com o corpo exato; timeout/5xx deixam a
-   intenção como incerta e o próximo toque reenvia **a mesma chave e o mesmo corpo**.
-6. Pagamento só é aprovado pelo webhook assinado em `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/zenith`:
-   `X-Zenith-Timestamp` (±300 s) e `X-Zenith-Signature` = HMAC-SHA256 hex de `"<timestamp>." + corpo bruto`
-   com `ZENITH_WEBHOOK_SECRET`. O evento `payment.captured` aprova o pedido do `referenceId` uma única vez
-   (id do evento único) e só se `amount` e `currency` baterem com o pedido. Sem o segredo, todo webhook é recusado.
+4. Os métodos vêm de `GET /integrations/payment-methods` em tempo real, filtrados por `ZENITH_ALLOWED_METHODS`
+   (padrão `spei`; `all` libera todos os devolvidos, com os digitais antes dos presenciais como o OXXO); o formulário do chat pede exatamente os campos do método (nome completo real e
+   e-mail real) e o payload segue `requiredPayloadFields`. Métodos de cartão (`secureCard`) ficam de fora.
+5. Cada compra tem uma `Idempotency-Key` (UUID) persistida com o corpo exato; timeout/5xx sem `checkout.id`
+   deixam a intenção como incerta e o próximo toque reenvia **a mesma chave e o mesmo corpo**. Um checkout
+   pendente só é reaproveitado depois de consultar `GET /integrations/checkouts/:id` (encerrado = nova intenção).
+6. O chat mostra o `nextAction` exatamente como veio: `bank_transfer` (CLABE, banco, referência), `voucher`
+   (referência OXXO), `qr_code`, `redirect` e `app_approval`, com o título e os passos enviados.
+7. Pagamento só é aprovado pelo webhook assinado em `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/zenith`:
+   cabeçalhos `X-Zenith-Event-Id`, `X-Zenith-Event-Type`, `X-Zenith-Timestamp` (±300 s) e `X-Zenith-Signature`
+   = HMAC-SHA256 hex de `"<timestamp>." + corpo bruto` com `ZENITH_WEBHOOK_SECRET`. Só `payment.captured` e
+   `checkout.succeeded` liberam o pedido do `referenceId`, uma única vez por `X-Zenith-Event-Id`, e só se
+   `amount`, `currency`, `checkoutId` e `paymentId` baterem. `payment.failed` recusa; `payment.pending` é
+   ignorado; `deposit.credited` (transferência sem pedido, `UNMATCHED`/`AMBIGUOUS`) só é registrado, com
+   unicidade por `depositId`, e nunca vira venda. Sem o segredo, todo webhook é recusado.
+8. Cadastro do endpoint (uma vez, com as variáveis do seu ambiente — não rode com valores colados):
+   `POST /integrations/webhooks/endpoints` com `url` acima, `secret` = `$ZENITH_WEBHOOK_SECRET` e os eventos
+   `payment.captured`, `payment.pending`, `payment.failed`, `checkout.succeeded`, `deposit.credited`.
 
 ## Deploy na Vercel
 

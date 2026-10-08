@@ -44,7 +44,8 @@ export function PayerForm({
         if (!alive) return;
         if (m === null) return noForm.current();
         setMethods(m);
-        if (m.length === 1) setCode(m[0].code);
+        // já vem marcado o primeiro (o catálogo vem com as opções digitais antes das presenciais)
+        setCode((cur) => (cur && m.some((x) => x.code === cur) ? cur : (m[0]?.code ?? "")));
       })
       .catch((e) => alive && setLoadError(e instanceof Error ? e.message : t.generateError));
     return () => {
@@ -115,8 +116,6 @@ export function PayerForm({
         <div className="payer-methods" role="radiogroup" aria-label={t.payWith}>
           {methods.map((m) => (
             <button key={m.code} type="button" role="radio" aria-checked={code === m.code} className={code === m.code ? "active" : ""} onClick={() => setCode(m.code)}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {m.iconUrl && <img src={m.iconUrl} alt="" />}
               {m.displayName}
             </button>
           ))}

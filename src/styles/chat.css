@@ -1760,3 +1760,47 @@
   word-break: break-all;
   text-align: right;
 }
+
+/* Próxima ação do gateway (SPEI, OXXO, QR...) */
+.next-action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  margin-top: 6px;
+}
+.next-action-title {
+  font-size: 13px;
+  margin: 0;
+}
+.next-action-code-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.next-action-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 20px;
+  letter-spacing: 1px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed rgba(216, 168, 92, 0.5);
+  border-radius: 12px;
+  padding: 12px;
+  word-break: break-all;
+  text-align: center;
+  cursor: pointer;
+}
+.transfer-details > div[role="button"] {
+  cursor: pointer;
+}
+.copy-hint {
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+  margin-left: 4px;
+}
+.next-action .qr {
+  align-self: center;
+}
+.pix-box .next-action {
+  width: 100%;
+}

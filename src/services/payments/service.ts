@@ -47,7 +47,8 @@ export function publicPayment(p: Payment) {
     nextAction: publicNextAction(p.nextAction),
     offerNodeId: p.offerNodeId,
     productId: p.productId,
-    provider: p.provider,
+    // o navegador só precisa saber se é teste (sandbox); o gateway real não é exposto
+    provider: p.provider === "sandbox" ? "sandbox" : "live",
   };
 }
 

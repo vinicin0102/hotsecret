@@ -179,8 +179,26 @@ export function clearZenithCatalogCache() {
  * Métodos que este checkout consegue cobrar pela Payments API: cartão (secureCard) exige os campos
  * hospedados do Zenith Elements e fica de fora — nunca coletamos número/validade/CVC.
  */
+/**
+ * Métodos que o dono aceita oferecer (ZENITH_ALLOWED_METHODS, separados por vírgula; padrão "spei").
+ * Não é uma lista de disponibilidade: o método ainda precisa vir no catálogo da conta em runtime.
+ */
+export function zenithAllowedMethods(): Set<string> | null {
+  const raw = (process.env.ZENITH_ALLOWED_METHODS ?? "spei").trim().toLowerCase();
+  if (!raw || raw === "*" || raw === "all") return null;
+  return new Set(raw.split(",").map((c) => c.trim()).filter(Boolean));
+}
+
 export function usableZenithMethods(catalog: ZenithCatalog, amount: number): ZenithMethod[] {
-  return catalog.items.filter((m) => {
+  const allowed = zenithAllowedMethods();
+  // opções digitais imediatas antes das presenciais (voucher/dinheiro), pela categoria publicada
+  const late = (m: ZenithMethod) => (/^(voucher|cash)$/i.test(m.category ?? "") ? 1 : 0);
+  return catalog.items
+    .map((m, i) => ({ m, i }))
+    .sort((a, b) => late(a.m) - late(b.m) || a.i - b.i)
+    .map(({ m }) => m)
+    .filter((m) => {
+    if (allowed && !allowed.has(m.code.toLowerCase())) return false;
     if (m.capabilities?.secureCard || m.category === "card") return false;
     const lim = m.amountLimits;
     if (lim?.currency && lim.currency !== catalog.currency) return false;
@@ -292,6 +310,7 @@ export function buildZenithCheckoutPayload(input: ZenithPayloadInput): Record<st
   const name = [first, last].filter(Boolean).join(" ") || String(input.customer.name ?? "").trim();
   if (needsFullName(method) && !name) errors.name = "required";
   else if (name.length > 140) errors.name = "too_long";
+  else if (needsFullName(method) && !validPersonName(name)) errors.name = "invalid_name";
   if (name) payload.customerName = name;
   // o catálogo pode pedir nome/e-mail também em outro caminho (ex.: metadata.customerName em produção)
   for (const path of method.requiredPayloadFields ?? []) {
@@ -316,21 +335,47 @@ export function buildZenithCheckoutPayload(input: ZenithPayloadInput): Record<st
   return payload;
 }
 
+/**
+ * Nome e sobrenome reais (a Zenith recusa nomes ausentes, repetidos, com números, só iniciais ou fictícios):
+ * pelo menos duas palavras com letras, nenhuma de uma letra só, sem dígitos e sem repetição tipo "aaaa".
+ */
+export function validPersonName(v: string): boolean {
+  const name = v.trim().replace(/\s+/g, " ");
+  if (/\d/.test(name) || !/^[\p{L}' .-]+$/u.test(name)) return false;
+  const words = name.split(" ").filter((w) => /\p{L}/u.test(w));
+  const letters = (w: string) => w.replace(/[^\p{L}]/gu, "");
+  // pelo menos nome + sobrenome; inicial isolada não vale (o conectivo "y"/"e" sim: "Ortega y Gasset")
+  if (words.filter((w) => letters(w).length >= 2).length < 2) return false;
+  if (words.some((w) => letters(w).length < 2 && !/^[ye]$/i.test(letters(w)))) return false;
+  if (/(\p{L})\1{2,}/iu.test(name)) return false;
+  // "Ana Ana" é fictício; sobrenome repetido depois do nome ("Juan Pérez Pérez") é comum no México
+  if (words.length === 2 && words[0].toLowerCase() === words[1].toLowerCase()) return false;
+  return !/\b(teste?|test|fulano|cliente|nombre|apellido|asdf|qwerty|prueba)\b/i.test(name);
+}
+
 function validIsoDate(v: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
   const d = new Date(`${v}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v && d.getTime() < Date.now();
 }
 
+/**
+ * Próxima ação do comprador, como a Zenith devolve: redirect (url), qr_code (code), voucher (code — OXXO),
+ * bank_transfer (details — SPEI) e app_approval (app). Só é exibido o que veio na resposta.
+ */
 export interface ZenithNextAction {
   type: string;
   details?: Record<string, unknown>;
   instructions?: { locale?: string; title?: string; steps?: string[] };
   url?: string;
+  code?: string;
+  app?: Record<string, unknown>;
 }
 
 export interface ZenithCheckoutResult {
   checkoutId: string | null;
+  /** id do pagamento na Zenith (conferido no webhook junto com o checkout) */
+  paymentId: string | null;
   referenceId: string | null;
   amount: number | null;
   currency: string | null;
@@ -353,6 +398,7 @@ export async function postZenithCheckout(body: string, idempotencyKey: string, o
   const next = data.nextAction as ZenithNextAction | undefined;
   return {
     checkoutId: typeof checkout.id === "string" ? checkout.id : null,
+    paymentId: typeof payment.id === "string" ? payment.id : null,
     referenceId: typeof checkout.referenceId === "string" ? checkout.referenceId : null,
     amount: typeof checkout.amount === "number" ? checkout.amount : null,
     currency: typeof checkout.currency === "string" ? checkout.currency : null,
@@ -361,6 +407,21 @@ export async function postZenithCheckout(body: string, idempotencyKey: string, o
     method: (data.method as ZenithCheckoutResult["method"]) ?? null,
     nextAction: next && typeof next.type === "string" ? next : null,
   };
+}
+
+/**
+ * GET /integrations/checkouts/:id — estado público (pending, authorized, succeeded, failed, canceled, refunded).
+ * Serve só para a experiência do comprador e para não reaproveitar um checkout encerrado:
+ * o pedido só é liberado pelo webhook assinado.
+ */
+export async function getZenithCheckoutStatus(checkoutId: string, opts: { fetchImpl?: FetchLike } = {}): Promise<string | null> {
+  if (!/^[A-Za-z0-9_.:-]{1,120}$/.test(checkoutId)) return null;
+  const data = await zenithRequest<Record<string, unknown>>("GET", `/integrations/checkouts/${encodeURIComponent(checkoutId)}`, {
+    fetchImpl: opts.fetchImpl,
+    timeoutMs: 8_000,
+  });
+  const checkout = (data.checkout && typeof data.checkout === "object" ? data.checkout : data) as Record<string, unknown>;
+  return typeof checkout.status === "string" ? checkout.status : null;
 }
 
 /** Status da Zenith → status interno. */
@@ -388,8 +449,9 @@ export function mapZenithStatus(s: string | undefined): "PENDING" | "APPROVED" |
   }
 }
 
-/** Valor que o comprador copia no app do banco (CLABE no México, CVU/alias na Argentina...). */
+/** Valor que o comprador copia: código do voucher/QR (OXXO) ou CLABE da transferência (SPEI). */
 export function zenithCopyValue(next: ZenithNextAction | null | undefined): string | null {
+  if ((next?.type === "voucher" || next?.type === "qr_code") && typeof next.code === "string" && next.code.trim()) return next.code.trim();
   const d = next?.details;
   if (!d) return null;
   for (const k of ["clabe", "cvu", "cbu", "alias", "reference", "referenceNumber", "code"]) {
@@ -410,11 +472,19 @@ export function publicNextAction(v: unknown): ZenithNextAction | null {
   }
   const steps = Array.isArray(n.instructions?.steps) ? n.instructions!.steps.filter((s) => typeof s === "string").slice(0, 10).map((s) => s.slice(0, 300)) : [];
   const url = typeof n.url === "string" && n.url.startsWith("https://") ? n.url : undefined;
+  const code = typeof n.code === "string" && n.code.trim() ? n.code.trim().slice(0, 1000) : undefined;
+  // app_approval: só os textos que a Zenith mandou (nome do app, mensagem...)
+  const app: Record<string, string> = {};
+  for (const [k, val] of Object.entries(n.app && typeof n.app === "object" ? n.app : {})) {
+    if (/^[A-Za-z][\w-]{0,40}$/.test(k) && (typeof val === "string" || typeof val === "number")) app[k] = String(val).slice(0, 200);
+  }
   return {
     type: n.type.slice(0, 40),
     details,
     instructions: { title: typeof n.instructions?.title === "string" ? n.instructions.title.slice(0, 200) : undefined, steps },
     ...(url ? { url } : {}),
+    ...(code ? { code } : {}),
+    ...(Object.keys(app).length ? { app } : {}),
   };
 }
 

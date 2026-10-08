@@ -293,6 +293,8 @@ model Payment {
   providerRequest   String?
   /// true = a criação no gateway teve resultado incerto; reenviar com a mesma chave antes de criar outra
   uncertain         Boolean       @default(false)
+  /// id do pagamento no gateway (Zenith: payment.id, conferido no webhook junto com o checkout)
+  gatewayPaymentId  String?
   /// código do método do catálogo do gateway (ex.: spei)
   methodCode        String?
   /// instruções de pagamento devolvidas pelo gateway (ex.: CLABE e passos do SPEI)

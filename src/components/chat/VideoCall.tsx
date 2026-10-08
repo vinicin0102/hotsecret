@@ -5,6 +5,7 @@ import type { PublicCharacter, PublicProduct } from "@/types/flow";
 import type { CallVideo, ChatTransport, PayMethod, PayerData, PublicPaymentInfo } from "@/features/chat-engine/transport";
 import { PaymentStatus } from "./PaymentStatus";
 import { PayerForm } from "./PayerForm";
+import { NextActionView } from "./NextAction";
 
 /** Toque de celular sintetizado (sem arquivo) + vibração, enquanto a chamada está tocando. */
 function useRingtone(active: boolean) {
@@ -156,9 +157,6 @@ export function PixPopup({
   const { t, money } = useChatI18n();
   const code = payment?.pixQrCode ?? "";
   const failed = payment?.status === "FAILED";
-  // transferência do gateway (ex.: SPEI): favorecido e passos vêm da própria Zenith
-  const details = payment?.nextAction?.details ?? {};
-  const gatewaySteps = payment?.nextAction?.instructions?.steps ?? [];
   const copy = async () => {
     if (!code) return;
     setCopied(true);
@@ -213,10 +211,21 @@ export function PixPopup({
           </div>
         ) : failed ? (
           <div className="error-text">{t.callNotApproved}</div>
+        ) : payment.nextAction ? (
+          <>
+            {/* dados de pagamento do gateway (SPEI, OXXO...) exatamente como vieram */}
+            <NextActionView action={payment.nextAction} amount={money(payment.amount, payment.currency)} compact />
+            <ol className="pix-steps" start={(payment.nextAction.instructions?.steps?.length ?? 0) + 1}>
+              <li>{t.step3}</li>
+            </ol>
+            <div className="pix-wait">
+              <span className="once-spin" /> {t.waitingPay}
+            </div>
+          </>
         ) : (
           <>
             <div className="pix-label">
-              {details.clabe ? t.transferDetails.clabe : t.keyOf} {details.beneficiary ? `· ${details.beneficiary}` : character.name.trim().split(/\s+/)[0]}
+              {t.keyOf} {character.name.trim().split(/\s+/)[0]}
             </div>
             <div className="pix-code-box" id="pix-code-text" onClick={copy}>
               {code}
@@ -225,14 +234,8 @@ export function PixPopup({
               {copied ? t.keyCopied : t.copyKey}
             </button>
             <ol className="pix-steps">
-              {gatewaySteps.length ? (
-                gatewaySteps.map((s, i) => <li key={i}>{s}</li>)
-              ) : (
-                <>
-                  <li>{t.step1}</li>
-                  <li>{t.step2}</li>
-                </>
-              )}
+              <li>{t.step1}</li>
+              <li>{t.step2}</li>
               <li>{t.step3}</li>
             </ol>
             <div className="pix-wait">

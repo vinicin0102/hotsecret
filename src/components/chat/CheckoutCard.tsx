@@ -50,7 +50,8 @@ export function CheckoutCard({
             <div className="pprice">{price}</div>
           </div>
           <p style={{ margin: "0 0 4px", fontSize: 13 }}>
-            {t.payVia} <b style={{ color: "#fff" }}>{t.payMethod}</b> · {t.instantRelease}
+            {/* com o formulário do gateway o método é escolhido logo abaixo (SPEI, OXXO...) */}
+            {withForm ? t.securePayment : <>{t.payVia} <b style={{ color: "#fff" }}>{t.payMethod}</b></>} · {t.instantRelease}
           </p>
           {withForm ? (
             <PayerForm

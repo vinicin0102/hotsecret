@@ -1,6 +1,8 @@
 // Webhook da Zenith: a ÚNICA fonte de confirmação de pagamento.
-// Ordem: corpo bruto → timestamp (±300s) → HMAC (ZENITH_WEBHOOK_SECRET) → referenceId/amount/currency →
-// id único do evento (idempotente) → status. Falha ao aplicar = 500 (a Zenith reenvia).
+// Ordem: corpo bruto → cabeçalhos X-Zenith-* → timestamp (±300s) → HMAC (ZENITH_WEBHOOK_SECRET) →
+// referenceId/amount/currency/checkoutId/paymentId → X-Zenith-Event-Id único → status.
+// Só payment.captured / checkout.succeeded liberam o pedido; deposit.credited só é registrado.
+// Falha ao aplicar = 500 (a Zenith reenvia).
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applyPaymentStatus } from "./service";
@@ -9,7 +11,7 @@ import { consumeZenithEvent, parseZenithEvent, verifyZenithSignature, type Zenit
 
 export const prismaZenithStore: ZenithWebhookStore = {
   findPayment: (id) =>
-    prisma.payment.findUnique({ where: { id }, select: { id: true, provider: true, amount: true, currency: true, providerPaymentId: true } }),
+    prisma.payment.findUnique({ where: { id }, select: { id: true, provider: true, amount: true, currency: true, providerPaymentId: true, gatewayPaymentId: true } }),
   async markProcessed(eventId, paymentId) {
     try {
       await prisma.webhookEvent.create({ data: { provider: "zenith", eventId, paymentId } });
@@ -35,7 +37,7 @@ export async function handleZenithWebhook(req: WebhookRequest, store: ZenithWebh
   } catch {
     payload = { raw: req.rawBody.slice(0, 2000) };
   }
-  const event = sig.ok ? parseZenithEvent(req.rawBody) : null;
+  const event = sig.ok ? parseZenithEvent(req) : null;
   const log = await prisma.webhookLog.create({
     data: { provider: "zenith", eventType: event?.type || null, signatureValid: sig.ok, payload },
   });
@@ -46,10 +48,12 @@ export async function handleZenithWebhook(req: WebhookRequest, store: ZenithWebh
   if (!event) return { status: 400, body: { error: "evento inválido" } };
 
   const result = await consumeZenithEvent(event, store);
-  if (result !== "unknown_payment") {
+  if (event.referenceId && !["unknown_payment", "ignored", "deposit_recorded"].includes(result)) {
     await prisma.webhookLog.update({ where: { id: log.id }, data: { paymentId: event.referenceId } }).catch(() => undefined);
   }
   // evento autêntico que não bate com o pedido: nada é aprovado e fica registrado para conferência
   if (result.endsWith("_mismatch") || result.endsWith("_missing")) console.warn("[zenith] webhook ignorado:", result, event.id, event.type);
+  // transferência sem pedido vinculado: entrada avulsa para conferência manual (nunca vira venda)
+  if (result === "deposit_recorded") console.warn("[zenith] depósito avulso registrado:", event.depositId ?? "-", event.reconciliationReason ?? "-");
   return { status: 200, body: { ok: true, result } };
 }

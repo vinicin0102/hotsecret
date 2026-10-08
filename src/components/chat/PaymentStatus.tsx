@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicPaymentInfo } from "@/features/chat-engine/transport";
+import { NextActionView } from "./NextAction";
 
 /** Imagem do gateway (URL, data URI ou base64 puro) — usada só se não der para gerar o QR localmente. */
 function gatewayQrSrc(v: string): string {
@@ -63,7 +64,10 @@ export function PaymentStatus({
     <div className="msg-row bot">
       <div className="card-msg payment-card">
         <div className="card-body">
-          <div className="eyebrow">{payment.method === "PIX" ? t.payEyebrowPix : t.payEyebrowCard}</div>
+          <div className="eyebrow">
+            {/* método do gateway (SPEI, OXXO...) pelo código do catálogo; senão PIX/cartão */}
+            {payment.methodCode ? `${t.payVia} ${payment.methodCode.toUpperCase()}` : payment.method === "PIX" ? t.payEyebrowPix : t.payEyebrowCard}
+          </div>
           <h3 style={{ fontSize: 17 }}>
             {productName ?? t.yourOrder} · {money(payment.amount, payment.currency)}
           </h3>
@@ -81,32 +85,8 @@ export function PaymentStatus({
           )}
           {payment.status === "REFUNDED" && <div className="status-line status-failed">{t.refunded}</div>}
 
-          {pending && payment.nextAction?.type === "bank_transfer" && (
-            <>
-              <p style={{ fontSize: 13 }}>{payment.nextAction.instructions?.title || t.copyInstructions}</p>
-              <dl className="transfer-details">
-                {Object.entries(payment.nextAction.details ?? {}).map(([k, v]) => (
-                  <div key={k}>
-                    <dt>{t.transferDetails[k] ?? k}</dt>
-                    <dd>{v}</dd>
-                  </div>
-                ))}
-              </dl>
-              {payment.pixQrCode && (
-                <button className="btn btn-gold btn-block" style={{ marginTop: 10 }} onClick={copy}>
-                  {copied ? t.copied : `${t.copyCode}`}
-                </button>
-              )}
-              {!!payment.nextAction.instructions?.steps?.length && (
-                <ol className="pix-steps">
-                  {payment.nextAction.instructions.steps.map((st, i) => (
-                    <li key={i}>{st}</li>
-                  ))}
-                </ol>
-              )}
-            </>
-          )}
-          {pending && payment.method === "PIX" && payment.nextAction?.type !== "bank_transfer" && (
+          {pending && payment.nextAction && <NextActionView action={payment.nextAction} amount={money(payment.amount, payment.currency)} />}
+          {pending && payment.method === "PIX" && !payment.nextAction && (
             <>
               {qr && (payment.currency ?? "BRL") === "BRL" && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -119,7 +99,7 @@ export function PaymentStatus({
               </button>
             </>
           )}
-          {pending && payment.redirectUrl && (payment.method === "CARD" || payment.nextAction?.type === "redirect") && (
+          {pending && payment.redirectUrl && payment.method === "CARD" && !payment.nextAction && (
             <a className="btn btn-primary btn-block" href={payment.redirectUrl} target="_blank" rel="noopener noreferrer">
               {t.openSecure}
             </a>

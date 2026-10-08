@@ -30,11 +30,14 @@ export interface PublicPaymentInfo {
   nextAction?: PaymentNextAction | null;
 }
 
+/** Próxima ação do comprador: redirect (url), qr_code/voucher (code), bank_transfer (details), app_approval (app). */
 export interface PaymentNextAction {
   type: string;
   details?: Record<string, string>;
   instructions?: { title?: string; steps?: string[] };
   url?: string;
+  code?: string;
+  app?: Record<string, string>;
 }
 
 /** Campo pedido pelo catálogo do gateway (Zenith). */
@@ -51,7 +54,6 @@ export interface PayField {
 export interface PayMethod {
   code: string;
   displayName: string;
-  iconUrl: string | null;
   fields: PayField[];
 }
 
