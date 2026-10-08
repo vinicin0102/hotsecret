@@ -291,6 +291,15 @@ ${brain.rules ? `\n# Regras do vendedor\n${brain.rules}\n` : ""}${
 # Ofertas disponíveis
 ${offers || (flowButtons ? "(nenhuma oferta por card — neste bloco os produtos são vendidos pelos BOTÕES DE OFERTA, veja a seção no fim)" : "(nenhuma oferta cadastrada — não ofereça produtos)")}
 Para mostrar o card de compra (ou ligar, nas ofertas em formato de chamada), coloque o offer_id em "offer_id" (no máximo uma oferta por resposta) e diga uma frase chamando para o botão ou avisando que vai ligar. Se o histórico mostrar que o lead recusou a chamada, não ligue de novo na mesma hora: acolha e, se houver, ofereça uma opção mais curta ou mais barata. Use "" quando não for oferecer. Não repita a mesma oferta se ela já foi mostrada e o lead não demonstrou interesse novo.
+Como escolher a oferta certa:
+- Se o lead citar um produto (pelo nome ou pelo que ele entrega), use o offer_id DESSE produto — confira o nome antes. Nunca mande uma oferta diferente da que ele pediu.
+- Na primeira mensagem do lead, só ofereça se ele pedir (preço, comprar, um produto). Primeiro converse.
+- Se a mesma oferta apareceu nas suas últimas 3 mensagens, não mande de novo — a não ser que o lead peça outra vez.${
+    brainOffers(brain).some((o) => o.style === "call" && o.videoId)
+      ? `
+- A CHAMADA DE VÍDEO é a sua oferta principal: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade, pedir mais, pedir foto/vídeo, perguntar preço) e não pedir outro produto específico, LIGUE para ele (offer_id da oferta em formato de chamada), avisando que vai ligar. Se ele recusar, acolha e convide de novo mais tarde, depois de algumas mensagens.`
+      : ""
+  }
 
 ${
     brainVoiceCalls(brain).length
@@ -740,7 +749,7 @@ const has = (re: RegExp, text: string) => re.test(plain(text));
  * Garante o envio quando o pedido do lead é claro e a IA não escolheu nada:
  * oferta citada pelo nome/descrição (ou ligação pedida), prévia pedida, áudio cuja descrição bate com a mensagem.
  */
-function assistReply(
+export function assistReply(
   reply: Omit<BrainReply, "usage">,
   history: ChatTurn[],
   offers: BrainOffer[],
@@ -781,24 +790,54 @@ function assistReply(
     }
   }
 
-  if (!out.offer && !out.showOffers) {
-    const declinedCall = /recusou a chamada/.test(history.slice(-4).map((t) => t.text).join(" "));
-    const calls = offers.filter((o) => o.style === "call" && o.videoId);
+  // ---------- ofertas: certa, na hora certa, sem repetir — e ligar sempre que houver interesse ----------
+  const leadMsgs = history.filter((t) => t.role === "lead" && !t.text.startsWith("["));
+  // só o que o lead ESCREVEU conta como pedido (anotações do sistema, como "[recusou a chamada de vídeo]", não)
+  const leadText = lastLead.startsWith("[") ? "" : lastLead;
+  const buy = has(BUY_INTENT, leadText);
+  const asked = buy || has(ASK_INTENT, leadText) || has(OPTIONS_INTENT, leadText) || has(OTHERS_INTENT, leadText);
+  const interested = asked || has(INTEREST_INTENT, leadText) || has(PREVIEW_INTENT, leadText) || has(CALL_INTENT, leadText);
+  const refused = has(REFUSE_INTENT, leadText);
+  const leadWords = keyWords(leadText);
+  // oferta que o lead citou pelo nome/título (a mais parecida)
+  let named: BrainOffer | undefined;
+  let namedScore = 0;
+  for (const o of offers) {
+    const hit = overlap(leadWords, keyWords(`${products.get(o.productId)?.name ?? ""} ${o.headline ?? ""}`));
+    if (hit > namedScore) [named, namedScore] = [o, hit];
+  }
+  // ofertas que apareceram nas 3 últimas falas do atendente
+  const lastBots = history.filter((t) => t.role === "bot").slice(-3).map((t) => t.text).join("\n");
+  const shownRecently = (o: BrainOffer) => lastBots.includes(`offer_id "${o.id}"`);
+  // chamada de vídeo: depois de uma recusa, só convida de novo depois de 4 mensagens do lead
+  const callOffer = offers.find((o) => o.style === "call" && o.videoId);
+  const declineIdx = history.map((t) => t.text).lastIndexOf("[recusou a chamada de vídeo]");
+  const leadSinceDecline = declineIdx < 0 ? Infinity : history.slice(declineIdx + 1).filter((t) => t.role === "lead" && !t.text.startsWith("[")).length;
+  const declinedOfferId = declineIdx < 0 ? null : (/offer_id "([^"]+)"/.exec([...history.slice(0, declineIdx)].reverse().find((t) => t.text.includes("ligou para o lead"))?.text ?? "")?.[1] ?? null);
+  const callBlocked = (o: BrainOffer) => o.id === declinedOfferId && leadSinceDecline < 4;
+  const asOffer = (o: BrainOffer) => ({ ...o, product: products.get(o.productId)! });
+
+  if (out.offer) {
+    let o: BrainOffer = out.offer;
+    // oferta errada: o lead citou outro produto pelo nome → manda o que ele pediu
+    if (named && named.id !== o.id && namedScore >= 1) o = named;
+    const explicit = o.id === named?.id || buy || (o.style === "call" && has(CALL_INTENT, leadText));
+    if (callBlocked(o) && !has(CALL_INTENT, leadText)) out.offer = null; // acabou de recusar esta chamada
+    else if (shownRecently(o) && !explicit) out.offer = null; // não repete a mesma oferta em sequência
+    else if (leadMsgs.length <= 1 && !asked && !explicit) out.offer = null; // cedo demais: ainda nem conversaram
+    else out.offer = asOffer(o);
+  }
+
+  if (!out.offer && !out.showOffers && !refused) {
     let pick: BrainOffer | undefined;
-    if (calls.length && !declinedCall && has(CALL_INTENT, lastLead) && (has(BUY_INTENT, lastLead) || has(ASK_INTENT, lastLead))) pick = calls[0];
-    if (!pick) {
-      // produto citado pelo nome/título (ex.: "tarot") ou pela descrição de quando oferecer
-      let best = 0;
-      for (const o of offers) {
-        const nameHit = overlap(said, keyWords(`${products.get(o.productId)?.name ?? ""} ${o.headline ?? ""}`));
-        const whenHit = overlap(said, keyWords(o.when ?? ""));
-        const score = nameHit * 2 + whenHit;
-        if ((nameHit >= 1 || whenHit >= 2) && score > best) [pick, best] = [o, score];
-      }
-      if (pick && !(has(BUY_INTENT, lastLead) || has(ASK_INTENT, lastLead) || best >= 3)) pick = undefined;
-    }
-    // não repete a mesma oferta que acabou de aparecer
-    if (pick && !recentBot.includes(`offer_id "${pick.id}"`)) out.offer = { ...pick, product: products.get(pick.productId)! };
+    // pediu um produto pelo nome
+    if (named && namedScore >= 1 && (asked || namedScore >= 2) && (!shownRecently(named) || buy)) pick = named;
+    // sempre que houver interesse (e ele não pediu outro produto), liga — a chamada é a oferta principal
+    if (!pick && callOffer && interested && !callBlocked(callOffer) && !shownRecently(callOffer) && (leadMsgs.length >= 2 || asked || has(CALL_INTENT, leadText)))
+      pick = callOffer;
+    // quer comprar e só há uma oferta
+    if (!pick && buy && offers.length === 1 && !shownRecently(offers[0])) pick = offers[0];
+    if (pick) out.offer = asOffer(pick);
   }
 
   // pedido de prévia (pedir "chamada de vídeo" é ligação, não prévia)
@@ -834,6 +873,9 @@ const NO_INTENT = /\b(nao|agora nao|depois|nem|nunca|no|ahorita no|despues|luego
 const BUY_INTENT =
   /\b(quero|qro|quer|bora|vamos|vamo|sim|ss|manda|mande|me manda|liga|ligar|ligacao|chamada|videochamada|video ?chamada|quanto|preco|valor|comprar|compro|pix|pagar|aceito|topo|pode ser|claro|fechado|fecho|bota|libera|quiero|kiero|dale|si|llamame|llamada|videollamada|cuanto|precio|costo|cuesta|pago|acepto|me interesa|mandame|sale|orale|andale)\b/i;
 const CALL_INTENT = /(liga|ligar|ligacao|chamada|videochamada|call|ao vivo|me liga|llamame|llamar|llamada|videollamada|marcame|en vivo)/i;
+/** interesse / desejo (pt + es, sem acentos): gatilho para ligar */
+const INTEREST_INTENT =
+  /\b(gostei|amei|adorei|curti|linda|lindo|gostosa|gostoso|delicia|maravilhosa|perfeita|safada|safadinha|tesao|excitad[oa]|interessad[oa]|quero ver|me mostra|mostra mais|mais fotos|mais videos|nossa|uau|wow|hermosa|preciosa|rica|riquisima|guapa|bonita|sexy|caliente|me gusta|me encanta|me encantas|quiero ver|muestrame|ensename|mas fotos|mas videos|que rico|uff|me interesa)\b/i;
 /** pedido de opções/preço (pt + es, sem acentos) */
 const OPTIONS_INTENT =
   /\b(packs?|pacotes?|paquetes?|opcoes|opcao|opciones|opcion|catalogo|o que (voce )?tem|que tienes|quais|cuales|precos?|precios?|valores?|quanto|cuanto|cuestan?|custa|tabela|lista)\b/i;
