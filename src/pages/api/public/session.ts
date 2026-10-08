@@ -10,6 +10,13 @@ import { checkRecoveryFor } from "@/services/recovery";
 import { publicPayment } from "@/services/payments/service";
 import { publicMessage } from "@/services/conversation";
 
+const utmValue = z
+  .string()
+  .max(5000)
+  .transform((v) => v.slice(0, 500))
+  .optional()
+  .catch(undefined);
+
 const schema = z.object({
   funnelId: z.string().max(64),
   token: z.string().max(2000).optional().nullable(),
@@ -17,13 +24,14 @@ const schema = z.object({
   preview: z.boolean().optional(),
   experimentId: z.string().max(64).optional().nullable(),
   variantId: z.string().max(64).optional().nullable(),
+  // UTMs longas (ex.: UTMify "{{campaign.name}}|{{campaign.id}}") são cortadas, nunca impedem o chat de abrir
   utm: z
     .object({
-      utm_source: z.string().max(200).optional(),
-      utm_medium: z.string().max(200).optional(),
-      utm_campaign: z.string().max(200).optional(),
-      utm_content: z.string().max(200).optional(),
-      utm_term: z.string().max(200).optional(),
+      utm_source: utmValue,
+      utm_medium: utmValue,
+      utm_campaign: utmValue,
+      utm_content: utmValue,
+      utm_term: utmValue,
     })
     .partial()
     .default({}),
@@ -42,6 +50,8 @@ function fbcFromLanding(landing?: string | null): string | null {
 }
 
 const t = (v?: string | null) => (v ? sanitizeText(v, 200) || null : null);
+/** UTMs guardam até 500 caracteres: no padrão da UTMify o id do anúncio vem no fim ("nome|id") e não pode ser cortado */
+const tu = (v?: string | null) => (v ? sanitizeText(v, 500) || null : null);
 
 export default apiHandler({
   POST: async (req) => {
@@ -98,11 +108,11 @@ export default apiHandler({
     const lead = await prisma.lead.create({
       data: {
         funnelId: funnel.id,
-        utmSource: t(body.utm.utm_source),
-        utmMedium: t(body.utm.utm_medium),
-        utmCampaign: t(body.utm.utm_campaign),
-        utmContent: t(body.utm.utm_content),
-        utmTerm: t(body.utm.utm_term),
+        utmSource: tu(body.utm.utm_source),
+        utmMedium: tu(body.utm.utm_medium),
+        utmCampaign: tu(body.utm.utm_campaign),
+        utmContent: tu(body.utm.utm_content),
+        utmTerm: tu(body.utm.utm_term),
         referrer: sanitizeUrl(body.referrer) || null,
         landingPage: sanitizeUrl(body.landingPage) || null,
         device: ua.device,

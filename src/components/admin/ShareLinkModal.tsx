@@ -19,6 +19,18 @@ const PRESETS: { key: string; label: string; utm: Record<string, string>; hint: 
     hint: "Cole no campo “Site” do anúncio. A Meta preenche campanha, conjunto e anúncio sozinha.",
   },
   {
+    key: "utmify",
+    label: "Meta Ads + UTMify",
+    utm: {
+      utm_source: "FB",
+      utm_campaign: "{{campaign.name}}|{{campaign.id}}",
+      utm_medium: "{{adset.name}}|{{adset.id}}",
+      utm_content: "{{ad.name}}|{{ad.id}}",
+      utm_term: "{{placement}}",
+    },
+    hint: "Padrão da UTMify (nome|id de campanha, conjunto e anúncio). Cole no campo “Parâmetros de URL” do anúncio.",
+  },
+  {
     key: "tiktok",
     label: "TikTok Ads",
     utm: { utm_source: "tiktok", utm_medium: "cpc", utm_campaign: "__CAMPAIGN_NAME__", utm_content: "__CID_NAME__", utm_term: "__AID_NAME__" },
