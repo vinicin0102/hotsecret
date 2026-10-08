@@ -42,7 +42,10 @@ export async function handleZenithWebhook(req: WebhookRequest, store: ZenithWebh
     data: { provider: "zenith", eventType: event?.type || null, signatureValid: sig.ok, payload },
   });
   if (!sig.ok) {
-    console.warn("[zenith] webhook recusado:", sig.reason);
+    // diagnóstico: só os NOMES dos cabeçalhos e das chaves do corpo (nunca valores, assinaturas ou segredos)
+    const headerNames = Object.keys(req.headers).filter((h) => !/^(cookie|authorization)$/i.test(h)).sort().join(",");
+    const bodyKeys = payload && typeof payload === "object" && !Array.isArray(payload) ? Object.keys(payload).sort().join(",") : typeof payload;
+    console.warn("[zenith] webhook recusado:", sig.reason, "| cabeçalhos:", headerNames, "| corpo:", bodyKeys);
     return { status: 401, body: { error: "assinatura inválida" } };
   }
   if (!event) return { status: 400, body: { error: "evento inválido" } };
