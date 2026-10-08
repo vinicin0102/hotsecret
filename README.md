@@ -80,6 +80,8 @@ o PIX do Brasil continua em `PAYMENT_PROVIDER`.
 5. Cada compra tem uma `Idempotency-Key` (UUID) persistida com o corpo exato; timeout/5xx sem `checkout.id`
    deixam a intenção como incerta e o próximo toque reenvia **a mesma chave e o mesmo corpo**. Um checkout
    pendente só é reaproveitado depois de consultar `GET /integrations/checkouts/:id` (encerrado = nova intenção).
+   Opcional, só com autorização da Zenith: `ZENITH_PAYER_NAME` e `ZENITH_PAYER_EMAIL` (nome completo e e-mail
+   reais do titular) deixam o checkout em um toque, sem formulário; se a Zenith recusar, o formulário aparece.
 6. O chat mostra o `nextAction` exatamente como veio: `bank_transfer` (CLABE, banco, referência), `voucher`
    (referência OXXO), `qr_code`, `redirect` e `app_approval`, com o título e os passos enviados.
 7. Pagamento só é aprovado pelo webhook assinado em `https://SEU_DOMINIO/hot-secret/api/webhooks/payments/zenith`:

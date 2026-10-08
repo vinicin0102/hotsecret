@@ -30,6 +30,22 @@ export function zenithConfigured(): boolean {
   return !!(process.env.ZENITH_PUBLIC_KEY && process.env.ZENITH_SECRET_KEY);
 }
 
+/**
+ * Pagador padrão do dono (opcional; desligado sem as duas variáveis): ZENITH_PAYER_NAME e ZENITH_PAYER_EMAIL.
+ * Ligado com autorização da Zenith (combinada pelo dono com o gerente da conta): o checkout funciona como o PIX,
+ * um toque sem formulário. Devem ser o nome e o e-mail reais do titular — nunca nomes inventados.
+ */
+export function zenithDefaultPayer(): { name: string; email: string } | null {
+  const name = (process.env.ZENITH_PAYER_NAME ?? "").trim();
+  const email = (process.env.ZENITH_PAYER_EMAIL ?? "").trim().toLowerCase();
+  if (!name || !email) return null;
+  if (!validPersonName(name) || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    console.warn("[zenith] ZENITH_PAYER_NAME/EMAIL inválidos: o checkout continua pedindo os dados do comprador");
+    return null;
+  }
+  return { name, email };
+}
+
 /** País da Zenith pela moeda do produto. */
 export const ZENITH_COUNTRY: Record<string, string> = { MXN: "MX", ARS: "AR" };
 

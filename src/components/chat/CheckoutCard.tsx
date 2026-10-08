@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicProduct } from "@/types/flow";
-import type { CheckoutForm, PayMethods, PayerData } from "@/features/chat-engine/transport";
+import { ApiError, type CheckoutForm, type PayMethods, type PayerData } from "@/features/chat-engine/transport";
 import { PayerForm } from "./PayerForm";
 
 /**
@@ -22,7 +22,9 @@ export function CheckoutCard({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [noForm, setNoForm] = useState(false);
-  const withForm = !!product.payerForm && !!loadMethods && !noForm;
+  /** o gateway recusou o pagador padrão: o lead informa os próprios dados */
+  const [askPayer, setAskPayer] = useState(false);
+  const withForm = (!!product.payerForm || askPayer) && !!loadMethods && !noForm;
   const { t, money } = useChatI18n();
   const price = money(product.price, product.currency);
 
@@ -32,8 +34,12 @@ export function CheckoutCard({
     try {
       await onSubmit({ method: "PIX" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.generateError);
       setLoading(false);
+      if (err instanceof ApiError && (err.data.code === "payer_required" || err.data.code === "invalid_fields")) {
+        setAskPayer(true);
+        return;
+      }
+      setError(err instanceof Error ? err.message : t.generateError);
     }
   };
 

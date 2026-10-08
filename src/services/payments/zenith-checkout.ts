@@ -20,7 +20,9 @@ import {
   ZenithError,
   ZenithValidationError,
   zenithCopyValue,
+  zenithDefaultPayer,
   zenithFormFields,
+  validPersonName,
   type ZenithMethod,
 } from "./zenith";
 
@@ -30,6 +32,8 @@ export interface ZenithPayerInput {
   email: string;
   /** valores dos campos do catálogo (customerFields + fields) */
   customer: Record<string, string>;
+  /** dados do titular (pagador padrão): não são gravados no cadastro do lead */
+  fromDefault?: boolean;
 }
 
 /** recusas de dados do comprador → campo do formulário e motivo */
@@ -87,7 +91,15 @@ export async function createZenithCheckout(
   const currency = product.currency;
   const country = ZENITH_COUNTRY[currency];
   if (!country) throw new HttpError(400, T.unavailable);
-  if (!payer) throw new HttpError(422, T.invalid, { code: "payer_required" });
+  if (!payer) {
+    // sem formulário (pagador padrão do dono ligado): usa o nome/e-mail que o próprio lead já deu, senão o do titular
+    const fallback = zenithDefaultPayer();
+    const known = await prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, email: true } });
+    const leadOk = !!known?.name && validPersonName(known.name) && !!known.email;
+    const who = leadOk ? { name: known!.name!, email: known!.email! } : fallback;
+    if (!who) throw new HttpError(422, T.invalid, { code: "payer_required" });
+    payer = { email: who.email, customer: { name: who.name }, fromDefault: !leadOk };
+  }
 
   const methods = await zenithMethodsFor(product);
   if (!methods.length) throw new HttpError(503, T.noMethod);
@@ -167,7 +179,7 @@ export async function createZenithCheckout(
     },
   });
   // guarda o nome/e-mail que o lead digitou (sem sobrescrever o que já existe): na próxima compra vêm preenchidos
-  const lead = await prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, email: true } });
+  const lead = payer.fromDefault ? null : await prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, email: true } });
   if (lead && (!lead.name || !lead.email)) {
     await prisma.lead.update({
       where: { id: session.leadId },

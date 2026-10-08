@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, OfferContent, PublicFunnel, TarotCard } from "@/types/flow";
 import { AI_OFFERS_OUT, autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
-import type { ChatTransport, CheckoutForm, PayerData, PublicPaymentInfo, ServerMessage } from "./transport";
+import { ApiError, type ChatTransport, type CheckoutForm, type PayerData, type PublicPaymentInfo, type ServerMessage } from "./transport";
 import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
 import { compressPhoto } from "./photo";
 import { asChatLocale, chatTexts } from "@/features/i18n/chat";
@@ -813,6 +813,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       try {
         await submitCheckout(nodeId, { method: "PIX", ...(productId !== mainOfNode ? { productId } : {}) }, { silent: true });
       } catch (e) {
+        // o gateway pediu os dados do comprador: o pop-up mostra o formulário
+        if (e instanceof ApiError && (e.data.code === "payer_required" || e.data.code === "invalid_fields")) {
+          setCall((cur) => (cur && cur.nodeId === nodeId ? { ...cur, needPayer: true } : cur));
+          return;
+        }
         setCallError(e instanceof Error ? e.message : tx.generateError);
       }
     },

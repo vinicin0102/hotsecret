@@ -13,6 +13,7 @@ import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
 import { brainOffers } from "./ai/brain";
 import { providerNameForCurrency } from "./payments/index";
+import { zenithDefaultPayer } from "./payments/zenith";
 import { asCurrency } from "@/lib/format";
 
 type NodeRow = { id: string; type: string; content: unknown; settings: unknown; positionX: number; positionY: number };
@@ -208,7 +209,8 @@ async function buildPublicFunnel(
       externalCheckoutUrl: p.checkoutUrl ?? null,
       metaPixelId: p.metaPixelId ?? null,
       // gateway que pede os dados do comprador (catálogo da Zenith) antes de gerar o pagamento
-      ...(providerNameForCurrency(asCurrency(p.currency)) === "zenith" ? { payerForm: true } : {}),
+      // com o pagador padrão do titular ligado é um toque igual ao PIX (o formulário só volta se a Zenith recusar)
+      ...(providerNameForCurrency(asCurrency(p.currency)) === "zenith" && !zenithDefaultPayer() ? { payerForm: true } : {}),
     };
   }
   const c = funnel.character;

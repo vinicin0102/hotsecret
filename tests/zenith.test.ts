@@ -12,6 +12,7 @@ import {
   needsFullName,
   validPersonName,
   zenithCopyValue,
+  zenithDefaultPayer,
   zenithFormFields,
   ZenithValidationError,
   type ZenithMethod,
@@ -301,6 +302,22 @@ test("produção: campos 'Nome completo' e 'E-mail' do catálogo não aparecem e
   assert.equal(p.customerName, "Ana Silva");
   assert.equal(p.customerEmail, "comprador@gmail.com");
   assert.equal(p.metadata, undefined, "nada inventado fora do que o catálogo pede");
+});
+
+test("pagador padrão do titular: desligado sem as duas variáveis e só com nome/e-mail válidos", () => {
+  delete process.env.ZENITH_PAYER_NAME;
+  delete process.env.ZENITH_PAYER_EMAIL;
+  assert.equal(zenithDefaultPayer(), null, "desligado por padrão");
+  process.env.ZENITH_PAYER_NAME = "Vinicius Ornelas";
+  process.env.ZENITH_PAYER_EMAIL = "Contato@Minhaloja.com";
+  try {
+    assert.deepEqual(zenithDefaultPayer(), { name: "Vinicius Ornelas", email: "contato@minhaloja.com" });
+    process.env.ZENITH_PAYER_NAME = "Cliente";
+    assert.equal(zenithDefaultPayer(), null, "nome que não é nome + sobrenome real: continua pedindo os dados");
+  } finally {
+    delete process.env.ZENITH_PAYER_NAME;
+    delete process.env.ZENITH_PAYER_EMAIL;
+  }
 });
 
 test("nome e sobrenome reais (a Zenith recusa nomes fictícios)", () => {
