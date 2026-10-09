@@ -107,14 +107,14 @@ export default function Products() {
             )}
             {p.videoUrl && <div className="hint">▶ Com vídeo de prévia</div>}
             <div className="row" style={{ justifyContent: "space-between" }}>
-              <div className="serif" style={{ fontSize: 19 }}>
+              <div className="serif prod-name" style={{ fontSize: 19 }}>
                 {p.name}
               </div>
               <span className={`pill ${p.active ? "status-PUBLISHED" : "status-ARCHIVED"}`}>{p.active ? "Ativo" : "Inativo"}</span>
             </div>
             <div>
               {p.originalPrice ? <span className="price-old">De {formatMoney(p.originalPrice, p.currency)}</span> : null}
-              <div className="serif" style={{ fontSize: 24, fontWeight: 700 }}>
+              <div className="serif prod-price" style={{ fontSize: 24, fontWeight: 700 }}>
                 Por {formatMoney(p.price, p.currency)}
               </div>
             </div>

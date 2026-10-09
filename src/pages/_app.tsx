@@ -5,6 +5,12 @@ import "@/styles/globals.css";
 import "@/styles/chat.css";
 import "@/styles/admin.css";
 import "@/styles/builder.css";
+// fontes do painel (servidas pelo próprio site) + identidade do painel
+import "@fontsource-variable/unbounded";
+import "@fontsource-variable/instrument-sans";
+import "@fontsource-variable/jetbrains-mono";
+import "@fontsource/instrument-serif/400-italic.css";
+import "@/styles/panel.css";
 import "@xyflow/react/dist/style.css";
 
 export default function App({ Component, pageProps }: AppProps) {

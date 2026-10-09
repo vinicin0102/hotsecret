@@ -7,14 +7,14 @@ import { api } from "@/lib/client";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", ico: "◈" },
-  { href: "/admin/conversas", label: "Conversas", ico: "💬" },
+  { href: "/admin/conversas", label: "Conversas", ico: "❝" },
   { href: "/admin/leads", label: "Leads", ico: "♡" },
   { href: "/admin/fluxos", label: "Fluxos", ico: "⟡" },
-  { href: "/admin/cerebro", label: "Cérebro", ico: "🧠" },
+  { href: "/admin/cerebro", label: "Cérebro", ico: "✺" },
   { href: "/admin/personagens", label: "Personagens", ico: "☾" },
   { href: "/admin/produtos", label: "Produtos", ico: "◇" },
   { href: "/admin/videos", label: "Vídeos", ico: "▶" },
-  { href: "/admin/pagamentos", label: "Pagamentos", ico: "₿" },
+  { href: "/admin/pagamentos", label: "Pagamentos", ico: "¤" },
   { href: "/admin/analytics", label: "Analytics", ico: "↗" },
 ];
 
