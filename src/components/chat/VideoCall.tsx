@@ -7,6 +7,8 @@ import { PaymentStatus } from "./PaymentStatus";
 import { PayerForm } from "./PayerForm";
 import { NextActionView } from "./NextAction";
 import { UpsellScreen } from "./UpsellScreen";
+import { VipOfferModal, VipPaySheet } from "./LiveChannel";
+import type { OfferContent } from "@/types/flow";
 
 /** Toque de celular sintetizado (sem arquivo) + vibração, enquanto a chamada está tocando. */
 export function useRingtone(active: boolean) {
@@ -277,8 +279,8 @@ export function CallScreen({
 }: {
   /** chamada de vídeo 02: antes de pagar, o trecho FREE toca uma vez e no fim dele aparece a oferta (como upsell) */
   freePreview?: boolean;
-  /** chamada de vídeo 02: o lead tocou em pagar a oferta principal */
-  onBuyMain?: () => void;
+  /** chamada de vídeo 02: o lead tocou em pagar a oferta principal (ou um ingresso de uma "Oferta" no FREE) */
+  onBuyMain?: (productId?: string) => void;
   nodeId: string;
   /** oferta do Cérebro (IA): produto da chamada */
   productId?: string;
@@ -304,11 +306,21 @@ export function CallScreen({
 
   const forNode = Object.values(payments).filter((p) => p.offerNodeId === nodeId);
   const mainPayments = forNode.filter((p) => p.productId === mainProduct?.id);
-  const paid = mainPayments.some((p) => p.status === "APPROVED");
+  // "Oferta" marcada no FREE (chamada de vídeo 02): pagar qualquer um dos ingressos também libera a chamada
+  const freeOfferIds = new Set(
+    (video?.markers ?? [])
+      .filter((m) => m.style === "offer" && m.at < video!.free.end)
+      .flatMap((m) => [m.productId, m.basicProductId ?? ""])
+      .filter(Boolean),
+  );
+  const paid = forNode.some((p) => p.status === "APPROVED" && (p.productId === mainProduct?.id || freeOfferIds.has(p.productId)));
   const mainPayment = mainPayments.sort((a, b) => (a.status === "APPROVED" ? -1 : b.status === "APPROVED" ? 1 : 0))[0];
   const boughtUpsell = (pid: string) => forNode.some((p) => p.productId === pid && p.status === "APPROVED");
   const upsellPayment = upsell ? forNode.find((p) => p.productId === upsell.productId && p.status !== "FAILED") : undefined;
-  const upsellDone = upsell ? boughtUpsell(upsell.productId) : false;
+  const upsellDone = upsell ? boughtUpsell(upsell.productId) || (!!upsell.basicProductId && boughtUpsell(upsell.basicProductId)) : false;
+  /** "Oferta" com 2 ingressos: o ingresso escolhido (abre a folha do pagamento) */
+  const [offerPick, setOfferPick] = useState<string | null>(null);
+  useEffect(() => setOfferPick(null), [upsell?.id]);
   // o loop de animação lê sempre o estado atual por aqui
   /** já viu o FREE (chamada de vídeo 02): depois de pagar, segue direto do VIP */
   const sawFree = useRef(false);
@@ -366,6 +378,16 @@ export function CallScreen({
       if (v && video) {
         const ms = v.currentTime * 1000;
         if (!paid && freePreview) {
+          // "Oferta" marcada dentro do FREE: o vídeo para e o upgrade abre
+          const fo = !upsell
+            ? video.markers.find((mk) => mk.style === "offer" && mk.at < video.free.end && !shown.current.has(mk.id) && ms >= mk.at && ms - mk.at < 1500)
+            : undefined;
+          if (fo) {
+            shown.current.add(fo.id);
+            setUpsell(fo);
+            setUpsellBuying(false);
+            v.pause();
+          }
           // fim do FREE: o vídeo para e a oferta aparece
           if (ms >= video.free.end || v.ended) {
             if (!v.paused) v.pause();
@@ -385,8 +407,8 @@ export function CallScreen({
             shown.current.add(m.id);
             setUpsell(m);
             setUpsellBuying(false);
-            // tela cheia: o vídeo para por baixo do aviso
-            if (m.pause || m.style === "screen") v.pause();
+            // tela cheia e oferta: o vídeo para por baixo
+            if (m.pause || m.style === "screen" || m.style === "offer") v.pause();
           }
         }
       }
@@ -483,6 +505,36 @@ export function CallScreen({
           onSimulate={onSimulate}
         />
       )}
+      {upsell && upsell.style === "offer" && (() => {
+        const offer: OfferContent = { productId: upsell.productId, downsellProductId: upsell.basicProductId, style: "live", vip: upsell.vip };
+        const inFree = !paid && !!freePreview;
+        return offerPick ? (
+          <VipPaySheet
+            character={character}
+            offer={offer}
+            payment={forNode.filter((p) => p.productId === offerPick && p.status !== "FAILED")[0]}
+            error={error}
+            onClose={() => {
+              setOfferPick(null);
+              closeUpsell();
+            }}
+            onSimulate={onSimulate}
+          />
+        ) : (
+          <VipOfferModal
+            offer={offer}
+            product={upsell.product as PublicProduct}
+            basic={upsell.basicProduct as PublicProduct | undefined}
+            onPick={(pid) => {
+              setOfferPick(pid);
+              setUpsellBuying(true);
+              if (inFree) onBuyMain?.(pid);
+              else onBuyUpsell(pid);
+            }}
+            onClose={closeUpsell}
+          />
+        );
+      })()}
       {upsell && upsell.style === "screen" && (
         <UpsellScreen
           key={upsell.id}
@@ -498,7 +550,7 @@ export function CallScreen({
           onSimulate={onSimulate}
         />
       )}
-      {upsell && upsell.style !== "screen" && (
+      {upsell && upsell.style !== "screen" && upsell.style !== "offer" && (
         <div className="call-upsell">
           <div className="call-upsell-text">{upsell.text || upsell.product.name}</div>
           <div className="call-upsell-price">

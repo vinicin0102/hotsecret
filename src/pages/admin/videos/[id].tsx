@@ -9,6 +9,7 @@ import { formatBRL } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { formatMs, normalizeTimeline, type VideoTimeline } from "@/types/video";
 import { UpsellScreenEditor } from "@/components/admin/UpsellScreenEditor";
+import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
 
 interface VideoData {
   id: string;
@@ -226,6 +227,15 @@ export default function VideoEditorPage() {
     setTl({ ...tl, chat: [...tl.chat, c] });
     setSel({ kind: "chat", id: c.id });
   };
+  /** "Oferta" (upgrade com 2 ingressos): pode ir no FREE (chamada de vídeo 02) ou no VIP */
+  const addOffer = () => {
+    if (!tl) return;
+    const at = Math.max(0, Math.min(duration, now));
+    const m = { id: shortId("of"), at, label: "Oferta", productId: products.find((p) => p.active)?.id ?? "", pause: true, style: "offer" as const };
+    setTl({ ...tl, markers: [...tl.markers, m] });
+    setSel({ kind: "marker", id: m.id });
+    seek(at);
+  };
   const addMarker = () => {
     if (!tl) return;
     const at = Math.max(tl.vip.start, Math.min(tl.vip.end, now));
@@ -247,6 +257,22 @@ export default function VideoEditorPage() {
   const selMarker = sel?.kind === "marker" ? tl.markers.find((m) => m.id === sel.id) : undefined;
   const setChat = (patch: Partial<VideoTimeline["chat"][number]>) =>
     selChat && setTl({ ...tl, chat: tl.chat.map((c) => (c.id === selChat.id ? { ...c, ...patch } : c)) });
+  const markerEl = (m: VideoTimeline["markers"][number]) => (
+                  <div
+                    key={m.id}
+                    className={`ve-marker ${m.style === "offer" ? "offer" : ""} ${sel?.kind === "marker" && sel.id === m.id ? "selected" : ""}`}
+                    style={{ left: msToX(m.at) }}
+                    title={`${m.label} · ${formatMs(m.at)}`}
+                    onPointerDown={(e) => {
+                      setSel({ kind: "marker", id: m.id });
+                      seek(m.at);
+                      startDrag(e, { what: "marker", id: m.id });
+                    }}
+                  >
+                    <span className="ve-pin" />
+                    <span className="ve-marker-label">{m.label}</span>
+                  </div>
+);
   const setMarker = (patch: Partial<VideoTimeline["markers"][number]>) =>
     selMarker && setTl({ ...tl, markers: tl.markers.map((m) => (m.id === selMarker.id ? { ...m, ...patch } : m)) });
   const activeChat = tl.chat.filter((c) => now >= c.start && now < c.end);
@@ -379,28 +405,14 @@ export default function VideoEditorPage() {
               <div className="ve-label free">FREE</div>
               <div className="ve-lane" style={{ width: laneW }} onPointerDown={(e) => seek(msAt(e.clientX, e.shiftKey))}>
                 {rangeBox("free", "LOOP FREE")}
+                {tl.markers.filter((m) => m.style === "offer" && m.at < tl.vip.start).map(markerEl)}
               </div>
             </div>
             <div className="ve-row">
               <div className="ve-label vip">VIP</div>
               <div className="ve-lane" style={{ width: laneW }} onPointerDown={(e) => seek(msAt(e.clientX, e.shiftKey))}>
                 {rangeBox("vip", "LOOP VIP")}
-                {tl.markers.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`ve-marker ${sel?.kind === "marker" && sel.id === m.id ? "selected" : ""}`}
-                    style={{ left: msToX(m.at) }}
-                    title={`${m.label} · ${formatMs(m.at)}`}
-                    onPointerDown={(e) => {
-                      setSel({ kind: "marker", id: m.id });
-                      seek(m.at);
-                      startDrag(e, { what: "marker", id: m.id });
-                    }}
-                  >
-                    <span className="ve-pin" />
-                    <span className="ve-marker-label">{m.label}</span>
-                  </div>
-                ))}
+                {tl.markers.filter((m) => !(m.style === "offer" && m.at < tl.vip.start)).map(markerEl)}
               </div>
             </div>
             <div className="ve-row">
@@ -434,6 +446,9 @@ export default function VideoEditorPage() {
           </button>
           <button className="btn btn-sm ve-add-upsell" onClick={addMarker}>
             + Upsell no VIP
+          </button>
+          <button className="btn btn-sm ve-add-offer" onClick={addOffer}>
+            + Oferta
           </button>
           <span className="hint">Shift+arrastar = encaixa em 0,5s · Ctrl+rolar = zoom · espaço = play</span>
           <span className="ve-summary">
@@ -495,7 +510,55 @@ export default function VideoEditorPage() {
             </div>
           </>
         )}
-        {selMarker && (
+        {selMarker && selMarker.style === "offer" && (
+          <>
+            <div className="card-head">
+              <h3>Oferta em {formatMs(selMarker.at)}</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => (setTl({ ...tl, markers: tl.markers.filter((m) => m.id !== selMarker.id) }), setSel(null))}>
+                Excluir
+              </button>
+            </div>
+            <p className="hint" style={{ marginTop: -6 }}>
+              O vídeo para e abre o upgrade com os ingressos (acesso completo e acesso básico). Escolheu, o PIX aparece embaixo; pagou, o vídeo
+              continua. <b>No FREE</b> ela vale para a Chamada de vídeo 02 (antes de pagar): pagar qualquer ingresso libera o VIP. <b>No VIP</b>{" "}
+              funciona como um upsell com 2 ingressos.
+            </p>
+            <div className="grid-2">
+              <div className="field">
+                <label htmlFor="ve-o-label">Nome no marcador</label>
+                <input id="ve-o-label" className="input" value={selMarker.label} onChange={(e) => setMarker({ label: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Momento (s)</label>
+                <input className="input" type="number" step="0.001" value={secInput(selMarker.at)} onChange={(e) => setMarker({ at: Math.round(Number(e.target.value) * 1000) })} />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="ve-o-prod">Ingresso 1 — acesso completo</label>
+              <select id="ve-o-prod" className="select" value={selMarker.productId} onChange={(e) => setMarker({ productId: e.target.value })}>
+                <option value="">— selecione —</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} · {formatBRL(p.price)} {p.active ? "" : "(inativo)"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <VipOfferEditor
+              vip={selMarker.vip}
+              basicProductId={selMarker.basicProductId || undefined}
+              mainProductId={selMarker.productId}
+              products={products}
+              onChange={(vip) => setMarker({ vip })}
+              onBasicChange={(id) => setMarker({ basicProductId: id || undefined })}
+              inCall
+            />
+            {selMarker.at >= tl.free.end && (selMarker.at < tl.vip.start || selMarker.at > tl.vip.end) && (
+              <p className="error-text">Esta oferta está fora dos trechos FREE e VIP e não vai aparecer.</p>
+            )}
+          </>
+        )}
+        {selMarker && selMarker.style !== "offer" && (
           <>
             <div className="card-head">
               <h3>Upsell em {formatMs(selMarker.at)}</h3>

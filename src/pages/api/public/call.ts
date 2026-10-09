@@ -28,14 +28,22 @@ export default apiHandler({
     if (node.type === "ai") {
       const brainId = (node.content as AiContent).brainId;
       const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
-      videoId = brain
-        ? brainOffers(brain).find((o) => (o.productId === productId || o.downsellProductId === productId) && (o.style === "call" || o.style === "live"))?.videoId
-        : undefined;
+      const withVideo = brain ? brainOffers(brain).filter((o) => (o.style === "call" || o.style === "live") && o.videoId) : [];
+      videoId = withVideo.find((o) => o.productId === productId || o.downsellProductId === productId)?.videoId;
+      if (!videoId && productId && withVideo.length) {
+        // ingresso comprado numa "Oferta" marcada no vídeo: a chamada é a desse vídeo
+        const vids = await prisma.video.findMany({ where: { id: { in: withVideo.map((o) => o.videoId!) } } });
+        videoId = vids.find((v) =>
+          ((v.timeline as { markers?: { productId?: string; basicProductId?: string }[] } | null)?.markers ?? []).some(
+            (m) => m.productId === productId || m.basicProductId === productId,
+          ),
+        )?.id;
+      }
     }
     const video = videoId ? await prisma.video.findUnique({ where: { id: videoId } }) : null;
     if (!video) return { video: null };
     const timeline = normalizeTimeline(video.timeline, video.durationMs);
-    const ids = [...new Set(timeline.markers.map((m) => m.productId).filter(Boolean))];
+    const ids = [...new Set(timeline.markers.flatMap((m) => [m.productId, m.basicProductId ?? ""]).filter(Boolean))];
     const products = await prisma.product.findMany({ where: { id: { in: ids }, active: true } });
     const byId = new Map(products.map((p) => [p.id, p]));
     return {
@@ -50,7 +58,12 @@ export default apiHandler({
           .filter((m) => byId.has(m.productId))
           .map((m) => {
             const p = byId.get(m.productId)!;
-            return { ...m, product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency } };
+            const b = m.basicProductId ? byId.get(m.basicProductId) : undefined;
+            return {
+              ...m,
+              product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency },
+              ...(b ? { basicProduct: { id: b.id, name: b.name, price: b.price, originalPrice: b.originalPrice, currency: b.currency } } : {}),
+            };
           }),
       },
     };

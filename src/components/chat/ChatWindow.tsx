@@ -397,8 +397,13 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             character={funnel.character}
             transport={transport}
             payments={payments}
-            productId={engine.call.payProductId ?? engine.call.productId}
-            mainProduct={funnel.products[engine.call.payProductId ?? engine.call.productId ?? ""] ?? productOf(engine.call.nodeId)}
+            productId={engine.call.productId ?? engine.call.payProductId}
+            mainProduct={
+              funnel.products[engine.call.payProductId ?? engine.call.productId ?? ""] ??
+              // ingresso de uma "Oferta" do vídeo: o produto principal da chamada continua sendo o da oferta
+              funnel.products[engine.call.productId ?? ""] ??
+              productOf(engine.call.nodeId)
+            }
             error={engine.callError}
             onHangUp={engine.hangUp}
             onBuyUpsell={engine.buyUpsell}

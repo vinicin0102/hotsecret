@@ -99,8 +99,12 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     const videoId = (node.content as { videoId?: string }).videoId;
     const downsell = (node.content as { downsellProductId?: string }).downsellProductId;
     const video = videoId ? await prisma.video.findUnique({ where: { id: videoId } }) : null;
-    const markers = ((video?.timeline as { markers?: { productId?: string }[] } | null)?.markers ?? []) as { productId?: string }[];
-    productId = downsell === input.productId || markers.some((m) => m.productId === input.productId) ? input.productId : undefined;
+    const markers = ((video?.timeline as { markers?: { productId?: string; basicProductId?: string }[] } | null)?.markers ?? []) as {
+      productId?: string;
+      basicProductId?: string;
+    }[];
+    productId =
+      downsell === input.productId || markers.some((m) => m.productId === input.productId || m.basicProductId === input.productId) ? input.productId : undefined;
   }
   if (node.type === "ai") {
     // só produtos cadastrados como oferta no cérebro deste bloco
@@ -112,7 +116,11 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
       // upsells marcados nos vídeos das ofertas em chamada
       const videoIds = offers.filter((o) => (o.style === "call" || o.style === "live") && o.videoId).map((o) => o.videoId!);
       const videos = videoIds.length ? await prisma.video.findMany({ where: { id: { in: videoIds } } }) : [];
-      allowed = videos.some((v) => ((v.timeline as { markers?: { productId?: string }[] } | null)?.markers ?? []).some((m) => m.productId === input.productId));
+      allowed = videos.some((v) =>
+        ((v.timeline as { markers?: { productId?: string; basicProductId?: string }[] } | null)?.markers ?? []).some(
+          (m) => m.productId === input.productId || m.basicProductId === input.productId,
+        ),
+      );
     }
     productId = allowed ? input.productId : undefined;
   }

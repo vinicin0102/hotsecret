@@ -95,7 +95,11 @@ export interface CallVideo {
   free: TimeRange;
   vip: TimeRange;
   chat: ChatCue[];
-  markers: (UpsellMarker & { product: { id: string; name: string; price: number; originalPrice: number | null; currency?: string } })[];
+  markers: (UpsellMarker & {
+    product: { id: string; name: string; price: number; originalPrice: number | null; currency?: string };
+    /** oferta com 2 ingressos: o acesso básico */
+    basicProduct?: { id: string; name: string; price: number; originalPrice: number | null; currency?: string };
+  })[];
 }
 
 /** Resposta do Cérebro (IA). */
@@ -412,7 +416,12 @@ export function createPreviewTransport(
           .filter((m) => byId.has(m.productId))
           .map((m) => {
             const p = byId.get(m.productId)!;
-            return { ...m, product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice } };
+            const b = m.basicProductId ? byId.get(m.basicProductId) : undefined;
+            return {
+              ...m,
+              product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice },
+              ...(b ? { basicProduct: { id: b.id, name: b.name, price: b.price, originalPrice: b.originalPrice } } : {}),
+            };
           }),
       };
     },

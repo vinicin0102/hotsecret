@@ -970,11 +970,18 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     [call, submitCheckout],
   );
 
-  /** chamada de vídeo 02: acabou o FREE e o lead tocou em pagar → gera o PIX sem sair da chamada */
-  const buyFreeCall = useCallback(() => {
-    if (!call?.free || !call.payProductId) return;
-    void startCallPix(call, call.payProductId, false, true);
-  }, [call, startCallPix]);
+  /**
+   * chamada de vídeo 02: o lead tocou em pagar (oferta do fim do FREE ou "Oferta" marcada no FREE do vídeo)
+   * → gera o PIX sem sair da chamada; pago, libera o VIP
+   */
+  const buyFreeCall = useCallback(
+    (productId?: string) => {
+      const pid = productId ?? call?.payProductId;
+      if (!call?.free || !pid) return;
+      void startCallPix(call, pid, false, true);
+    },
+    [call, startCallPix],
+  );
 
   /** entra (ou volta) na chamada já paga */
   const enterCall = useCallback((nodeId: string, productId: string) => {

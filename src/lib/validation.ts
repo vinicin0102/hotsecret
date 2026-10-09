@@ -286,7 +286,9 @@ export const videoSchema = z.object({
             text: optTxt(300),
             ctaLabel: optTxt(60),
             pause: z.boolean().optional(),
-            style: z.enum(["card", "screen"]).optional(),
+            style: z.enum(["card", "screen", "offer"]).optional(),
+            basicProductId: z.string().max(64).optional(),
+            vip: vipTextsSchema.optional(),
             screen: z
               .object({
                 icon: optTxt(8),

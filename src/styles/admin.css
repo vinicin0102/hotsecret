@@ -1152,3 +1152,21 @@ code.inline {
   max-height: 320px;
   overflow: auto;
 }
+/* "Oferta" (upgrade com 2 ingressos) na linha do tempo: champanhe, para não confundir com o upsell roxo */
+.ve-add-offer {
+  border-color: rgba(235, 194, 122, 0.6) !important;
+  color: #ebc27a !important;
+  background: rgba(235, 194, 122, 0.1) !important;
+}
+.ve-marker.offer {
+  background: #ebc27a;
+}
+.ve-marker.offer .ve-pin {
+  border-top-color: #ebc27a;
+}
+.ve-marker.offer .ve-marker-label {
+  color: #f3d9a6;
+}
+.ve-marker.offer.selected {
+  background: #fff;
+}

@@ -17,7 +17,10 @@ export function VipOfferEditor({
   videos = [],
   videoId,
   onVideoChange,
+  inCall,
 }: {
+  /** oferta dentro da chamada (aba Vídeos): sem os campos que só existem no chat (mensagens, imagem bloqueada, pop-up de saída) */
+  inCall?: boolean;
   vip: VipOfferTexts | undefined;
   basicProductId: string | undefined;
   /** vídeos da aba Vídeos: o escolhido é liberado depois do pagamento (igual à chamada de vídeo) */
@@ -39,11 +42,13 @@ export function VipOfferEditor({
   );
   return (
     <div className="vip-editor">
+      {!inCall && (
       <p className="hint" style={{ marginTop: 0 }}>
         Abre um <b>upgrade</b> por cima do chat com os benefícios e dois ingressos. Ao escolher, gera o pagamento numa folha embaixo, com o chat
         visível acima (as mensagens de conversão vão aparecendo). Se ele tentar fechar, aparece <b>“Vai desistir agora?”</b>. Campos vazios usam o
         texto padrão (no idioma do fluxo).
       </p>
+      )}
       <div className="field">
         <label>Ingresso 2 — acesso básico (opcional)</label>
         <select className="select" value={basicProductId ?? ""} onChange={(e) => onBasicChange(e.target.value)}>
@@ -107,6 +112,8 @@ export function VipOfferEditor({
         {field("payTitle", "Título do pagamento", "{NOME} COMEÇOU!")}
         {field("paySubtitle", "Subtítulo do pagamento", "Vídeo chamada iniciada... Realize o pagamento para participar!")}
       </div>
+      {!inCall && (
+      <>
       <div className="field">
         <label>Mensagens no chat durante o pagamento (uma por linha)</label>
         <textarea
@@ -129,6 +136,8 @@ export function VipOfferEditor({
         {field("stayLabel", "Botão para ficar", "Não vou desistir 🔥")}
         {field("leaveLabel", "Botão para sair", "SOU BROXA 🤏")}
       </div>
+      </>
+      )}
     </div>
   );
 }

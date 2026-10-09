@@ -1,4 +1,5 @@
 // Linha do tempo do vídeo da chamada (tempos em milissegundos).
+import type { VipOfferTexts } from "./flow";
 
 export interface TimeRange {
   start: number;
@@ -46,9 +47,16 @@ export interface UpsellMarker {
   ctaLabel?: string;
   /** pausa o vídeo até o lead comprar ou recusar */
   pause?: boolean;
-  /** card: caixa de oferta embaixo (padrão) · screen: tela cheia em 3 passos */
-  style?: "card" | "screen";
+  /**
+   * card: caixa de oferta embaixo (padrão) · screen: tela cheia em 3 passos ·
+   * offer: upgrade com 2 ingressos (acesso completo = productId, acesso básico = basicProductId)
+   */
+  style?: "card" | "screen" | "offer";
   screen?: UpsellScreen;
+  /** oferta: 2º ingresso (acesso básico) */
+  basicProductId?: string;
+  /** oferta: textos do upgrade (selo, título, benefícios, botões...) */
+  vip?: VipOfferTexts;
 }
 
 export interface VideoTimeline {
