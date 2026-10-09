@@ -110,7 +110,7 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     let allowed = !!input.productId && offers.some((o) => o.productId === input.productId || o.downsellProductId === input.productId);
     if (!allowed && input.productId) {
       // upsells marcados nos vídeos das ofertas em chamada
-      const videoIds = offers.filter((o) => o.style === "call" && o.videoId).map((o) => o.videoId!);
+      const videoIds = offers.filter((o) => (o.style === "call" || o.style === "live") && o.videoId).map((o) => o.videoId!);
       const videos = videoIds.length ? await prisma.video.findMany({ where: { id: { in: videoIds } } }) : [];
       allowed = videos.some((v) => ((v.timeline as { markers?: { productId?: string }[] } | null)?.markers ?? []).some((m) => m.productId === input.productId));
     }

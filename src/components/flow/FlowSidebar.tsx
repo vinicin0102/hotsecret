@@ -418,6 +418,9 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                 products={products}
                 onChange={(vip) => setContent({ vip })}
                 onBasicChange={(id) => setContent({ downsellProductId: id })}
+                videos={videos}
+                videoId={(c.videoId as string) || undefined}
+                onVideoChange={(id) => setContent({ videoId: id })}
               />
             )}
             <div className="field">

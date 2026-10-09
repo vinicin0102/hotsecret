@@ -3,6 +3,7 @@
 import type { VipOfferTexts } from "@/types/flow";
 import { formatMoney } from "@/lib/format";
 import { UploadInput } from "./UploadInput";
+import { withBase } from "@/lib/paths";
 
 const linesOf = (v: string) => v.split("\n");
 
@@ -13,9 +14,16 @@ export function VipOfferEditor({
   mainProductId,
   onChange,
   onBasicChange,
+  videos = [],
+  videoId,
+  onVideoChange,
 }: {
   vip: VipOfferTexts | undefined;
   basicProductId: string | undefined;
+  /** vídeos da aba Vídeos: o escolhido é liberado depois do pagamento (igual à chamada de vídeo) */
+  videos?: { id: string; name: string }[];
+  videoId?: string;
+  onVideoChange?: (videoId: string) => void;
   products: { id: string; name: string; price: number; currency?: string; active?: boolean }[];
   mainProductId?: string;
   onChange: (vip: VipOfferTexts) => void;
@@ -50,6 +58,29 @@ export function VipOfferEditor({
         </select>
         <span className="hint">O ingresso 1 (acesso completo) é o produto da oferta.</span>
       </div>
+      {onVideoChange && (
+        <div className="field">
+          <label>Vídeo liberado depois do pagamento</label>
+          <select className="select" value={videoId ?? ""} onChange={(e) => onVideoChange(e.target.value)}>
+            <option value="">— nenhum (segue o ramo “Comprou” / botão de acesso) —</option>
+            {videos.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          {videoId ? (
+            <a className="hint" href={withBase(`/admin/videos/${videoId}`)} target="_blank" rel="noreferrer">
+              Editar trechos FREE/VIP, falas e upsells ↗
+            </a>
+          ) : (
+            <span className="hint">
+              Igual à chamada de vídeo: pagou (qualquer um dos ingressos), a chamada abre com o vídeo, as falas e os upsells marcados. Envie e edite em{" "}
+              <a href={withBase("/admin/videos")}>▶ Vídeos</a>.
+            </span>
+          )}
+        </div>
+      )}
       <div className="grid-2">
         {field("badge", "Selo do topo", "UPGRADE EXCLUSIVO 💎")}
         {field("intro", "Frase acima dos benefícios", "Libere a ligação privada completa e ganhe acesso a:")}

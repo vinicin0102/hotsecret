@@ -777,6 +777,9 @@ export default function CerebroPage() {
                       products={products}
                       onChange={(vip) => setOffer(i, { vip })}
                       onBasicChange={(id) => setOffer(i, { downsellProductId: id })}
+                      videos={videos}
+                      videoId={o.videoId || undefined}
+                      onVideoChange={(id) => setOffer(i, { videoId: id })}
                     />
                   )}
                   {o.style === "call" && (

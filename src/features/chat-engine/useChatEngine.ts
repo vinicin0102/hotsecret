@@ -363,7 +363,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           downsellProductId: r.offer.downsellProductId,
           downsellText: r.offer.downsellText,
           ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
-          ...(r.offer.style === "live" ? { style: "live" as const, vip: r.offer.vip } : {}),
+          ...(r.offer.style === "live" ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}) } : {}),
         };
         if (r.offer.style === "tarot") tarotProducts.current.add(r.offer.productId);
         if (r.offer.style === "live") setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
@@ -603,7 +603,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       let isCall = false;
       if (node?.type === "offer") {
         const oc = node.content as OfferContent;
-        isCall = oc.style === "call" && (productId === oc.productId || productId === oc.downsellProductId);
+        isCall = (oc.style === "call" || (oc.style === "live" && !!oc.videoId)) && (productId === oc.productId || productId === oc.downsellProductId);
       } else if (node?.type === "ai") {
         isCall = callProducts.current.has(productId);
         if (!isCall && !upsellProducts.current.has(productId)) {
@@ -733,7 +733,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
                     ? { style: "tarot" as const, tarotCards: c.tarotCards as TarotCard[], tarotBackUrl: (c.tarotBackUrl as string) || undefined }
                     : {}),
                   ...(c.style === "live"
-                    ? { style: "live" as const, vip: (c.vip as OfferContent["vip"]) ?? undefined, downsellProductId: (c.downsellProductId as string) || undefined }
+                    ? {
+                        style: "live" as const,
+                        vip: (c.vip as OfferContent["vip"]) ?? undefined,
+                        downsellProductId: (c.downsellProductId as string) || undefined,
+                        ...(c.hasVideo ? { videoId: "brain" } : {}),
+                      }
                     : {}),
                 },
                 at: m.createdAt,
@@ -1035,6 +1040,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         setTyping(false);
       }
       void pushVipMessages(nodeId, o);
+      if (o?.videoId) callProducts.current.add(productId);
       if (product?.payerForm && !payerRef.current && transportRef.current?.mode === "live") {
         setVip({ ...v, phase: "pay", payProductId: productId, needPayer: true });
         return;
@@ -1078,8 +1084,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   useEffect(() => {
     if (!vip?.payProductId) return;
     const ok = Object.values(payments).some((p) => p.offerNodeId === vip.nodeId && p.productId === vip.payProductId && p.status === "APPROVED");
-    if (ok) setVip(null);
-  }, [vip, payments]);
+    if (!ok) return;
+    const o = vipOffer(vip);
+    setVip(null);
+    // vídeo escolhido na oferta: a chamada abre direto (o botão "Entrar na chamada" também fica no chat)
+    if (o?.videoId) setCall({ nodeId: vip.nodeId, phase: "active", payProductId: vip.payProductId, ...(vip.productId ? { productId: vip.payProductId } : {}) });
+  }, [vip, payments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Canal VIP AO VIVO: libera a próxima prévia (o servidor manda uma por vez, na ordem) */
   const [previewBusy, setPreviewBusy] = useState(false);

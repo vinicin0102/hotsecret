@@ -184,9 +184,16 @@ export function tarotCardsOf(o: { tarotCards?: TarotCard[] }): TarotCard[] {
   return (o.tarotCards ?? []).filter((c) => c?.id && (c.name || c.imageUrl || c.meaning));
 }
 /** formato da oferta mostrado ao lead + cartas do tarot só com id/posição (a leitura vem depois do pagamento) */
-export function publicOfferFormat(o: BrainOffer): { style: "card" | "call" | "tarot" | "live"; tarotCards?: TarotCard[]; tarotBackUrl?: string; vip?: VipOfferTexts } {
+export function publicOfferFormat(o: BrainOffer): {
+  style: "card" | "call" | "tarot" | "live";
+  tarotCards?: TarotCard[];
+  tarotBackUrl?: string;
+  vip?: VipOfferTexts;
+  /** canal VIP com vídeo liberado depois do pagamento (o vídeo em si só sai pelo /api/public/call) */
+  hasVideo?: boolean;
+} {
   if (o.style === "call" && o.videoId) return { style: "call" };
-  if (o.style === "live") return { style: "live", vip: o.vip ?? {} };
+  if (o.style === "live") return { style: "live", vip: o.vip ?? {}, ...(o.videoId ? { hasVideo: true } : {}) };
   const cards = o.style === "tarot" ? tarotCardsOf(o) : [];
   if (cards.length) return { style: "tarot", tarotCards: cards.map((c) => ({ id: c.id, label: c.label })), tarotBackUrl: o.tarotBackUrl || undefined };
   return { style: "card" };
@@ -257,7 +264,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
         o.style === "call" ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa." : "",
         o.style === "live"
-          ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
+          ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO${o.videoId ? " (depois do pagamento começa a chamada de vídeo com você)" : ""} com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
           : "",
         o.style === "tarot"
           ? `  Formato: aparecem ${tarotCardsOf(o).length || 3} CARTAS DE TAROT viradas no chat; o lead toca nelas para ver o preço e, depois do PIX, as cartas são reveladas com a leitura. Você não sabe quais são as cartas: nunca invente nem antecipe a leitura — crie mistério e curiosidade.`

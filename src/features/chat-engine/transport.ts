@@ -111,6 +111,8 @@ export interface AiReply {
     style?: "card" | "call" | "tarot" | "live";
     /** canal VIP AO VIVO: textos do upgrade/pagamento */
     vip?: VipOfferTexts;
+    /** canal VIP AO VIVO: depois do pagamento abre a chamada de vídeo */
+    hasVideo?: boolean;
     tarotCards?: TarotCard[];
     tarotBackUrl?: string;
     downsellProductId?: string;
@@ -388,7 +390,7 @@ export function createPreviewTransport(
       let videoId = cfg?.videoId;
       if (!videoId && cfg?.brainId) {
         const { brain } = await get<{ brain: { offers: { productId: string; style?: string; videoId?: string }[] } }>(`/api/admin/brains/${cfg.brainId}`);
-        videoId = brain.offers.find((o) => (o.productId === productId || (o as { downsellProductId?: string }).downsellProductId === productId) && o.style === "call")?.videoId;
+        videoId = brain.offers.find((o) => (o.productId === productId || (o as { downsellProductId?: string }).downsellProductId === productId) && (o.style === "call" || o.style === "live"))?.videoId;
       }
       if (!videoId) return null;
       const [{ video }, { products: list }] = await Promise.all([
