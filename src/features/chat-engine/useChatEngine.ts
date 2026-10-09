@@ -863,7 +863,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const answerCall = useCallback(() => {
     if (!call) return;
     const productId = call.productId ?? callOffer(call)?.productId ?? "";
-    void startCallPix(call, productId, false, !!callOffer(call)?.freeLoop);
+    if (callOffer(call)?.freeLoop) {
+      // chamada de vídeo 02: a chamada abre com o FREE; a oferta aparece no fim dele (como upsell)
+      setCall({ ...call, phase: "active", free: true, payProductId: productId });
+      track("offer_clicked", call.nodeId, { call: "answered", productId, free: true });
+      return;
+    }
+    void startCallPix(call, productId, false);
   }, [call, startCallPix]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Ligação de voz ----------
@@ -963,6 +969,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     },
     [call, submitCheckout],
   );
+
+  /** chamada de vídeo 02: acabou o FREE e o lead tocou em pagar → gera o PIX sem sair da chamada */
+  const buyFreeCall = useCallback(() => {
+    if (!call?.free || !call.payProductId) return;
+    void startCallPix(call, call.payProductId, false, true);
+  }, [call, startCallPix]);
 
   /** entra (ou volta) na chamada já paga */
   const enterCall = useCallback((nodeId: string, productId: string) => {
@@ -1134,6 +1146,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     call,
     callError,
     answerCall,
+    buyFreeCall,
     submitCallPayer,
     payer,
     declineCall,

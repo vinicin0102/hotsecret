@@ -810,9 +810,10 @@ export default function CerebroPage() {
                       </select>
                       {o.freeLoop ? (
                         <p className="hint">
-                          <b>Chamada de vídeo 02:</b> quando a IA escolher esta oferta, o lead recebe a ligação. Ao <b>atender</b>, a chamada já abre com o
-                          trecho <b>FREE em loop</b> e o PIX aparece por cima do vídeo. Pagou, o vídeo segue para o trecho VIP (com as falas e os upsells).
-                          Recusar abre o pop-up do downsell, igual à chamada de vídeo.
+                          <b>Chamada de vídeo 02:</b> quando a IA escolher esta oferta, o lead recebe a ligação. Ao <b>atender</b>, a chamada abre e o
+                          trecho <b>FREE</b> toca uma vez. No fim dele o vídeo para e a oferta aparece em forma de upsell (aviso → bloqueado → PIX). Pagou,
+                          libera o <b>VIP em loop</b> com o restante da live e os upsells. Recusar a ligação abre o pop-up do downsell, igual à chamada
+                          de vídeo.
                         </p>
                       ) : (
                         <p className="hint">

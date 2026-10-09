@@ -272,10 +272,13 @@ export function CallScreen({
   onBuyUpsell,
   onSimulate,
   previewMode,
-  freeLoop,
+  freePreview,
+  onBuyMain,
 }: {
-  /** chamada de vídeo 02: antes de pagar, o trecho FREE toca em loop */
-  freeLoop?: boolean;
+  /** chamada de vídeo 02: antes de pagar, o trecho FREE toca uma vez e no fim dele aparece a oferta (como upsell) */
+  freePreview?: boolean;
+  /** chamada de vídeo 02: o lead tocou em pagar a oferta principal */
+  onBuyMain?: () => void;
   nodeId: string;
   /** oferta do Cérebro (IA): produto da chamada */
   productId?: string;
@@ -309,14 +312,16 @@ export function CallScreen({
   // o loop de animação lê sempre o estado atual por aqui
   /** já viu o FREE (chamada de vídeo 02): depois de pagar, segue direto do VIP */
   const sawFree = useRef(false);
-  if (freeLoop) sawFree.current = true;
-  const live = useRef({ paid, upsell, boughtUpsell, freeLoop });
-  live.current = { paid, upsell, boughtUpsell, freeLoop };
+  if (freePreview) sawFree.current = true;
+  /** chamada de vídeo 02: o FREE acabou → oferta principal em forma de upsell */
+  const [mainOffer, setMainOffer] = useState(false);
+  const live = useRef({ paid, upsell, boughtUpsell, freePreview });
+  live.current = { paid, upsell, boughtUpsell, freePreview };
 
-  // chamada de vídeo 02: ao atender, o trecho FREE já toca (em loop até pagar)
+  // chamada de vídeo 02: ao atender, o trecho FREE já toca (uma vez)
   useEffect(() => {
     const v = vRef.current;
-    if (!v || !video || paid || !freeLoop) return;
+    if (!v || !video || paid || !freePreview) return;
     v.currentTime = video.free.start / 1000;
     v.muted = false;
     v.play().catch(() => {
@@ -324,7 +329,7 @@ export function CallScreen({
       setNeedsTap(true);
       void v.play().catch(() => undefined);
     });
-  }, [video, paid, freeLoop]);
+  }, [video, paid, freePreview]);
 
   useEffect(() => {
     let alive = true;
@@ -357,11 +362,15 @@ export function CallScreen({
     let lastT = -1;
     const loop = () => {
       const v = vRef.current;
-      const { paid, upsell, boughtUpsell, freeLoop } = live.current;
+      const { paid, upsell, boughtUpsell, freePreview } = live.current;
       if (v && video) {
         const ms = v.currentTime * 1000;
-        if (!paid && freeLoop) {
-          if (ms >= video.free.end || ms < video.free.start - 250) v.currentTime = video.free.start / 1000;
+        if (!paid && freePreview) {
+          // fim do FREE: o vídeo para e a oferta aparece
+          if (ms >= video.free.end || v.ended) {
+            if (!v.paused) v.pause();
+            setMainOffer(true);
+          }
         } else if (!paid) {
           if (!v.paused) v.pause();
         } else if (ms >= video.vip.end) v.currentTime = video.vip.start / 1000;
@@ -463,6 +472,17 @@ export function CallScreen({
         </div>
       )}
 
+      {freePreview && mainOffer && !paid && mainProduct && (
+        <UpsellScreen
+          marker={{ id: "main", at: video?.free.end ?? 0, label: mainProduct.name, productId: mainProduct.id, style: "screen", product: mainProduct }}
+          character={character}
+          payment={mainPayments.filter((p) => p.status !== "FAILED")[0]}
+          bought={paid}
+          onBuy={() => onBuyMain?.()}
+          onSkip={onHangUp}
+          onSimulate={onSimulate}
+        />
+      )}
       {upsell && upsell.style === "screen" && (
         <UpsellScreen
           key={upsell.id}

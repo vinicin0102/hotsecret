@@ -268,7 +268,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
         o.style === "call"
           ? o.freeLoop
-            ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, ele já te vê ao vivo (prévia grátis) e paga pelo PIX ali mesmo para continuar."
+            ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, ele já te vê ao vivo por um tempinho grátis e, no fim, paga pelo PIX ali mesmo para continuar."
             : "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa."
           : "",
         o.style === "live"
