@@ -307,9 +307,10 @@ export function CallScreen({
   const forNode = Object.values(payments).filter((p) => p.offerNodeId === nodeId);
   const mainPayments = forNode.filter((p) => p.productId === mainProduct?.id);
   // "Oferta" marcada no FREE (chamada de vídeo 02): pagar qualquer um dos ingressos também libera a chamada
+  // (sem "Oferta" no FREE, a primeira "Oferta" do vídeo é a do fim do FREE)
+  const freeZone = (video?.markers ?? []).filter((m) => m.style === "offer" && m.at < video!.vip.start);
   const freeOfferIds = new Set(
-    (video?.markers ?? [])
-      .filter((m) => m.style === "offer" && m.at < video!.vip.start)
+    (freeZone.length ? freeZone : (video?.markers ?? []).filter((m) => m.style === "offer").slice(0, 1))
       .flatMap((m) => [m.productId, m.basicProductId ?? ""])
       .filter(Boolean),
   );
@@ -325,10 +326,13 @@ export function CallScreen({
   /** já viu o FREE (chamada de vídeo 02): depois de pagar, segue direto do VIP */
   const sawFree = useRef(false);
   if (freePreview) sawFree.current = true;
-  /** chamada de vídeo 02: o FREE acabou → oferta principal em forma de upsell */
-  const [mainOffer, setMainOffer] = useState(false);
   /** o FREE acabou e a "Oferta" marcada está na tela: fechar desliga (não há mais nada grátis para ver) */
   const freeEnded = useRef(false);
+  /** sem "Oferta" no vídeo: o upgrade do fim do FREE usa o produto da chamada */
+  const mainOfferMarker = useRef<CallVideo["markers"][number] | null>(null);
+  mainOfferMarker.current = mainProduct
+    ? { id: "main", at: 0, label: mainProduct.name, productId: mainProduct.id, style: "offer", product: mainProduct }
+    : null;
   const live = useRef({ paid, upsell, boughtUpsell, freePreview });
   live.current = { paid, upsell, boughtUpsell, freePreview };
 
@@ -390,18 +394,19 @@ export function CallScreen({
             setUpsellBuying(false);
             v.pause();
           }
-          // fim do FREE: o vídeo para; com "Oferta" marcada, aparece a SUA oferta (a automática só quando não há nenhuma)
+          // fim do FREE: o vídeo para e abre o upgrade — a "Oferta" do FREE; senão a primeira "Oferta" do vídeo
+          // (no VIP ela nunca seria vista antes de pagar); sem nenhuma, o upgrade com o produto da chamada
           if (ms >= video.free.end || v.ended) {
             if (!v.paused) v.pause();
-            if (zone.length) {
-              freeEnded.current = true;
-              if (!upsell) {
-                const last = zone[zone.length - 1];
-                shown.current.add(last.id);
-                setUpsell(last);
+            freeEnded.current = true;
+            if (!upsell) {
+              const end = zone[zone.length - 1] ?? video.markers.find((mk) => mk.style === "offer") ?? mainOfferMarker.current;
+              if (end) {
+                shown.current.add(end.id);
+                setUpsell(end);
                 setUpsellBuying(false);
               }
-            } else setMainOffer(true);
+            }
           }
         } else if (!paid) {
           if (!v.paused) v.pause();
@@ -504,17 +509,6 @@ export function CallScreen({
         </div>
       )}
 
-      {freePreview && mainOffer && !paid && mainProduct && (
-        <UpsellScreen
-          marker={{ id: "main", at: video?.free.end ?? 0, label: mainProduct.name, productId: mainProduct.id, style: "screen", product: mainProduct }}
-          character={character}
-          payment={mainPayments.filter((p) => p.status !== "FAILED")[0]}
-          bought={paid}
-          onBuy={() => onBuyMain?.()}
-          onSkip={onHangUp}
-          onSimulate={onSimulate}
-        />
-      )}
       {upsell && upsell.style === "offer" && (() => {
         const offer: OfferContent = { productId: upsell.productId, downsellProductId: upsell.basicProductId, style: "live", vip: upsell.vip };
         const inFree = !paid && !!freePreview;
