@@ -88,13 +88,43 @@ export interface TarotCard {
   imageUrl?: string;
   meaning?: string;
 }
+/** Textos da oferta "Canal VIP AO VIVO" (vazios = textos padrão do país do fluxo). */
+export interface VipOfferTexts {
+  /** selo do topo ("UPGRADE EXCLUSIVO 💎") */
+  badge?: string;
+  /** título ("QUER O ACESSO") e a parte em destaque ("TOTAL? 💦") */
+  title?: string;
+  highlight?: string;
+  /** frase acima dos benefícios */
+  intro?: string;
+  /** benefícios (um por linha no painel) */
+  benefits?: string[];
+  /** botões dos ingressos */
+  completeLabel?: string;
+  basicLabel?: string;
+  /** folha do pagamento */
+  payTitle?: string;
+  paySubtitle?: string;
+  /** mensagens que aparecem no chat, acima do pagamento, enquanto ele não paga */
+  payMessages?: string[];
+  /** imagem borrada com cadeado mostrada no chat junto com o pagamento */
+  lockedImageUrl?: string;
+  /** pop-up quando ele tenta sair do pagamento */
+  exitTitle?: string;
+  exitText?: string;
+  stayLabel?: string;
+  stayHint?: string;
+  leaveLabel?: string;
+}
 export interface OfferContent {
   productId: string;
   headline?: string;
   description?: string;
   ctaLabel?: string;
   /** card: card de compra · call: chamada de vídeo recebida (Atender gera o PIX, Recusar segue "Recusou a chamada") · tarot: cartas viradas reveladas após o pagamento (só ofertas do Cérebro) */
-  style?: "card" | "call" | "tarot";
+  style?: "card" | "call" | "tarot" | "live";
+  /** canal VIP AO VIVO (style "live"): textos do upgrade, do pagamento e do pop-up de saída; o 2º ingresso (acesso básico) é o downsellProductId */
+  vip?: VipOfferTexts;
   /** tarot: as cartas (no chat público só vão id e posição até o pagamento) */
   tarotCards?: TarotCard[];
   /** tarot: imagem do verso das cartas */
@@ -207,6 +237,38 @@ export interface ChatAppearance {
   visibleCount?: number;
 }
 
+/** prévia do Canal VIP AO VIVO: liberada uma por uma no botão "Ver prévia" */
+export interface LivePreview {
+  id: string;
+  kind: "image" | "video" | "audio";
+  url: string;
+  caption?: string;
+}
+/** Modo "Canal VIP AO VIVO" do fluxo: ligação ao entrar, chat com cara de live e prévias uma a uma. */
+export interface LiveSettings {
+  enabled?: boolean;
+  /** idade mostrada no topo */
+  age?: number;
+  /** cidade fixa; vazio = a cidade do lead (pela conexão dele) */
+  city?: string;
+  /** frase da tela de ligação ("{nome} quer uma conversa com você...") */
+  ringText?: string;
+  previews?: LivePreview[];
+  /** rodapé dos cards de prévia ("No VIP eu mostro tudo sem limites 💋") */
+  previewFooter?: string;
+  /** texto do botão ("Ver Prévia") */
+  previewButton?: string;
+}
+/** o que vai ao navegador: as prévias só saem uma por uma pelo servidor */
+export interface PublicLive {
+  age?: number;
+  city?: string;
+  ringText?: string;
+  previewCount: number;
+  previewFooter?: string;
+  previewButton?: string;
+}
+
 export interface FunnelSettings {
   defaultDelayMs?: number;
   appearance?: ChatAppearance;
@@ -216,6 +278,8 @@ export interface FunnelSettings {
   recovery?: RecoverySettings;
   /** país do fluxo: pt-BR (Brasil), es-MX (México) ou es-AR (Argentina) — idioma do chat e da IA */
   locale?: "pt-BR" | "es-MX" | "es-AR";
+  /** Canal VIP AO VIVO */
+  live?: LiveSettings;
 }
 
 /** Produto exposto ao front público (sem link de entrega). */
@@ -261,6 +325,8 @@ export interface PublicFunnel {
   appearance?: ChatAppearance;
   /** pt-BR, es-MX ou es-AR */
   locale?: "pt-BR" | "es-MX" | "es-AR";
+  /** modo Canal VIP AO VIVO ligado */
+  live?: PublicLive;
 }
 
 export const DEFAULT_RECOVERY: RecoverySettings = {

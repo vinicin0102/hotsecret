@@ -1,6 +1,6 @@
 // Transporte do chat: "live" fala com a API (eventos persistidos), "preview" simula tudo em memória.
 import { withBase } from "@/lib/paths";
-import type { FlowNode, TarotCard } from "@/types/flow";
+import type { FlowNode, LivePreview, TarotCard, VipOfferTexts } from "@/types/flow";
 import { metaCookies } from "./pixels";
 import type { ChatCue, TimeRange, UpsellMarker, VideoTimeline } from "@/types/video";
 import { normalizeTimeline } from "@/types/video";
@@ -108,7 +108,9 @@ export interface AiReply {
     headline?: string;
     description?: string;
     ctaLabel?: string;
-    style?: "card" | "call" | "tarot";
+    style?: "card" | "call" | "tarot" | "live";
+    /** canal VIP AO VIVO: textos do upgrade/pagamento */
+    vip?: VipOfferTexts;
     tarotCards?: TarotCard[];
     tarotBackUrl?: string;
     downsellProductId?: string;
@@ -146,6 +148,8 @@ export interface ChatTransport {
   tarot(nodeId: string, productId?: string): Promise<TarotCard[] | null>;
   /** chamada de vídeo: vídeo + linha do tempo da oferta (productId: oferta do Cérebro) */
   callVideo(nodeId: string, productId?: string): Promise<CallVideo | null>;
+  /** Canal VIP AO VIVO: libera a próxima prévia (null = acabaram) */
+  livePreview(): Promise<ServerMessage | null>;
   simulatePayment?(paymentId: string, status: "APPROVED" | "FAILED"): Promise<PublicPaymentInfo | null>;
 }
 
@@ -239,6 +243,16 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       const r = await post<{ video: CallVideo | null }>("/api/public/call", { token: getToken(), nodeId, productId });
       return r.video;
     },
+    async livePreview() {
+      await chain;
+      try {
+        const r = await post<{ message: Omit<ServerMessage, "sender" | "nodeId"> }>("/api/public/live-preview", { token: getToken() });
+        return { ...r.message, sender: "bot", nodeId: null } as ServerMessage;
+      } catch (e) {
+        if (e instanceof ApiError && (e.status === 410 || e.status === 404)) return null;
+        throw e;
+      }
+    },
     async ai(nodeId, message, event) {
       await chain;
       const body = event ? { token: getToken(), nodeId, event } : message === null ? { token: getToken(), nodeId, start: true } : { token: getToken(), nodeId, message };
@@ -277,7 +291,10 @@ export function createPreviewTransport(
   aiFlowOffers: (nodeId: string) => { productId: string; headline?: string; button?: string }[] | undefined = () => undefined,
   /** país do fluxo (idioma da IA no preview) */
   language: "pt-BR" | "es-MX" | "es-AR" = "pt-BR",
+  /** Canal VIP AO VIVO: as prévias do fluxo (o preview do painel lê direto da configuração) */
+  livePreviews: () => Promise<LivePreview[]> = async () => [],
 ): ChatTransport {
+  let previewsShown = 0;
   const opened = new Set<string>();
   const aiHistory = new Map<string, { role: "lead" | "bot"; text: string }[]>();
   const payments = new Map<string, PublicPaymentInfo>();
@@ -436,6 +453,20 @@ export function createPreviewTransport(
       } catch (e) {
         return { messages: [`(preview) ${e instanceof Error ? e.message : "Falha na IA"}`], audio: null, offer: null, end: false };
       }
+    },
+    async livePreview() {
+      const list = (await livePreviews()).filter((p) => p.url);
+      const p = list[previewsShown];
+      if (!p) return null;
+      previewsShown++;
+      return {
+        id: `preview_live_${previewsShown}`,
+        sender: "bot",
+        type: p.kind,
+        content: { url: p.url, caption: p.caption ?? "", livePreview: { n: previewsShown, total: list.length } },
+        nodeId: null,
+        createdAt: new Date().toISOString(),
+      } as ServerMessage;
     },
     async viewOnce(nodeId) {
       if (opened.has(nodeId)) return null;

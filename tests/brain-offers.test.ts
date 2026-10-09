@@ -103,3 +103,11 @@ test("ordem do dono para o pedido do lead: a oferta da ordem não é trocada pel
   // sem ordem do dono, continua trocando para o que ele pediu
   assert.equal(runWith([CALL, FOTOS, TAROT], [lead("hola"), bot("hola"), lead("quiero la lectura de tarot")], FOTOS), "of_tarot");
 });
+
+test("pedir prévia não é pedir para comprar: a única oferta não é empurrada", () => {
+  const only = [FOTOS];
+  const one = (text: string) => assistReply(reply(), [lead("hola"), bot("hola"), lead(text)], only, PRODUCTS, [], []).offer?.id ?? null;
+  assert.equal(one("me manda uma prévia"), null);
+  assert.equal(one("mandame un adelanto"), null);
+  assert.equal(one("quero comprar"), "of_fotos");
+});

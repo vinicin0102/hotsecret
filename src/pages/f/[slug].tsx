@@ -13,7 +13,7 @@ import { createLiveTransport, createPreviewTransport, type ChatTransport } from 
 import type { ResumeState } from "@/features/chat-engine/useChatEngine";
 import { initPixels } from "@/features/chat-engine/pixels";
 import { asChatLocale } from "@/features/i18n/chat";
-import type { OfferContent, PublicFunnel } from "@/types/flow";
+import type { LivePreview, OfferContent, PublicFunnel } from "@/types/flow";
 
 interface Props {
   funnel: PublicFunnel | null;
@@ -102,7 +102,13 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
       (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
       (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined,
       (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined),
-      asChatLocale(funnel.locale));
+      asChatLocale(funnel.locale),
+      // rascunho aberto pelo admin: as prévias do Canal VIP vêm da configuração do fluxo
+      async () => {
+        const r = await fetch(withBase(`/api/admin/funnels/${funnel.id}`)).catch(() => null);
+        const j = r?.ok ? ((await r.json()) as { funnel?: { settings?: { live?: { previews?: LivePreview[] } } } }) : null;
+        return (j?.funnel?.settings?.live?.previews ?? []).filter((p) => p.url);
+      });
     }
     if (!token) return null;
     return createLiveTransport(() => token, { sandbox, locale: asChatLocale(funnel.locale) });
@@ -160,7 +166,28 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps<Props> = async ({ params, req, res }) => {
+/** Canal VIP AO VIVO sem cidade fixa: mostra a cidade do lead (localização aproximada da conexão, dada pela Vercel). */
+function withLeadCity(funnel: PublicFunnel, header: string | string[] | undefined): PublicFunnel {
+  if (!funnel.live || funnel.live.city) return funnel;
+  let city = "";
+  try {
+    city = decodeURIComponent(String(Array.isArray(header) ? header[0] : (header ?? ""))).trim().slice(0, 60);
+  } catch {
+    city = "";
+  }
+  return city ? { ...funnel, live: { ...funnel.live, city } } : funnel;
+}
+
+export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
+  const r = await funnelProps(ctx);
+  if ("props" in r && r.props && (r.props as Props).funnel) {
+    const p = r.props as Props;
+    return { props: { ...p, funnel: withLeadCity(p.funnel!, ctx.req.headers["x-vercel-ip-city"]) } };
+  }
+  return r;
+};
+
+const funnelProps: GetServerSideProps<Props> = async ({ params, req, res }) => {
   const slug = String(params?.slug ?? "").toLowerCase();
   const sandbox = activeProviderName() === "sandbox" && sandboxAllowed();
 

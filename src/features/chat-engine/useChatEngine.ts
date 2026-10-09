@@ -49,7 +49,9 @@ let localSeq = 0;
 const lid = () => `l${++localSeq}_${Date.now().toString(36)}`;
 const now = () => new Date().toISOString();
 
-export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | null, resume: ResumeState | null) {
+/** hold: o fluxo só começa quando virar false (Canal VIP AO VIVO: depois de atender a ligação da entrada) */
+export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | null, resume: ResumeState | null, opts: { hold?: boolean } = {}) {
+  const hold = !!opts.hold;
   const tx = chatTexts(asChatLocale(funnel.locale));
   // o grafo público chega sem o conteúdo pago; ele é mesclado após o pagamento aprovado
   const [graph, setGraph] = useState<FlowGraph>(funnel.graph);
@@ -61,6 +63,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const [typing, setTyping] = useState(false);
   const [awaiting, setAwaiting] = useState<Awaiting>(null);
   const [payments, setPayments] = useState<Record<string, PublicPaymentInfo>>({});
+  const paymentsRef = useRef(payments);
+  paymentsRef.current = payments;
   const [ended, setEnded] = useState(false);
   const [checkoutOpened, setCheckoutOpened] = useState(false);
   /** chamada de vídeo: tocando (ringing) ou em andamento (active) */
@@ -82,6 +86,21 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     /** o gateway pede os dados do comprador antes de gerar o pagamento */
     needPayer?: boolean;
   } | null>(null);
+  /**
+   * Canal VIP AO VIVO: offer (upgrade com 2 ingressos) → pay (folha do pagamento, chat visível acima)
+   * → exit (pop-up "vai desistir agora?" ao tentar fechar). productId/offer: oferta do Cérebro.
+   */
+  const [vip, setVip] = useState<{
+    nodeId: string;
+    phase: "offer" | "pay" | "exit";
+    productId?: string;
+    offer?: OfferContent;
+    payProductId?: string;
+    needPayer?: boolean;
+  } | null>(null);
+  const [vipError, setVipError] = useState<string | null>(null);
+  /** mensagens de conversão já disparadas (uma vez por oferta) */
+  const vipPushed = useRef(new Set<string>());
   /** dados do comprador já informados nesta conversa (só em memória; reaproveitados no downsell/upsell) */
   const [payer, setPayer] = useState<PayerData | null>(null);
   const payerRef = useRef<PayerData | null>(null);
@@ -224,6 +243,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             push({ kind: "offer", id: lid(), nodeId: node.id, at: now() });
             track("offer_viewed", node.id);
             markChatStarted();
+            // Canal VIP AO VIVO: o upgrade abre por cima do chat (o card fica no chat para reabrir)
+            if ((c as unknown as OfferContent).style === "live") setVip({ nodeId: node.id, phase: "offer" });
             // "Enquanto não compra": mensagens/áudios de apoio logo após o card (quebra de objeções)
             const followUp = nextNodeId(graphRef.current, node.id, "default");
             if (followUp) {
@@ -342,8 +363,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           downsellProductId: r.offer.downsellProductId,
           downsellText: r.offer.downsellText,
           ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
+          ...(r.offer.style === "live" ? { style: "live" as const, vip: r.offer.vip } : {}),
         };
         if (r.offer.style === "tarot") tarotProducts.current.add(r.offer.productId);
+        if (r.offer.style === "live") setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
         if (r.offer.style === "call") {
           // oferta do Cérebro em formato de chamada: toca a ligação
           setTyping(false);
@@ -675,7 +698,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   // ---------- Início / retomada ----------
   useEffect(() => {
-    if (started.current || !transport) return;
+    if (started.current || !transport || hold) return;
     started.current = true;
 
     if (!resume || !resume.resumed) {
@@ -708,6 +731,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
                   ctaLabel: (c.ctaLabel as string) || undefined,
                   ...(c.style === "tarot" && Array.isArray(c.tarotCards)
                     ? { style: "tarot" as const, tarotCards: c.tarotCards as TarotCard[], tarotBackUrl: (c.tarotBackUrl as string) || undefined }
+                    : {}),
+                  ...(c.style === "live"
+                    ? { style: "live" as const, vip: (c.vip as OfferContent["vip"]) ?? undefined, downsellProductId: (c.downsellProductId as string) || undefined }
                     : {}),
                 },
                 at: m.createdAt,
@@ -784,7 +810,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transport]);
+  }, [transport, hold]);
 
   // ---------- Chamada de vídeo ----------
   const [callError, setCallError] = useState<string | null>(null);
@@ -950,7 +976,142 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     [call, submitCheckout, track],
   );
 
+  // ---------- Canal VIP AO VIVO ----------
+  const vipOffer = (v: NonNullable<typeof vip>) => v.offer ?? (getNode(graphRef.current, v.nodeId)?.content as OfferContent | undefined);
+
+  /** reabre pelo card do chat: com pagamento pendente volta direto para o pagamento */
+  const openVip = useCallback(
+    (nodeId: string, productId?: string, offer?: OfferContent) => {
+      const pending = Object.values(payments).find((p) => p.offerNodeId === nodeId && (p.status === "PENDING" || p.status === "CREATED"));
+      track("offer_clicked", nodeId, productId ? { productId } : undefined);
+      setVip({ nodeId, productId, offer, phase: pending ? "pay" : "offer", payProductId: pending?.productId });
+    },
+    [payments, track],
+  );
+
+  /** mensagens de conversão no chat (acima do pagamento) enquanto ele não paga */
+  const pushVipMessages = useCallback(
+    async (nodeId: string, o: OfferContent | undefined) => {
+      if (vipPushed.current.has(nodeId)) return;
+      vipPushed.current.add(nodeId);
+      const texts = o?.vip?.payMessages ?? [];
+      const paid = () => Object.values(paymentsRef.current).some((p) => p.offerNodeId === nodeId && p.status === "APPROVED");
+      for (const text of texts) {
+        await sleep(1400);
+        if (paid()) return;
+        setTyping(true);
+        await sleep(Math.min(autoDelay(text.length), 2600));
+        setTyping(false);
+        if (paid()) return;
+        push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text }, nodeId, at: now() });
+      }
+      if (o?.vip?.lockedImageUrl && !paid()) {
+        await sleep(1200);
+        push({ kind: "message", id: lid(), sender: "bot", type: "image", content: { url: o.vip.lockedImageUrl, locked: true }, nodeId, at: now() });
+      }
+    },
+    [push],
+  );
+
+  /** escolheu um ingresso: gera o pagamento e mostra a folha com o código */
+  const pickVip = useCallback(
+    async (productId: string) => {
+      const v = vip;
+      if (!v) return;
+      const nodeId = v.nodeId;
+      const o = vipOffer(v);
+      setVipError(null);
+      setVip({ ...v, phase: "pay", payProductId: productId, needPayer: false });
+      const product = funnel.products[productId];
+      track("checkout_started", nodeId, { productId, vip: productId === o?.productId ? "complete" : "basic" });
+      if (product && transportRef.current?.mode === "live") {
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
+      }
+      setCheckoutOpened(true);
+      // quem clicou em comprar não recebe mais as mensagens de apoio do bloco
+      if (followUpOffers.current.size > 0) {
+        followUpOffers.current.clear();
+        runId.current++;
+        setTyping(false);
+      }
+      void pushVipMessages(nodeId, o);
+      if (product?.payerForm && !payerRef.current && transportRef.current?.mode === "live") {
+        setVip({ ...v, phase: "pay", payProductId: productId, needPayer: true });
+        return;
+      }
+      const mainOfNode = (getNode(graphRef.current, nodeId)?.content as OfferContent | undefined)?.productId;
+      try {
+        await submitCheckout(nodeId, { method: "PIX", ...(productId !== mainOfNode ? { productId } : {}) }, { silent: true });
+      } catch (e) {
+        if (e instanceof ApiError && (e.data.code === "payer_required" || e.data.code === "invalid_fields")) {
+          setVip((cur) => (cur && cur.nodeId === nodeId ? { ...cur, needPayer: true } : cur));
+          return;
+        }
+        setVipError(e instanceof Error ? e.message : tx.generateError);
+      }
+    },
+    [vip, funnel.products, pushVipMessages, submitCheckout, track], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const submitVipPayer = useCallback(
+    async (data: PayerData) => {
+      const v = vip;
+      if (!v?.payProductId) return;
+      const mainOfNode = (getNode(graphRef.current, v.nodeId)?.content as OfferContent | undefined)?.productId;
+      await submitCheckout(v.nodeId, { method: "PIX", payer: data, ...(v.payProductId !== mainOfNode ? { productId: v.payProductId } : {}) }, { silent: true });
+      setVip((cur) => (cur && cur.nodeId === v.nodeId ? { ...cur, needPayer: false } : cur));
+    },
+    [vip, submitCheckout],
+  );
+
+  /** fechar: no upgrade fecha; no pagamento pergunta "vai desistir agora?" */
+  const closeVip = useCallback(() => {
+    setVip((cur) => (!cur ? cur : cur.phase === "pay" ? { ...cur, phase: "exit" } : null));
+  }, []);
+  const stayVip = useCallback(() => setVip((cur) => (cur ? { ...cur, phase: cur.payProductId ? "pay" : "offer" } : cur)), []);
+  const leaveVip = useCallback(() => {
+    if (vip) track("vip_exit", vip.nodeId);
+    setVip(null);
+  }, [vip, track]);
+
+  // pagamento aprovado: fecha a folha (o fluxo segue pelo ramo "Comprou")
+  useEffect(() => {
+    if (!vip?.payProductId) return;
+    const ok = Object.values(payments).some((p) => p.offerNodeId === vip.nodeId && p.productId === vip.payProductId && p.status === "APPROVED");
+    if (ok) setVip(null);
+  }, [vip, payments]);
+
+  /** Canal VIP AO VIVO: libera a próxima prévia (o servidor manda uma por vez, na ordem) */
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const revealPreview = useCallback(async () => {
+    const t = transportRef.current;
+    if (!t || previewBusy) return;
+    setPreviewBusy(true);
+    try {
+      setTyping(true);
+      const [m] = await Promise.all([t.livePreview().catch(() => null), sleep(900)]);
+      setTyping(false);
+      if (!m) return;
+      seenServerMsgs.current.add(m.id);
+      push({ kind: "message", id: m.id, sender: "bot", type: m.type as "image" | "video" | "audio", content: m.content, nodeId: m.nodeId, at: m.createdAt });
+    } finally {
+      setTyping(false);
+      setPreviewBusy(false);
+    }
+  }, [previewBusy, push]);
+
   return {
+    vip,
+    vipError,
+    vipOffer: vip ? vipOffer(vip) : undefined,
+    openVip,
+    pickVip,
+    submitVipPayer,
+    closeVip,
+    stayVip,
+    leaveVip,
+    revealPreview,
+    previewBusy,
     voice,
     answerVoice,
     declineVoice,

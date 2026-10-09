@@ -16,6 +16,10 @@ import { PaymentStatus } from "./PaymentStatus";
 import { DeliveryCard } from "./DeliveryCard";
 import { CallScreen, IncomingCall, PixPopup, VoiceCall } from "./VideoCall";
 import { Particles } from "./Particles";
+import { LiveHeader, LiveIncomingCall, LivePreviewButton, LivePreviewCard, VipExitModal, VipOfferCard, VipOfferModal, VipPaySheet } from "./LiveChannel";
+
+/** o lead pediu prévia/provinha (pt + es): aparece o botão "Ver prévia" */
+const PREVIEW_ASK = /(pr[eé]via|previazinha|provinha|amostra|adelanto|probadita|muestra|avance|preview|\bfot(o|os|inho|inha|ito)\b|v[ií]deo|nude)/i;
 
 interface Props {
   funnel: PublicFunnel;
@@ -43,7 +47,11 @@ function visibleItems(items: ChatItem[], count: number, isOpen: (i: ChatItem) =>
 }
 
 export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, onRestart }: Props) {
-  const engine = useChatEngine(funnel, transport, resume);
+  // Canal VIP AO VIVO: o lead cai numa ligação; o chat só começa quando ele atende (ou recusa)
+  const live = funnel.live;
+  const [ringing, setRinging] = useState(!!live && !resume?.resumed);
+  const [previewAsked, setPreviewAsked] = useState(false);
+  const engine = useChatEngine(funnel, transport, resume, { hold: ringing });
   const i18n = useMemo(() => makeChatI18n(asChatLocale(funnel.locale)), [funnel.locale]);
   const { t } = i18n;
   const bgVideo = funnel.appearance?.bgVideoUrl || null;
@@ -70,6 +78,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
 
   const send = () => {
     if (!draft.trim()) return;
+    if (live && PREVIEW_ASK.test(draft)) setPreviewAsked(true);
     engine.submitAnswer(draft);
     setDraft("");
   };
@@ -87,6 +96,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   };
 
 
+  const livePreviewsShown = items.filter((i) => i.kind === "message" && !!i.content.livePreview).length;
+  const livePreviewsLeft = Math.max(0, (live?.previewCount ?? 0) - livePreviewsShown);
+
   const isOpenItem = (i: ChatItem) => {
     if (i.kind === "checkout" || i.kind === "callAccess") return true;
     if (i.kind === "payment") return ["CREATED", "PENDING"].includes(payments[i.paymentId]?.status ?? "");
@@ -102,6 +114,32 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
     switch (item.kind) {
       case "message": {
         const c = item.content;
+        const lp = c.livePreview as { n: number; total: number } | undefined;
+        if (lp && (item.type === "image" || item.type === "video" || item.type === "audio")) {
+          return (
+            <LivePreviewCard
+              key={item.id}
+              character={funnel.character}
+              kind={item.type}
+              url={String(c.url ?? "")}
+              caption={(c.caption as string) || undefined}
+              n={lp.n}
+              total={lp.total}
+              footer={live?.previewFooter}
+            />
+          );
+        }
+        if (item.type === "image" && c.locked) {
+          return (
+            <div key={item.id} className="msg-row bot">
+              <div className="live-locked">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={String(c.url ?? "")} alt="" />
+                <span>🔒</span>
+              </div>
+            </div>
+          );
+        }
         if (item.type === "image") {
           const m = c as unknown as ImageContent;
           return (
@@ -132,7 +170,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           );
         }
         return (
-          <MessageBubble key={item.id} sender={item.sender} at={item.at}>
+          <MessageBubble key={item.id} sender={item.sender} at={item.at} from={live ? funnel.character.name : undefined}>
             {String(c.text ?? "")}
           </MessageBubble>
         );
@@ -145,6 +183,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           (p) => p.offerNodeId === item.nodeId && p.status === "APPROVED" && (!item.productId || p.productId === item.productId),
         );
         const offer = item.offer ?? (node?.content as OfferContent) ?? { productId: "" };
+        if (offer.style === "live") {
+          return <VipOfferCard key={item.id} offer={offer} product={product} bought={bought} onOpen={() => engine.openVip(item.nodeId, item.productId, item.offer)} />;
+        }
         if (offer.style === "tarot" && item.productId) {
           const pid = item.productId;
           return (
@@ -266,7 +307,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
 
   return (
     <ChatI18nContext.Provider value={i18n}>
-    <div className={`chat-shell ${embedded ? "embedded" : ""} ${bgVideo ? "has-bg-video" : ""}`} lang={i18n.locale}>
+    <div className={`chat-shell ${embedded ? "embedded" : ""} ${bgVideo ? "has-bg-video" : ""} ${live ? "live-mode" : ""}`} lang={i18n.locale}>
       {!embedded && <Particles />}
       <div className="chat-window">
         {bgVideo && (
@@ -276,6 +317,47 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           </>
         )}
         {previewLabel && <div className="preview-banner">{previewLabel}</div>}
+        {live && ringing && (
+          <LiveIncomingCall
+            character={funnel.character}
+            ringText={live.ringText}
+            onAccept={() => {
+              setRinging(false);
+              engine.track("live_answered");
+            }}
+            onDecline={() => {
+              setRinging(false);
+              engine.track("live_declined");
+            }}
+          />
+        )}
+        {engine.vip && engine.vipOffer && engine.vip.phase === "offer" && (
+          <VipOfferModal
+            offer={engine.vipOffer}
+            product={funnel.products[engine.vip.productId ?? engine.vipOffer.productId]}
+            basic={engine.vipOffer.downsellProductId ? funnel.products[engine.vipOffer.downsellProductId] : undefined}
+            onPick={(pid) => void engine.pickVip(pid)}
+            onClose={engine.closeVip}
+          />
+        )}
+        {engine.vip && engine.vipOffer && engine.vip.phase !== "offer" && (
+          <VipPaySheet
+            character={funnel.character}
+            offer={engine.vipOffer}
+            payment={Object.values(payments)
+              .filter((p) => p.offerNodeId === engine.vip!.nodeId && p.productId === engine.vip!.payProductId)
+              .sort((a, b) => (a.status === "FAILED" ? 1 : 0) - (b.status === "FAILED" ? 1 : 0))[0]}
+            error={engine.vipError}
+            payerForm={
+              engine.vip.needPayer && transport
+                ? { loadMethods: () => transport.paymentMethods(engine.vip!.payProductId ?? ""), initial: engine.payer, onSubmit: engine.submitVipPayer }
+                : undefined
+            }
+            onClose={engine.closeVip}
+            onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
+          />
+        )}
+        {engine.vip && engine.vipOffer && engine.vip.phase === "exit" && <VipExitModal offer={engine.vipOffer} onStay={engine.stayVip} onLeave={engine.leaveVip} />}
         {engine.voice && (
           <VoiceCall
             key={engine.voice.id + engine.voice.nodeId}
@@ -323,7 +405,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             previewMode={transport?.mode === "preview"}
           />
         )}
-        <ChatHeader character={funnel.character} typing={typing} />
+        {live ? <LiveHeader character={funnel.character} typing={typing} age={live.age} city={live.city} /> : <ChatHeader character={funnel.character} typing={typing} />}
         <div className={`chat-body ${fadeOld ? "fade-old" : ""}`} ref={bodyRef} aria-live="polite">
           {!bgVideo && <div className="day-sep">{t.today}</div>}
           {!bgVideo && (
@@ -344,6 +426,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             </div>
           )}
         </div>
+        {live && livePreviewsLeft > 0 && (previewAsked || livePreviewsShown > 0) && (
+          <LivePreviewButton label={live.previewButton} left={livePreviewsLeft} busy={engine.previewBusy} onClick={() => void engine.revealPreview()} />
+        )}
         <div className="composer">
           <input
             ref={photoRef}
@@ -378,7 +463,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             disabled={!canType}
             placeholder={
               canType
-                ? (awaiting?.placeholder ?? "") || t.typeAnswer
+                ? (awaiting?.placeholder ?? "") || (live ? `${t.chatWith} ${funnel.character.name}...` : t.typeAnswer)
                 : awaiting?.kind === "buttons"
                   ? t.chooseAbove
                   : t.message

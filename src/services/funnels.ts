@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type {
+  LiveSettings,
+  PublicLive,
   FlowEdge,
   FlowGraph,
   FlowNode,
@@ -104,6 +106,20 @@ export function getFunnelSettings(raw: unknown): Required<FunnelSettings> {
     appearance: s.appearance ?? {},
     recovery: { ...DEFAULT_RECOVERY, ...(s.recovery ?? {}) },
     locale: s.locale === "es-MX" || s.locale === "es-AR" ? s.locale : "pt-BR",
+    live: s.live ?? {},
+  };
+}
+
+/** Canal VIP AO VIVO para o navegador: sem os arquivos das prévias (saem uma por uma pelo servidor). */
+export function publicLive(live: LiveSettings | undefined): PublicLive | undefined {
+  if (!live?.enabled) return undefined;
+  return {
+    ...(live.age ? { age: live.age } : {}),
+    ...(live.city?.trim() ? { city: live.city.trim() } : {}),
+    ...(live.ringText?.trim() ? { ringText: live.ringText.trim() } : {}),
+    previewCount: (live.previews ?? []).filter((p) => p.url).length,
+    ...(live.previewFooter?.trim() ? { previewFooter: live.previewFooter.trim() } : {}),
+    ...(live.previewButton?.trim() ? { previewButton: live.previewButton.trim() } : {}),
   };
 }
 
@@ -231,6 +247,7 @@ async function buildPublicFunnel(
     delay: getFunnelSettings(funnel.settings).delay,
     appearance: getFunnelSettings(funnel.settings).appearance,
     locale: getFunnelSettings(funnel.settings).locale,
+    ...(publicLive(getFunnelSettings(funnel.settings).live) ? { live: publicLive(getFunnelSettings(funnel.settings).live) } : {}),
     tracking: publicTracking(mergeTracking(await getGlobalTracking(), (funnel.settings as FunnelSettings | null)?.tracking)),
   };
 }

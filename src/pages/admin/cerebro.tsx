@@ -6,6 +6,8 @@ import { useFetch } from "@/hooks/useFetch";
 import { api, uploadFile } from "@/lib/client";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
+import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
+import type { VipOfferTexts } from "@/types/flow";
 
 type Provider = "anthropic" | "deepseek";
 interface ProviderSettings {
@@ -32,7 +34,8 @@ const defaultTarot = (): TarotCard[] =>
 interface Offer {
   id: string;
   productId: string;
-  style?: "card" | "call" | "tarot";
+  style?: "card" | "call" | "tarot" | "live";
+  vip?: VipOfferTexts;
   videoId?: string;
   tarotCards?: TarotCard[];
   tarotBackUrl?: string;
@@ -293,7 +296,7 @@ function TestChat({ brain }: { brain: Brain }) {
           : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
         ...(r.offer
-          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
+          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? "🔴 Canal VIP AO VIVO" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
           : []),
         ...(r.voiceCall ? [{ role: "bot" as const, text: "📞 Ligou para o lead (no chat de verdade toca a ligação de voz)", voice: true }] : []),
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
@@ -752,6 +755,7 @@ export default function CerebroPage() {
                           ["card", "Card de compra"],
                           ["call", "📹 Chamada de vídeo"],
                           ["tarot", "🔮 Cartas de tarot"],
+                          ["live", "🔴 Canal VIP AO VIVO"],
                         ] as const
                       ).map(([s, label]) => (
                         <button
@@ -765,6 +769,16 @@ export default function CerebroPage() {
                       ))}
                     </div>
                   </div>
+                  {o.style === "live" && (
+                    <VipOfferEditor
+                      vip={o.vip}
+                      basicProductId={o.downsellProductId || undefined}
+                      mainProductId={o.productId}
+                      products={products}
+                      onChange={(vip) => setOffer(i, { vip })}
+                      onBasicChange={(id) => setOffer(i, { downsellProductId: id })}
+                    />
+                  )}
                   {o.style === "call" && (
                     <div className="field">
                       <label>Vídeo da chamada</label>

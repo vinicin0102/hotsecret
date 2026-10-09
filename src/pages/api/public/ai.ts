@@ -64,7 +64,7 @@ function toTurns(messages: Msg[]): ChatTurn[] {
       case "offer":
         turns.push({
           role: "bot",
-          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? priceForAi(c.price, c.currency) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
+          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : c.style === "live" ? "abriu o upgrade do canal VIP ao vivo com a oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? priceForAi(c.price, c.currency) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
         });
         break;
       case "checkout":
@@ -195,7 +195,21 @@ export default apiHandler({
         session.conversationId,
         "bot",
         "offer",
-        { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, currency: p.currency, aiOfferId: reply.offer.id, style: offer.style, tarotCards: offer.tarotCards ?? null, tarotBackUrl: offer.tarotBackUrl ?? null } as Prisma.InputJsonValue,
+        {
+          productId: p.id,
+          name: p.name,
+          headline: offer.headline,
+          ctaLabel: offer.ctaLabel ?? null,
+          price: p.price,
+          originalPrice: p.originalPrice,
+          currency: p.currency,
+          aiOfferId: reply.offer.id,
+          style: offer.style,
+          tarotCards: offer.tarotCards ?? null,
+          tarotBackUrl: offer.tarotBackUrl ?? null,
+          // canal VIP: os textos e o 2º ingresso voltam quando o lead recarrega a página
+          ...(offer.style === "live" ? { vip: (offer.vip ?? {}) as Prisma.InputJsonValue, downsellProductId: offer.downsellProductId ?? null } : {}),
+        } as Prisma.InputJsonValue,
         node.id,
       );
       await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "offer_viewed", nodeId: node.id, data: { productId: p.id, ai: true } });

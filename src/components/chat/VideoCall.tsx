@@ -8,7 +8,7 @@ import { PayerForm } from "./PayerForm";
 import { NextActionView } from "./NextAction";
 
 /** Toque de celular sintetizado (sem arquivo) + vibração, enquanto a chamada está tocando. */
-function useRingtone(active: boolean) {
+export function useRingtone(active: boolean) {
   useEffect(() => {
     if (!active) return;
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;

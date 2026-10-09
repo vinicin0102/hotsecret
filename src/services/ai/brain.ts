@@ -12,7 +12,7 @@ const money = (cents: number | null | undefined, currency?: string | null) =>
     : currency === "ARS"
       ? `${formatMoney(cents, "ARS", "es-AR")} ARS`
       : formatBRL(cents);
-import type { TarotCard } from "@/types/flow";
+import type { TarotCard, VipOfferTexts } from "@/types/flow";
 import { readStoredImage } from "@/services/storage";
 import {
   callDeepSeek,
@@ -43,7 +43,9 @@ export interface BrainOffer {
   headline?: string;
   ctaLabel?: string;
   /** card: card de compra · call: chamada de vídeo recebida (vídeo da aba Vídeos) */
-  style?: "card" | "call" | "tarot";
+  style?: "card" | "call" | "tarot" | "live";
+  /** canal VIP AO VIVO: textos do upgrade/pagamento (o 2º ingresso, acesso básico, é o downsellProductId) */
+  vip?: VipOfferTexts;
   videoId?: string;
   tarotCards?: TarotCard[];
   tarotBackUrl?: string;
@@ -182,8 +184,9 @@ export function tarotCardsOf(o: { tarotCards?: TarotCard[] }): TarotCard[] {
   return (o.tarotCards ?? []).filter((c) => c?.id && (c.name || c.imageUrl || c.meaning));
 }
 /** formato da oferta mostrado ao lead + cartas do tarot só com id/posição (a leitura vem depois do pagamento) */
-export function publicOfferFormat(o: BrainOffer): { style: "card" | "call" | "tarot"; tarotCards?: TarotCard[]; tarotBackUrl?: string } {
+export function publicOfferFormat(o: BrainOffer): { style: "card" | "call" | "tarot" | "live"; tarotCards?: TarotCard[]; tarotBackUrl?: string; vip?: VipOfferTexts } {
   if (o.style === "call" && o.videoId) return { style: "call" };
+  if (o.style === "live") return { style: "live", vip: o.vip ?? {} };
   const cards = o.style === "tarot" ? tarotCardsOf(o) : [];
   if (cards.length) return { style: "tarot", tarotCards: cards.map((c) => ({ id: c.id, label: c.label })), tarotBackUrl: o.tarotBackUrl || undefined };
   return { style: "card" };
@@ -253,6 +256,9 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
         o.when ? `  Quando oferecer (ORDEM DO DONO): ${o.when}` : "",
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
         o.style === "call" ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa." : "",
+        o.style === "live"
+          ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
+          : "",
         o.style === "tarot"
           ? `  Formato: aparecem ${tarotCardsOf(o).length || 3} CARTAS DE TAROT viradas no chat; o lead toca nelas para ver o preço e, depois do PIX, as cartas são reveladas com a leitura. Você não sabe quais são as cartas: nunca invente nem antecipe a leitura — crie mistério e curiosidade.`
           : "",
@@ -489,7 +495,7 @@ export async function runBrain(input: {
   const images = brainImages(input.brain);
   const voiceCalls = brainVoiceCalls(input.brain);
   const products = new Map(
-    (await prisma.product.findMany({ where: { id: { in: offers.map((o) => o.productId) } } })).map((p) => [p.id, p]),
+    (await prisma.product.findMany({ where: { id: { in: offers.flatMap((o) => [o.productId, ...(o.style === "live" && o.downsellProductId ? [o.downsellProductId] : [])]) } } })).map((p) => [p.id, p]),
   );
   const validOffers = offers.filter((o) => products.get(o.productId)?.active);
 
@@ -521,7 +527,7 @@ export async function runBrain(input: {
     ...Object.fromEntries(
       validOffers.map((o) => [
         o.id,
-        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
+        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? " — canal VIP ao vivo" : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
       ]),
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
@@ -825,7 +831,10 @@ export function assistReply(
   const leadMsgs = history.filter((t) => t.role === "lead" && !t.text.startsWith("["));
   // só o que o lead ESCREVEU conta como pedido (anotações do sistema, como "[recusou a chamada de vídeo]", não)
   const leadText = lastLead.startsWith("[") ? "" : lastLead;
-  const buy = has(BUY_INTENT, leadText);
+  // pedir prévia ("me manda uma prévia") não é pedir para comprar — a não ser que fale de preço/pagamento
+  const buy =
+    has(BUY_INTENT, leadText) &&
+    (!has(PREVIEW_INTENT, leadText) || /\b(comprar|compro|pagar|pago|pix|preco|precio|cuanto|quanto|valor|costo|cuesta)\b/.test(plain(leadText)));
   const asked = buy || has(ASK_INTENT, leadText) || has(OPTIONS_INTENT, leadText) || has(OTHERS_INTENT, leadText);
   const interested = asked || has(INTEREST_INTENT, leadText) || has(PREVIEW_INTENT, leadText) || has(CALL_INTENT, leadText);
   const refused = has(REFUSE_INTENT, leadText);

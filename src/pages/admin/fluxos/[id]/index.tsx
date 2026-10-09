@@ -423,6 +423,7 @@ function Builder() {
       {showPreview && meta && (
         <PreviewModal
           onClose={() => setShowPreview(false)}
+          livePreviews={meta.settings?.live?.enabled ? (meta.settings.live.previews ?? []).filter((p) => p.url) : []}
           funnel={{
             id: meta.id,
             name: meta.name,
@@ -439,6 +440,19 @@ function Builder() {
             delay: meta.settings?.delay,
             appearance: meta.settings?.appearance,
             locale: meta.settings?.locale,
+            ...(meta.settings?.live?.enabled
+              ? {
+                  live: {
+                    age: meta.settings.live.age,
+                    // no preview do painel não há cidade do lead: mostra a fixa (ou nenhuma)
+                    city: meta.settings.live.city || undefined,
+                    ringText: meta.settings.live.ringText,
+                    previewCount: (meta.settings.live.previews ?? []).filter((p) => p.url).length,
+                    previewFooter: meta.settings.live.previewFooter,
+                    previewButton: meta.settings.live.previewButton,
+                  },
+                }
+              : {}),
             products: Object.fromEntries(
               products.map((p) => [
                 p.id,

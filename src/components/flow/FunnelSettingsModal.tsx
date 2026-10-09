@@ -2,7 +2,17 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { slugify } from "@/lib/format";
 import { withBase } from "@/lib/paths";
-import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, type FunnelDelay, type ChatAppearance, type FunnelSettings, type RecoverySettings, type TrackingIds } from "@/types/flow";
+import {
+  DEFAULT_FUNNEL_DELAY,
+  DEFAULT_RECOVERY,
+  type FunnelDelay,
+  type ChatAppearance,
+  type FunnelSettings,
+  type LivePreview,
+  type LiveSettings,
+  type RecoverySettings,
+  type TrackingIds,
+} from "@/types/flow";
 import { DelayEditor } from "./DelayEditor";
 import { UploadInput } from "@/components/admin/UploadInput";
 
@@ -40,14 +50,26 @@ export function FunnelSettingsModal({
   const [locale, setLocale] = useState<"pt-BR" | "es-MX" | "es-AR">(
     meta.settings?.locale === "es-MX" || meta.settings?.locale === "es-AR" ? meta.settings.locale : "pt-BR",
   );
+  const [live, setLive] = useState<LiveSettings>({ ...(meta.settings?.live ?? {}) });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const setPreview = (i: number, patch: Partial<LivePreview>) =>
+    setLive((l) => ({ ...l, previews: (l.previews ?? []).map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
+  const movePreview = (i: number, d: -1 | 1) =>
+    setLive((l) => {
+      const list = [...(l.previews ?? [])];
+      const j = i + d;
+      if (j < 0 || j >= list.length) return l;
+      [list[i], list[j]] = [list[j], list[i]];
+      return { ...l, previews: list };
+    });
 
   const submit = async () => {
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking, appearance, locale } });
+      const cleanLive: LiveSettings = { ...live, previews: (live.previews ?? []).filter((p) => p.url) };
+      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking, appearance, locale, live: cleanLive } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -125,6 +147,115 @@ export function FunnelSettingsModal({
               : "Chat e IA em português, preços em reais."}
         </span>
       </div>
+
+      <div className="section-title">🔴 Canal VIP AO VIVO</div>
+      <label className="checkbox" style={{ marginBottom: 8 }}>
+        <input type="checkbox" checked={!!live.enabled} onChange={(e) => setLive((l) => ({ ...l, enabled: e.target.checked }))} />
+        Ligar o modo Canal VIP AO VIVO neste fluxo
+      </label>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Quem clica no anúncio cai numa <b>chamada de vídeo recebida</b>. Ao atender, abre o chat com cara de live (nome, idade e cidade no topo, vídeo de
+        fundo acima). Quando o lead pede prévia/provinha, aparece o botão <b>Ver Prévia</b> que libera as prévias abaixo uma por uma. Para vender, use no
+        bloco Oferta (ou no Cérebro) o formato <b>🔴 Canal VIP AO VIVO</b>.
+      </p>
+      {live.enabled && (
+        <>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="fp-age">Idade</label>
+              <input
+                id="fp-age"
+                className="input"
+                type="number"
+                min={18}
+                max={99}
+                placeholder="ex.: 22"
+                value={live.age ?? ""}
+                onChange={(e) => setLive((l) => ({ ...l, age: e.target.value ? Math.max(18, Math.min(99, Number(e.target.value) || 18)) : undefined }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="fp-city">Cidade</label>
+              <input id="fp-city" className="input" placeholder="vazio = a mesma cidade do lead" value={live.city ?? ""} onChange={(e) => setLive((l) => ({ ...l, city: e.target.value }))} />
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="fp-ring">Frase da tela de ligação</label>
+            <input
+              id="fp-ring"
+              className="input"
+              placeholder="padrão: {nome} quer uma conversa com você..."
+              value={live.ringText ?? ""}
+              onChange={(e) => setLive((l) => ({ ...l, ringText: e.target.value }))}
+            />
+          </div>
+          <div className="field">
+            <label>Prévias (na ordem em que são liberadas)</label>
+            {(live.previews ?? []).map((p, i) => (
+              <div key={p.id} className="brain-row" style={{ marginBottom: 10 }}>
+                <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+                  <b>Prévia {i + 1}</b>
+                  <div className="row">
+                    <select className="select" style={{ width: "auto" }} value={p.kind} onChange={(e) => setPreview(i, { kind: e.target.value as LivePreview["kind"] })}>
+                      <option value="image">📷 Foto</option>
+                      <option value="video">🎬 Vídeo</option>
+                      <option value="audio">🎧 Áudio</option>
+                    </select>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => movePreview(i, -1)} disabled={i === 0} aria-label="Subir">
+                      ↑
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => movePreview(i, 1)} disabled={i === (live.previews ?? []).length - 1} aria-label="Descer">
+                      ↓
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLive((l) => ({ ...l, previews: (l.previews ?? []).filter((_, j) => j !== i) }))}>
+                      Remover
+                    </button>
+                  </div>
+                </div>
+                <UploadInput
+                  value={p.url}
+                  onChange={(url) => setPreview(i, { url, ...(/\.(mp4|webm|mov)(\?|$)/i.test(url) ? { kind: "video" } : /\.(mp3|m4a|ogg|wav|aac|opus)(\?|$)/i.test(url) ? { kind: "audio" } : {}) })}
+                  accept={p.kind === "video" ? "video/*" : p.kind === "audio" ? "audio/*" : "image/*"}
+                />
+                <input
+                  className="input"
+                  style={{ marginTop: 6 }}
+                  placeholder="Legenda (ex.: olha como eu sou safadinha... quer ver mais? vem pro VIP 💋)"
+                  value={p.caption ?? ""}
+                  onChange={(e) => setPreview(i, { caption: e.target.value })}
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() =>
+                setLive((l) => ({ ...l, previews: [...(l.previews ?? []), { id: `lp_${Date.now().toString(36)}`, kind: "image", url: "", caption: "" }] }))
+              }
+              disabled={(live.previews ?? []).length >= 20}
+            >
+              + Adicionar prévia
+            </button>
+          </div>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="fp-pbtn">Texto do botão</label>
+              <input id="fp-pbtn" className="input" placeholder="Ver Prévia" value={live.previewButton ?? ""} onChange={(e) => setLive((l) => ({ ...l, previewButton: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label htmlFor="fp-pfoot">Rodapé das prévias</label>
+              <input
+                id="fp-pfoot"
+                className="input"
+                placeholder="No VIP eu mostro tudo sem limites 💋"
+                value={live.previewFooter ?? ""}
+                onChange={(e) => setLive((l) => ({ ...l, previewFooter: e.target.value }))}
+              />
+            </div>
+          </div>
+          <p className="hint">Dica: suba um vídeo de fundo (abaixo) para o chat ficar com cara de live.</p>
+        </>
+      )}
 
       <div className="section-title">Tempo entre mensagens</div>
       <p className="hint" style={{ marginTop: -4 }}>

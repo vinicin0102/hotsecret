@@ -25,6 +25,27 @@ const delaySettings = z.object({
   label: optTxt(60),
 });
 
+/** textos da oferta Canal VIP AO VIVO (bloco Oferta e Cérebro) */
+const lines = (max: number, each: number) => z.array(txt(each)).max(max).transform((a) => a.map((v) => v.trim()).filter(Boolean));
+export const vipTextsSchema = z.object({
+  badge: optTxt(60),
+  title: optTxt(80),
+  highlight: optTxt(60),
+  intro: optTxt(200),
+  benefits: lines(8, 160).optional(),
+  completeLabel: optTxt(60),
+  basicLabel: optTxt(60),
+  payTitle: optTxt(80),
+  paySubtitle: optTxt(160),
+  payMessages: lines(8, 300).optional(),
+  lockedImageUrl: optUrl,
+  exitTitle: optTxt(80),
+  exitText: optTxt(200),
+  stayLabel: optTxt(60),
+  stayHint: optTxt(80),
+  leaveLabel: optTxt(60),
+});
+
 const contentSchemas: Record<NodeType, z.ZodType> = {
   start: z.object({}).passthrough().transform(() => ({})),
   text: z.object({ text: txt(4000), sender: z.enum(["bot", "user"]).optional() }),
@@ -45,10 +66,11 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
     headline: optTxt(120),
     description: optTxt(600),
     ctaLabel: optTxt(60),
-    style: z.enum(["card", "call"]).optional(),
+    style: z.enum(["card", "call", "live"]).optional(),
     videoId: z.string().max(64).optional(),
     downsellProductId: z.string().max(64).optional(),
     downsellText: optTxt(200),
+    vip: vipTextsSchema.optional(),
   }),
   delivery: z.object({ text: optTxt(1000), productId: z.string().max(64).optional(), buttonLabel: optTxt(60) }),
   link: z.object({ text: optTxt(1000), url, buttonLabel: optTxt(60) }),
@@ -145,6 +167,21 @@ export const funnelMetaSchema = z.object({
           visibleCount: z.number().int().min(2).max(20).optional(),
         })
         .optional(),
+      /** Canal VIP AO VIVO */
+      live: z
+        .object({
+          enabled: z.boolean().optional(),
+          age: z.number().int().min(18).max(99).optional(),
+          city: optTxt(60),
+          ringText: optTxt(120),
+          previews: z
+            .array(z.object({ id, kind: z.enum(["image", "video", "audio"]), url: url.pipe(z.string().min(1, "Prévia sem arquivo")), caption: optTxt(300) }))
+            .max(20)
+            .optional(),
+          previewFooter: optTxt(120),
+          previewButton: optTxt(40),
+        })
+        .optional(),
     })
     .optional(),
 });
@@ -185,10 +222,11 @@ const brainOfferSchema = z.object({
   pitch: optTxt(2000),
   headline: optTxt(120),
   ctaLabel: optTxt(60),
-  style: z.enum(["card", "call", "tarot"]).optional(),
+  style: z.enum(["card", "call", "tarot", "live"]).optional(),
   videoId: z.string().max(64).optional(),
   downsellProductId: z.string().max(64).optional(),
   downsellText: optTxt(200),
+  vip: vipTextsSchema.optional(),
   tarotCards: tarotCards.optional(),
   tarotBackUrl: optUrl,
 });

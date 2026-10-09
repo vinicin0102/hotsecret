@@ -6,6 +6,8 @@ import { formatBRL } from "@/lib/format";
 import { withBase } from "@/lib/paths";
 import { NODE_META, nodeTypeLabel } from "./nodeMeta";
 import { DelayEditor } from "./DelayEditor";
+import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
+import type { VipOfferTexts } from "@/types/flow";
 
 export interface SidebarProduct {
   id: string;
@@ -336,6 +338,7 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                   [
                     ["card", "Card de compra"],
                     ["call", "📹 Chamada de vídeo"],
+                    ["live", "🔴 Canal VIP AO VIVO"],
                   ] as const
                 ).map(([s, label]) => (
                   <button key={s} type="button" className={((c.style as string) ?? "card") === s ? "active" : ""} onClick={() => setContent({ style: s })}>
@@ -407,6 +410,16 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                 ))}
               </select>
             </div>
+            {c.style === "live" && (
+              <VipOfferEditor
+                vip={c.vip as VipOfferTexts | undefined}
+                basicProductId={(c.downsellProductId as string) || undefined}
+                mainProductId={(c.productId as string) || undefined}
+                products={products}
+                onChange={(vip) => setContent({ vip })}
+                onBasicChange={(id) => setContent({ downsellProductId: id })}
+              />
+            )}
             <div className="field">
               <label>Título do card (opcional)</label>
               <input className="input" value={String(c.headline ?? "")} onChange={(e) => setContent({ headline: e.target.value })} />

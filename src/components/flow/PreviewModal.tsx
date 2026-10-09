@@ -4,10 +4,10 @@ import { Modal } from "@/components/ui/Modal";
 import { createPreviewTransport } from "@/features/chat-engine/transport";
 import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import { asChatLocale } from "@/features/i18n/chat";
-import type { OfferContent, PublicFunnel } from "@/types/flow";
+import type { LivePreview, OfferContent, PublicFunnel } from "@/types/flow";
 
 /** Simulação real do chat com o fluxo atual (inclusive alterações não salvas). Nada é gravado. */
-export function PreviewModal({ funnel, onClose }: { funnel: PublicFunnel; onClose: () => void }) {
+export function PreviewModal({ funnel, onClose, livePreviews = [] }: { funnel: PublicFunnel; onClose: () => void; livePreviews?: LivePreview[] }) {
   const [round, setRound] = useState(0);
   const transport = useMemo(
     () =>
@@ -18,7 +18,8 @@ export function PreviewModal({ funnel, onClose }: { funnel: PublicFunnel; onClos
       (id) => (funnel.graph.nodes.find((x) => x.id === id)?.content as { url?: string } | undefined)?.url || undefined,
       (id) => funnel.graph.nodes.find((x) => x.id === id)?.content as { brainId?: string; goal?: string; videoId?: string } | undefined,
       (id) => (funnel.graph.edges.some((e) => e.source === id && e.condition === AI_OFFERS_OUT) ? flowOffersFrom(funnel.graph, id) : undefined),
-      asChatLocale(funnel.locale)),
+      asChatLocale(funnel.locale),
+      async () => livePreviews),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [round],
   );
