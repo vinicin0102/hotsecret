@@ -207,6 +207,7 @@ export default apiHandler({
           style: offer.style,
           tarotCards: offer.tarotCards ?? null,
           tarotBackUrl: offer.tarotBackUrl ?? null,
+          ...(offer.freeLoop ? { freeLoop: true } : {}),
           // canal VIP: os textos e o 2º ingresso voltam quando o lead recarrega a página
           ...(offer.style === "live"
             ? { vip: (offer.vip ?? {}) as Prisma.InputJsonValue, downsellProductId: offer.downsellProductId ?? null, hasVideo: !!offer.hasVideo }

@@ -138,7 +138,10 @@ export function PixPopup({
   onClose,
   onSimulate,
   payerForm,
+  overVideo,
 }: {
+  /** chamada de vídeo 02: o pop-up fica embaixo, por cima do vídeo (FREE em loop) */
+  overVideo?: boolean;
   character: PublicCharacter;
   product: PublicProduct | undefined;
   payment: PublicPaymentInfo | undefined;
@@ -171,8 +174,8 @@ export function PixPopup({
     setTimeout(() => setCopied(false), 2500);
   };
   return (
-    <div className="call-overlay pix" role="dialog" aria-label={t.payEyebrowPix}>
-      {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
+    <div className={`call-overlay pix ${overVideo ? "over-video" : ""}`} role="dialog" aria-label={t.payEyebrowPix}>
+      {character.avatarUrl && !overVideo && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
       <button className="pix-close" onClick={onClose} aria-label={t.close}>
         ✕
       </button>
@@ -269,7 +272,10 @@ export function CallScreen({
   onBuyUpsell,
   onSimulate,
   previewMode,
+  freeLoop,
 }: {
+  /** chamada de vídeo 02: antes de pagar, o trecho FREE toca em loop */
+  freeLoop?: boolean;
   nodeId: string;
   /** oferta do Cérebro (IA): produto da chamada */
   productId?: string;
@@ -301,8 +307,24 @@ export function CallScreen({
   const upsellPayment = upsell ? forNode.find((p) => p.productId === upsell.productId && p.status !== "FAILED") : undefined;
   const upsellDone = upsell ? boughtUpsell(upsell.productId) : false;
   // o loop de animação lê sempre o estado atual por aqui
-  const live = useRef({ paid, upsell, boughtUpsell });
-  live.current = { paid, upsell, boughtUpsell };
+  /** já viu o FREE (chamada de vídeo 02): depois de pagar, segue direto do VIP */
+  const sawFree = useRef(false);
+  if (freeLoop) sawFree.current = true;
+  const live = useRef({ paid, upsell, boughtUpsell, freeLoop });
+  live.current = { paid, upsell, boughtUpsell, freeLoop };
+
+  // chamada de vídeo 02: ao atender, o trecho FREE já toca (em loop até pagar)
+  useEffect(() => {
+    const v = vRef.current;
+    if (!v || !video || paid || !freeLoop) return;
+    v.currentTime = video.free.start / 1000;
+    v.muted = false;
+    v.play().catch(() => {
+      v.muted = true;
+      setNeedsTap(true);
+      void v.play().catch(() => undefined);
+    });
+  }, [video, paid, freeLoop]);
 
   useEffect(() => {
     let alive = true;
@@ -321,7 +343,7 @@ export function CallScreen({
   useEffect(() => {
     const v = vRef.current;
     if (!v || !video || !paid) return;
-    v.currentTime = Math.min(video.free.start, video.vip.start) / 1000;
+    v.currentTime = (sawFree.current ? video.vip.start : Math.min(video.free.start, video.vip.start)) / 1000;
     v.muted = false;
     v.play().catch(() => {
       v.muted = true;
@@ -335,10 +357,12 @@ export function CallScreen({
     let lastT = -1;
     const loop = () => {
       const v = vRef.current;
-      const { paid, upsell, boughtUpsell } = live.current;
+      const { paid, upsell, boughtUpsell, freeLoop } = live.current;
       if (v && video) {
         const ms = v.currentTime * 1000;
-        if (!paid) {
+        if (!paid && freeLoop) {
+          if (ms >= video.free.end || ms < video.free.start - 250) v.currentTime = video.free.start / 1000;
+        } else if (!paid) {
           if (!v.paused) v.pause();
         } else if (ms >= video.vip.end) v.currentTime = video.vip.start / 1000;
         // atualiza a tela ~10x por segundo (falas na tela)

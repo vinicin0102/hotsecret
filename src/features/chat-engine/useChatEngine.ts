@@ -85,6 +85,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     downsell?: boolean;
     /** o gateway pede os dados do comprador antes de gerar o pagamento */
     needPayer?: boolean;
+    /** chamada de vídeo 02: a chamada já está aberta com o FREE em loop e o PIX por cima, até pagar */
+    free?: boolean;
   } | null>(null);
   /**
    * Canal VIP AO VIVO: offer (upgrade com 2 ingressos) → pay (folha do pagamento, chat visível acima)
@@ -364,6 +366,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           downsellText: r.offer.downsellText,
           ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
           ...(r.offer.style === "live" ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}) } : {}),
+          ...(r.offer.freeLoop ? { freeLoop: true } : {}),
         };
         if (r.offer.style === "tarot") tarotProducts.current.add(r.offer.productId);
         if (r.offer.style === "live") setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
@@ -823,9 +826,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   /** gera o PIX do produto (principal ou downsell) e mostra o pop-up só com o código */
   const startCallPix = useCallback(
-    async (c: NonNullable<typeof call>, productId: string, downsell: boolean) => {
+    async (c: NonNullable<typeof call>, productId: string, downsell: boolean, freeLoop = false) => {
       const nodeId = c.nodeId;
-      setCall({ ...c, phase: "pix", payProductId: productId, downsell });
+      // chamada de vídeo 02: abre a chamada (FREE em loop) e o PIX fica por cima do vídeo
+      const phase = freeLoop ? ("active" as const) : ("pix" as const);
+      setCall({ ...c, phase, payProductId: productId, downsell, ...(freeLoop ? { free: true } : {}) });
       callProducts.current.add(productId);
       setCallError(null);
       const product = funnel.products[productId];
@@ -837,7 +842,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       setCheckoutOpened(true);
       // dados do comprador ainda não informados: o pop-up mostra o formulário antes de gerar
       if (product?.payerForm && !payerRef.current && transportRef.current?.mode === "live") {
-        setCall({ ...c, phase: "pix", payProductId: productId, downsell, needPayer: true });
+        setCall({ ...c, phase, payProductId: productId, downsell, needPayer: true, ...(freeLoop ? { free: true } : {}) });
         return;
       }
       const mainOfNode = (getNode(graphRef.current, nodeId)?.content as OfferContent | undefined)?.productId;
@@ -858,7 +863,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const answerCall = useCallback(() => {
     if (!call) return;
     const productId = call.productId ?? callOffer(call)?.productId ?? "";
-    void startCallPix(call, productId, false);
+    void startCallPix(call, productId, false, !!callOffer(call)?.freeLoop);
   }, [call, startCallPix]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Ligação de voz ----------
@@ -932,9 +937,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   // pagamento do pop-up aprovado → libera o vídeo
   useEffect(() => {
-    if (call?.phase !== "pix" || !call.payProductId) return;
+    if (!call?.payProductId || !(call.phase === "pix" || (call.phase === "active" && call.free))) return;
     const ok = Object.values(payments).some((p) => p.offerNodeId === call.nodeId && p.productId === call.payProductId && p.status === "APPROVED");
-    if (ok) setCall({ ...call, phase: "active" });
+    if (ok) setCall({ ...call, phase: "active", free: false });
   }, [call, payments]);
 
   const hangUp = useCallback(() => {

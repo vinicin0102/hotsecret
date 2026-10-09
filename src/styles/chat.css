@@ -2673,3 +2673,48 @@
   font-size: 13px;
   font-weight: 700;
 }
+
+/* ===== Chamada de vídeo 02: o PIX fica embaixo, por cima do vídeo (FREE em loop) ===== */
+.call-overlay.pix.over-video {
+  z-index: 62;
+  background: linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.55));
+  justify-content: flex-end;
+  pointer-events: none;
+  animation: none;
+}
+.call-overlay.pix.over-video .pix-box,
+.call-overlay.pix.over-video .pix-close {
+  pointer-events: auto;
+}
+.call-overlay.pix.over-video .pix-box {
+  margin: 0 auto max(12px, env(safe-area-inset-bottom));
+  padding: 14px 16px;
+  background: rgba(14, 6, 14, 0.82);
+}
+.call-overlay.pix.over-video .pix-avatar {
+  display: none;
+}
+/* compacto: o lead continua vendo o vídeo */
+.call-overlay.pix.over-video .pix-title {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+.call-overlay.pix.over-video .pix-steps,
+.call-overlay.pix.over-video .pix-label {
+  display: none;
+}
+.call-overlay.pix.over-video .pix-code-box {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  padding: 0;
+  border: 0;
+}
+.call-overlay.pix.over-video .pix-product {
+  margin: 4px 0 10px;
+}
+.call-overlay.pix.over-video .pix-wait {
+  margin-top: 8px;
+}

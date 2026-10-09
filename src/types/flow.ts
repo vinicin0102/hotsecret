@@ -131,6 +131,8 @@ export interface OfferContent {
   tarotBackUrl?: string;
   /** vídeo da chamada (aba Vídeos) */
   videoId?: string;
+  /** chamada de vídeo 02: ao atender, o lead já vê o trecho FREE em loop e paga por cima do vídeo para liberar o VIP */
+  freeLoop?: boolean;
   /** chamada: produto oferecido quando o lead recusa (ex.: chamada mais curta e mais barata) */
   downsellProductId?: string;
   /** chamada: texto do pop-up do downsell */

@@ -371,8 +371,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           />
         )}
         {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}
-        {engine.call?.phase === "pix" && (
+        {(engine.call?.phase === "pix" || (engine.call?.phase === "active" && engine.call.free)) && (
           <PixPopup
+            overVideo={engine.call.phase === "active"}
             character={funnel.character}
             product={funnel.products[engine.call.payProductId ?? ""]}
             payment={Object.values(payments)
@@ -403,6 +404,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onBuyUpsell={engine.buyUpsell}
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
             previewMode={transport?.mode === "preview"}
+            freeLoop={!!engine.call.free}
           />
         )}
         {live ? <LiveHeader character={funnel.character} typing={typing} age={live.age} city={live.city} /> : <ChatHeader character={funnel.character} typing={typing} />}

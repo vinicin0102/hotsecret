@@ -44,6 +44,8 @@ export interface BrainOffer {
   ctaLabel?: string;
   /** card: card de compra · call: chamada de vídeo recebida (vídeo da aba Vídeos) */
   style?: "card" | "call" | "tarot" | "live";
+  /** chamada de vídeo 02 (style "call"): ao atender, o lead já vê o trecho FREE em loop e paga para liberar o VIP */
+  freeLoop?: boolean;
   /** canal VIP AO VIVO: textos do upgrade/pagamento (o 2º ingresso, acesso básico, é o downsellProductId) */
   vip?: VipOfferTexts;
   videoId?: string;
@@ -191,8 +193,10 @@ export function publicOfferFormat(o: BrainOffer): {
   vip?: VipOfferTexts;
   /** canal VIP com vídeo liberado depois do pagamento (o vídeo em si só sai pelo /api/public/call) */
   hasVideo?: boolean;
+  /** chamada de vídeo 02 */
+  freeLoop?: boolean;
 } {
-  if (o.style === "call" && o.videoId) return { style: "call" };
+  if (o.style === "call" && o.videoId) return { style: "call", ...(o.freeLoop ? { freeLoop: true } : {}) };
   if (o.style === "live") return { style: "live", vip: o.vip ?? {}, ...(o.videoId ? { hasVideo: true } : {}) };
   const cards = o.style === "tarot" ? tarotCardsOf(o) : [];
   if (cards.length) return { style: "tarot", tarotCards: cards.map((c) => ({ id: c.id, label: c.label })), tarotBackUrl: o.tarotBackUrl || undefined };
@@ -262,7 +266,11 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
         p.description ? `  Descrição: ${p.description}` : "",
         o.when ? `  Quando oferecer (ORDEM DO DONO): ${o.when}` : "",
         o.pitch ? `  Como apresentar: ${o.pitch}` : "",
-        o.style === "call" ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa." : "",
+        o.style === "call"
+          ? o.freeLoop
+            ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, ele já te vê ao vivo (prévia grátis) e paga pelo PIX ali mesmo para continuar."
+            : "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa."
+          : "",
         o.style === "live"
           ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO${o.videoId ? " (depois do pagamento começa a chamada de vídeo com você)" : ""} com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
           : "",

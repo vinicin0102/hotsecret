@@ -35,6 +35,8 @@ interface Offer {
   id: string;
   productId: string;
   style?: "card" | "call" | "tarot" | "live";
+  /** chamada de vídeo 02 */
+  freeLoop?: boolean;
   vip?: VipOfferTexts;
   videoId?: string;
   tarotCards?: TarotCard[];
@@ -754,6 +756,7 @@ export default function CerebroPage() {
                         [
                           ["card", "Card de compra"],
                           ["call", "📹 Chamada de vídeo"],
+                          ["call2", "📹 Chamada de vídeo 02"],
                           ["tarot", "🔮 Cartas de tarot"],
                           ["live", "🔴 Canal VIP AO VIVO"],
                         ] as const
@@ -761,8 +764,20 @@ export default function CerebroPage() {
                         <button
                           key={s}
                           type="button"
-                          className={(o.style ?? "card") === s ? "active" : ""}
-                          onClick={() => setOffer(i, s === "tarot" && !o.tarotCards?.length ? { style: s, tarotCards: defaultTarot() } : { style: s })}
+                          className={
+                            // chamada de vídeo 02 = chamada com o FREE em loop ao atender
+                            (s === "call2" ? o.style === "call" && !!o.freeLoop : s === "call" ? o.style === "call" && !o.freeLoop : (o.style ?? "card") === s) ? "active" : ""
+                          }
+                          onClick={() =>
+                            setOffer(
+                              i,
+                              s === "call2"
+                                ? { style: "call", freeLoop: true }
+                                : s === "tarot" && !o.tarotCards?.length
+                                  ? { style: s, tarotCards: defaultTarot(), freeLoop: undefined }
+                                  : { style: s, freeLoop: undefined },
+                            )
+                          }
                         >
                           {label}
                         </button>
@@ -793,10 +808,18 @@ export default function CerebroPage() {
                           </option>
                         ))}
                       </select>
-                      <p className="hint">
-                        Quando a IA escolher esta oferta, o lead recebe a ligação (foto, toque e vibração). Atender abre um pop-up só com o código PIX;
-                        Recusar abre o mesmo pop-up com o downsell. O vídeo só começa depois do pagamento aprovado.
-                      </p>
+                      {o.freeLoop ? (
+                        <p className="hint">
+                          <b>Chamada de vídeo 02:</b> quando a IA escolher esta oferta, o lead recebe a ligação. Ao <b>atender</b>, a chamada já abre com o
+                          trecho <b>FREE em loop</b> e o PIX aparece por cima do vídeo. Pagou, o vídeo segue para o trecho VIP (com as falas e os upsells).
+                          Recusar abre o pop-up do downsell, igual à chamada de vídeo.
+                        </p>
+                      ) : (
+                        <p className="hint">
+                          Quando a IA escolher esta oferta, o lead recebe a ligação (foto, toque e vibração). Atender abre um pop-up só com o código PIX;
+                          Recusar abre o mesmo pop-up com o downsell. O vídeo só começa depois do pagamento aprovado.
+                        </p>
+                      )}
                       {!o.videoId && <p className="error-text">Sem vídeo, a oferta aparece como card normal.</p>}
                       <div className="grid-2" style={{ marginTop: 10 }}>
                         <div className="field">
