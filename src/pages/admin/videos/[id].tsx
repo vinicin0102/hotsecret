@@ -553,9 +553,10 @@ export default function VideoEditorPage() {
               onBasicChange={(id) => setMarker({ basicProductId: id || undefined })}
               inCall
             />
-            {selMarker.at >= tl.free.end && (selMarker.at < tl.vip.start || selMarker.at > tl.vip.end) && (
-              <p className="error-text">Esta oferta está fora dos trechos FREE e VIP e não vai aparecer.</p>
+            {selMarker.at >= tl.free.end && selMarker.at < tl.vip.start && (
+              <p className="hint">Fica no fim do FREE: aparece quando o FREE acaba (Chamada de vídeo 02), no lugar da oferta automática.</p>
             )}
+            {selMarker.at > tl.vip.end && <p className="error-text">Esta oferta está depois do fim do VIP e não vai aparecer.</p>}
           </>
         )}
         {selMarker && selMarker.style !== "offer" && (

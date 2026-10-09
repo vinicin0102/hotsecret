@@ -309,7 +309,7 @@ export function CallScreen({
   // "Oferta" marcada no FREE (chamada de vídeo 02): pagar qualquer um dos ingressos também libera a chamada
   const freeOfferIds = new Set(
     (video?.markers ?? [])
-      .filter((m) => m.style === "offer" && m.at < video!.free.end)
+      .filter((m) => m.style === "offer" && m.at < video!.vip.start)
       .flatMap((m) => [m.productId, m.basicProductId ?? ""])
       .filter(Boolean),
   );
@@ -327,6 +327,8 @@ export function CallScreen({
   if (freePreview) sawFree.current = true;
   /** chamada de vídeo 02: o FREE acabou → oferta principal em forma de upsell */
   const [mainOffer, setMainOffer] = useState(false);
+  /** o FREE acabou e a "Oferta" marcada está na tela: fechar desliga (não há mais nada grátis para ver) */
+  const freeEnded = useRef(false);
   const live = useRef({ paid, upsell, boughtUpsell, freePreview });
   live.current = { paid, upsell, boughtUpsell, freePreview };
 
@@ -378,20 +380,28 @@ export function CallScreen({
       if (v && video) {
         const ms = v.currentTime * 1000;
         if (!paid && freePreview) {
-          // "Oferta" marcada dentro do FREE: o vídeo para e o upgrade abre
-          const fo = !upsell
-            ? video.markers.find((mk) => mk.style === "offer" && mk.at < video.free.end && !shown.current.has(mk.id) && ms >= mk.at && ms - mk.at < 1500)
-            : undefined;
+          // "Oferta" marcada no FREE (qualquer ponto antes do VIP, como aparece no editor)
+          const zone = video.markers.filter((mk) => mk.style === "offer" && mk.at < video.vip.start);
+          // no meio do FREE: o vídeo para e o upgrade abre
+          const fo = !upsell ? zone.find((mk) => mk.at < video.free.end && !shown.current.has(mk.id) && ms >= mk.at && ms - mk.at < 1500) : undefined;
           if (fo) {
             shown.current.add(fo.id);
             setUpsell(fo);
             setUpsellBuying(false);
             v.pause();
           }
-          // fim do FREE: o vídeo para e a oferta aparece
+          // fim do FREE: o vídeo para; com "Oferta" marcada, aparece a SUA oferta (a automática só quando não há nenhuma)
           if (ms >= video.free.end || v.ended) {
             if (!v.paused) v.pause();
-            setMainOffer(true);
+            if (zone.length) {
+              freeEnded.current = true;
+              if (!upsell) {
+                const last = zone[zone.length - 1];
+                shown.current.add(last.id);
+                setUpsell(last);
+                setUpsellBuying(false);
+              }
+            } else setMainOffer(true);
           }
         } else if (!paid) {
           if (!v.paused) v.pause();
@@ -516,7 +526,8 @@ export function CallScreen({
             error={error}
             onClose={() => {
               setOfferPick(null);
-              closeUpsell();
+              if (inFree && freeEnded.current) onHangUp();
+              else closeUpsell();
             }}
             onSimulate={onSimulate}
           />
@@ -531,7 +542,7 @@ export function CallScreen({
               if (inFree) onBuyMain?.(pid);
               else onBuyUpsell(pid);
             }}
-            onClose={closeUpsell}
+            onClose={inFree && freeEnded.current ? onHangUp : closeUpsell}
           />
         );
       })()}
