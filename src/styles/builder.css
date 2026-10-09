@@ -331,3 +331,14 @@
   color: var(--text-2);
   font-weight: 500;
 }
+.issues-count {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.issues-count .ok {
+  color: #4ade80;
+}
+.issues .loose {
+  opacity: 0.85;
+}

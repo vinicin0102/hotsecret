@@ -101,6 +101,8 @@ export interface GraphIssue {
   nodeId?: string;
   level: "error" | "warning";
   message: string;
+  /** bloco solto: não está ligado ao INÍCIO (nunca aparece para o lead) */
+  loose?: boolean;
 }
 
 /** Validação do fluxo antes de publicar. */
@@ -128,7 +130,9 @@ export function validateGraph(graph: FlowGraph): GraphIssue[] {
 
   for (const n of graph.nodes) {
     if (n.type !== "start" && !reachable.has(n.id)) {
-      issues.push({ nodeId: n.id, level: "warning", message: "Nó não está conectado ao fluxo." });
+      // bloco solto nunca roda: só avisa (o que falta nele não impede publicar)
+      issues.push({ nodeId: n.id, level: "warning", loose: true, message: "Bloco solto: não está ligado ao INÍCIO (não aparece para o lead)." });
+      continue;
     }
     const c = n.content as unknown as Record<string, unknown>;
     if (n.type === "buttons" || (n.type === "question" && c.mode === "buttons")) {
@@ -152,7 +156,9 @@ export function validateGraph(graph: FlowGraph): GraphIssue[] {
     if (n.type === "tag" && !c.tagId) issues.push({ nodeId: n.id, level: "error", message: "Selecione uma tag." });
     if (n.type === "ai" && !c.brainId) issues.push({ nodeId: n.id, level: "error", message: "Selecione um cérebro para a IA." });
   }
-  return issues;
+  // erros primeiro (são eles que impedem publicar), depois avisos e por último os blocos soltos
+  const rank = (i: GraphIssue) => (i.level === "error" ? 0 : i.loose ? 2 : 1);
+  return issues.map((i, k) => [i, k] as const).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([i]) => i);
 }
 
 /** Gera ids curtos e únicos dentro de um fluxo. */

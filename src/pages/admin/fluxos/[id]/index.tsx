@@ -7,7 +7,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { FlowCanvas, edgeStyle } from "@/components/flow/FlowCanvas";
 import type { HsFlowNode } from "@/components/flow/FlowNode";
 import { FlowSidebar, type SidebarBrain, type SidebarProduct, type SidebarTag } from "@/components/flow/FlowSidebar";
-import { PALETTE, makeNode, type PaletteItem } from "@/components/flow/nodeMeta";
+import { PALETTE, makeNode, nodeLabel, type PaletteItem } from "@/components/flow/nodeMeta";
 import { FunnelSettingsModal, type FunnelMeta } from "@/components/flow/FunnelSettingsModal";
 import { PreviewModal } from "@/components/flow/PreviewModal";
 import { ShareLinkModal } from "@/components/admin/ShareLinkModal";
@@ -364,18 +364,37 @@ function Builder() {
               onConnect={onConnect}
               onSelect={setSelectedId}
             />
-            {issues.length > 0 && (
-              <div className="issues">
-                <b>Verificação do fluxo</b>
-                <ul style={{ paddingLeft: 16, margin: "6px 0 0" }}>
-                  {issues.slice(0, 12).map((i, k) => (
-                    <li key={k} className={i.level} onClick={() => i.nodeId && setSelectedId(i.nodeId)}>
-                      {i.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {issues.length > 0 && (() => {
+              const errs = issues.filter((i) => i.level === "error");
+              const warns = issues.filter((i) => i.level === "warning" && !i.loose);
+              const loose = issues.filter((i) => i.loose);
+              const who = (nodeId?: string) => {
+                const n = nodeId ? graph.nodes.find((x) => x.id === nodeId) : undefined;
+                return n ? `${nodeLabel(n)}: ` : "";
+              };
+              return (
+                <div className="issues">
+                  <b>Verificação do fluxo</b>
+                  <div className="issues-count">
+                    {errs.length ? <span className="error">{errs.length} erro(s) — impedem publicar</span> : <span className="ok">Pronto para publicar ✓</span>}
+                    {warns.length + loose.length > 0 && <span className="warning"> · {warns.length + loose.length} aviso(s)</span>}
+                  </div>
+                  <ul style={{ paddingLeft: 16, margin: "6px 0 0" }}>
+                    {[...errs, ...warns].slice(0, 20).map((i, k) => (
+                      <li key={k} className={i.level} onClick={() => i.nodeId && setSelectedId(i.nodeId)} title="Clique para abrir o bloco">
+                        {who(i.nodeId)}
+                        {i.message}
+                      </li>
+                    ))}
+                    {loose.length > 0 && (
+                      <li className="warning loose" onClick={() => setSelectedId(loose[0].nodeId ?? null)} title="Clique para abrir o primeiro">
+                        {loose.length} bloco(s) solto(s), sem ligação com o INÍCIO — não aparecem para o lead (não impedem publicar). Ligue ou apague.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              );
+            })()}
           </div>
           {selectedNode && (
             <FlowSidebar
