@@ -11,6 +11,31 @@ export interface ChatCue extends TimeRange {
   text: string;
 }
 
+/**
+ * Upsell em tela cheia (3 passos): aviso por cima do vídeo → card "bloqueado" com o preço → folha do pagamento.
+ * Cada upsell tem o seu tema (textos e ícones); vazios usam o texto padrão. {nome} = nome do personagem.
+ */
+export interface UpsellScreen {
+  /** 1) aviso */
+  icon?: string;
+  title?: string;
+  tag?: string;
+  text?: string;
+  button?: string;
+  /** 2) card bloqueado */
+  lockIcon?: string;
+  lockBadge?: string;
+  lockTitle?: string;
+  lockText?: string;
+  feeLabel?: string;
+  feeNote?: string;
+  payButton?: string;
+  footNote?: string;
+  /** 3) folha do pagamento */
+  payIcon?: string;
+  payTitle?: string;
+}
+
 /** Upsell que aparece num momento exato do trecho VIP. */
 export interface UpsellMarker {
   id: string;
@@ -21,6 +46,9 @@ export interface UpsellMarker {
   ctaLabel?: string;
   /** pausa o vídeo até o lead comprar ou recusar */
   pause?: boolean;
+  /** card: caixa de oferta embaixo (padrão) · screen: tela cheia em 3 passos */
+  style?: "card" | "screen";
+  screen?: UpsellScreen;
 }
 
 export interface VideoTimeline {

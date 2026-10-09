@@ -187,6 +187,21 @@ const pt = {
   vipStay: "Não vou desistir 🔥",
   vipStayHint: "Continuar e concluir o PIX",
   vipLeave: "SOU BROXA 🤏",
+  // upsell em tela cheia na chamada
+  upTitle: "TRANSMISSÃO PAUSADA",
+  upTag: "🔒 PARTE EXCLUSIVA",
+  upText: "A próxima parte da sua chamada com {nome} é exclusiva. Libere para continuar.",
+  upButton: "🔓 LIBERAR AGORA",
+  upLockBadge: "ACESSO BLOQUEADO",
+  upLockTitle: "ESTA PARTE ESTÁ BLOQUEADA",
+  upLockText: "Para continuar no privado com {nome}, libere esta parte.",
+  upFeeNotePix: "Pagamento único via PIX • Acesso imediato",
+  upFeeNote: "Pagamento único • Acesso imediato",
+  upFootNote: "Após o pagamento a chamada continua automaticamente",
+  upVia: "via",
+  upCopyPix: "COPIAR PIX",
+  upCopyTransfer: "COPIAR CLABE",
+  upNotNow: "agora não",
 };
 export type ChatTexts = typeof pt;
 
@@ -359,6 +374,20 @@ const es: ChatTexts = {
   vipStay: "No me voy a rendir 🔥",
   vipStayHint: "Seguir y completar el pago",
   vipLeave: "ME RAJO 🤏",
+  upTitle: "TRANSMISIÓN PAUSADA",
+  upTag: "🔒 PARTE EXCLUSIVA",
+  upText: "La siguiente parte de tu llamada con {nome} es exclusiva. Desbloquéala para continuar.",
+  upButton: "🔓 DESBLOQUEAR AHORA",
+  upLockBadge: "ACCESO BLOQUEADO",
+  upLockTitle: "ESTA PARTE ESTÁ BLOQUEADA",
+  upLockText: "Para seguir en privado con {nome}, desbloquea esta parte.",
+  upFeeNotePix: "Pago único • Acceso inmediato",
+  upFeeNote: "Pago único • Acceso inmediato",
+  upFootNote: "Después del pago la llamada continúa automáticamente",
+  upVia: "por",
+  upCopyPix: "COPIAR CLABE",
+  upCopyTransfer: "COPIAR CLABE",
+  upNotNow: "ahora no",
 };
 
 /** Argentina: mesmo espanhol, com voseo onde o chat fala com o lead. */
@@ -397,6 +426,11 @@ const esAR: ChatTexts = {
   vipExitText: "Tu acceso VIP ya casi está listo. Solo falta completar la transferencia.",
   vipStayHint: "Seguir y completar el pago",
   vipLeave: "ME ACOBARDO 🤏",
+  upText: "La siguiente parte de tu llamada con {nome} es exclusiva. Desbloqueala para seguir.",
+  upButton: "🔓 DESBLOQUEAR YA",
+  upLockText: "Para seguir en privado con {nome}, desbloqueá esta parte.",
+  upCopyPix: "COPIAR",
+  upCopyTransfer: "COPIAR",
   fieldErrors: { ...es.fieldErrors, invalid_option: "Elegí una opción", invalid_name: "Escribí tu nombre y apellido reales", invalid_email: "Usá tu correo real" },
 };
 

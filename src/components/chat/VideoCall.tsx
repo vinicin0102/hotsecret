@@ -6,6 +6,7 @@ import type { CallVideo, ChatTransport, PayMethods, PayerData, PublicPaymentInfo
 import { PaymentStatus } from "./PaymentStatus";
 import { PayerForm } from "./PayerForm";
 import { NextActionView } from "./NextAction";
+import { UpsellScreen } from "./UpsellScreen";
 
 /** Toque de celular sintetizado (sem arquivo) + vibração, enquanto a chamada está tocando. */
 export function useRingtone(active: boolean) {
@@ -351,7 +352,8 @@ export function CallScreen({
             shown.current.add(m.id);
             setUpsell(m);
             setUpsellBuying(false);
-            if (m.pause) v.pause();
+            // tela cheia: o vídeo para por baixo do aviso
+            if (m.pause || m.style === "screen") v.pause();
           }
         }
       }
@@ -437,7 +439,22 @@ export function CallScreen({
         </div>
       )}
 
-      {upsell && (
+      {upsell && upsell.style === "screen" && (
+        <UpsellScreen
+          key={upsell.id}
+          marker={upsell}
+          character={character}
+          payment={upsellPayment}
+          bought={boughtUpsell(upsell.productId)}
+          onBuy={() => {
+            setUpsellBuying(true);
+            onBuyUpsell(upsell.productId);
+          }}
+          onSkip={closeUpsell}
+          onSimulate={onSimulate}
+        />
+      )}
+      {upsell && upsell.style !== "screen" && (
         <div className="call-upsell">
           <div className="call-upsell-text">{upsell.text || upsell.product.name}</div>
           <div className="call-upsell-price">

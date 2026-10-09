@@ -8,6 +8,7 @@ import { api } from "@/lib/client";
 import { formatBRL } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { formatMs, normalizeTimeline, type VideoTimeline } from "@/types/video";
+import { UpsellScreenEditor } from "@/components/admin/UpsellScreenEditor";
 
 interface VideoData {
   id: string;
@@ -533,10 +534,35 @@ export default function VideoEditorPage() {
                 <input className="input" type="number" step="0.001" value={secInput(selMarker.at)} onChange={(e) => setMarker({ at: Math.round(Number(e.target.value) * 1000) })} />
               </div>
             </div>
-            <label className="checkbox">
-              <input type="checkbox" checked={!!selMarker.pause} onChange={(e) => setMarker({ pause: e.target.checked })} />
-              Pausar o vídeo até o lead comprar ou recusar
-            </label>
+            <div className="field">
+              <label>Como aparece</label>
+              <div className="segmented">
+                {(
+                  [
+                    ["card", "Card embaixo"],
+                    ["screen", "Tela cheia (aviso → bloqueado → PIX)"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <button key={v} type="button" className={(selMarker.style ?? "card") === v ? "active" : ""} onClick={() => setMarker({ style: v })}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {selMarker.style === "screen" ? (
+              <>
+                <p className="hint" style={{ marginTop: -4 }}>
+                  O vídeo para e fica borrado atrás de um aviso. O botão abre o card bloqueado com o preço; pagar abre a folha com o PIX (CLABE no
+                  México). Pagou, a chamada continua sozinha.
+                </p>
+                <UpsellScreenEditor value={selMarker.screen} onChange={(screen) => setMarker({ screen })} />
+              </>
+            ) : (
+              <label className="checkbox">
+                <input type="checkbox" checked={!!selMarker.pause} onChange={(e) => setMarker({ pause: e.target.checked })} />
+                Pausar o vídeo até o lead comprar ou recusar
+              </label>
+            )}
             {(selMarker.at < tl.vip.start || selMarker.at > tl.vip.end) && <p className="error-text">Este marcador está fora do trecho VIP e não vai aparecer.</p>}
           </>
         )}

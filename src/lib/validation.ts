@@ -284,6 +284,26 @@ export const videoSchema = z.object({
             text: optTxt(300),
             ctaLabel: optTxt(60),
             pause: z.boolean().optional(),
+            style: z.enum(["card", "screen"]).optional(),
+            screen: z
+              .object({
+                icon: optTxt(8),
+                title: optTxt(60),
+                tag: optTxt(60),
+                text: optTxt(240),
+                button: optTxt(60),
+                lockIcon: optTxt(8),
+                lockBadge: optTxt(40),
+                lockTitle: optTxt(80),
+                lockText: optTxt(240),
+                feeLabel: optTxt(60),
+                feeNote: optTxt(100),
+                payButton: optTxt(60),
+                footNote: optTxt(140),
+                payIcon: optTxt(8),
+                payTitle: optTxt(60),
+              })
+              .optional(),
           }),
         )
         .max(50),
