@@ -2,6 +2,7 @@
 import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
+import Script from "next/script";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { Logo } from "@/components/ui/Logo";
@@ -142,6 +143,16 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
         {funnel.character.avatarUrl && <meta property="og:image" content={funnel.character.avatarUrl} />}
         <meta name="robots" content="noindex" />
       </Head>
+      {/* UTMify: guarda as UTMs do anúncio e repassa para os links (não carrega na pré-visualização de rascunho) */}
+      {!draftPreview && (
+        <Script
+          id="utmify-utms"
+          src="https://cdn.utmify.com.br/scripts/utms/latest.js"
+          strategy="afterInteractive"
+          data-utmify-prevent-xcod-sck=""
+          data-utmify-prevent-subids=""
+        />
+      )}
       {error ? (
         <div className="chat-shell">
           <div className="chat-empty">
