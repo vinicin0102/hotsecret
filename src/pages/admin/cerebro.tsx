@@ -987,8 +987,8 @@ export default function CerebroPage() {
               </div>
               <p className="hint" style={{ marginTop: -6 }}>
                 Quando o lead demonstra interesse, pede para ligar ou aceita o convite da IA, toca uma ligação no celular dele (foto, toque e vibração) — ele escolhe atender ou recusar. Ao atender, o seu áudio
-                toca numa tela de chamada com cronômetro, como uma ligação de verdade. Quando o áudio termina (ou ele desliga), aparece a sua mensagem e a
-                oferta escolhida — ex.: a chamada de vídeo por R$ 19,99. Uma ligação por conversa.
+                toca numa tela de chamada com cronômetro, como uma ligação de verdade. Quando o áudio termina (ou ele desliga), a tela da chamada encerrada
+                mostra a sua mensagem e o <b>botão da oferta</b> escolhida — ex.: a chamada de vídeo por R$ 19,99 (o card também fica no chat). Uma ligação por conversa.
               </p>
               {(draft.voiceCalls ?? []).map((v, i) => {
                 const setV = (patch: Partial<VoiceCallItem>) =>
@@ -1010,7 +1010,7 @@ export default function CerebroPage() {
                     </div>
                     <div className="grid-2">
                       <div className="field">
-                        <label>Oferta no fim da ligação</label>
+                        <label>Oferta no fim da ligação (botão na tela da chamada)</label>
                         <select className="select" value={v.offerId ?? ""} onChange={(e) => setV({ offerId: e.target.value })}>
                           <option value="">— nenhuma —</option>
                           {draft.offers.map((o) => {

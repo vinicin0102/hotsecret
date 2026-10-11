@@ -368,6 +368,15 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onAnswer={engine.answerVoice}
             onDecline={engine.declineVoice}
             onEnd={(sec) => void engine.endVoice(sec)}
+            offer={engine.voice.offer}
+            product={engine.voice.offer ? funnel.products[engine.voice.offer.productId] : undefined}
+            endText={engine.voice.endText}
+            onBuy={() => {
+              const v = engine.voice;
+              engine.closeVoice();
+              if (v?.offer) engine.openCheckout(v.nodeId, v.offer.productId);
+            }}
+            onClose={engine.closeVoice}
           />
         )}
         {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}

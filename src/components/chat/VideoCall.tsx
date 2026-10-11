@@ -613,6 +613,11 @@ export function VoiceCall({
   onAnswer,
   onDecline,
   onEnd,
+  offer,
+  product,
+  endText,
+  onBuy,
+  onClose,
 }: {
   character: PublicCharacter;
   url: string;
@@ -621,6 +626,12 @@ export function VoiceCall({
   onAnswer: () => void;
   onDecline: () => void;
   onEnd: (seconds: number) => void;
+  /** oferta do fim da ligação: o botão aparece aqui mesmo, na tela da chamada encerrada */
+  offer?: { headline?: string; ctaLabel?: string };
+  product?: PublicProduct;
+  endText?: string;
+  onBuy?: () => void;
+  onClose?: () => void;
 }) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const started = useRef<number>(0);
@@ -628,7 +639,7 @@ export function VoiceCall({
   const [muted, setMuted] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const ended = useRef(false);
-  const { t } = useChatI18n();
+  const { t, money } = useChatI18n();
 
   const finish = () => {
     if (ended.current) return;
@@ -685,6 +696,30 @@ export function VoiceCall({
           </button>
         )}
       </div>
+      {phase === "ended" && offer && product && (
+        <div className="voice-offer" role="group" aria-label={offer.headline || product.name}>
+          {endText && <p className="voice-offer-text">{endText}</p>}
+          <div className="voice-offer-card">
+            {product.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="voice-offer-img" src={product.imageUrl} alt="" />
+            )}
+            <div className="voice-offer-info">
+              <div className="voice-offer-name">{offer.headline || product.name}</div>
+              <div className="voice-offer-price">
+                {product.originalPrice && product.originalPrice > product.price ? <s>{money(product.originalPrice, product.currency)}</s> : null}
+                <b>{money(product.price, product.currency)}</b>
+              </div>
+            </div>
+          </div>
+          <button className="voice-offer-btn" onClick={onBuy}>
+            {offer.ctaLabel || t.wantAccess}
+          </button>
+          <button className="voice-offer-skip" onClick={onClose}>
+            {t.upNotNow}
+          </button>
+        </div>
+      )}
       {phase === "active" && (
         <div className="call-actions voice-actions">
           <div>

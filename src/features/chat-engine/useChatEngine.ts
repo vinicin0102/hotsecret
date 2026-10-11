@@ -74,7 +74,16 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
    * → active (vídeo, liberado só depois do pagamento). productId/offer: oferta do Cérebro.
    */
   /** ligação de voz do Cérebro: tocando → em andamento (áudio) → encerrada */
-  const [voice, setVoice] = useState<{ nodeId: string; id: string; url: string; phase: "ringing" | "active" | "ended"; seconds?: number } | null>(null);
+  const [voice, setVoice] = useState<{
+    nodeId: string;
+    id: string;
+    url: string;
+    phase: "ringing" | "active" | "ended";
+    seconds?: number;
+    /** oferta do fim da ligação: aparece na própria tela da chamada encerrada */
+    offer?: { productId: string; headline?: string; ctaLabel?: string };
+    endText?: string;
+  } | null>(null);
   const [call, setCall] = useState<{
     nodeId: string;
     phase: "ringing" | "pix" | "active";
@@ -882,7 +891,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     setVoice(null);
     void aiTurnRef.current(v.nodeId, null, "voice_declined");
   }, [voice]);
-  /** a ligação terminou (áudio acabou ou o lead desligou): tela "chamada encerrada", depois a mensagem e a oferta no chat */
+  /**
+   * a ligação terminou (áudio acabou ou o lead desligou): tela "chamada encerrada". Com oferta, a tela fica aberta com o botão
+   * da oferta (a mensagem e o card também vão para o chat); sem oferta, fecha e a mensagem aparece no chat.
+   */
   const endVoice = useCallback(
     async (seconds: number) => {
       const v = voice;
@@ -891,10 +903,20 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       setVoice({ ...v, phase: "ended", seconds });
       const token = ++runId.current;
       const resP = t ? t.voiceCallEnded(v.nodeId, v.id, seconds).catch(() => null) : Promise.resolve(null);
-      await sleep(1800);
-      setVoice(null);
+      await sleep(1200);
       const placeholder = ((getNode(graphRef.current, v.nodeId)?.content as AiContent | undefined)?.placeholder as string) || undefined;
       const r = await resP;
+      if (runId.current !== token) return;
+      const offer = r?.offer ? { productId: r.offer.productId, headline: r.offer.headline, ctaLabel: r.offer.ctaLabel } : undefined;
+      if (offer) {
+        setVoice({ ...v, phase: "ended", seconds, offer, endText: r?.endText || undefined });
+        if (r?.endText) push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.endText }, nodeId: v.nodeId, at: now() });
+        push({ kind: "offer", id: lid(), nodeId: v.nodeId, productId: offer.productId, offer, at: now() });
+        setAwaiting({ kind: "ai", nodeId: v.nodeId, placeholder });
+        return;
+      }
+      await sleep(600);
+      setVoice(null);
       if (runId.current !== token) return;
       if (r?.endText) {
         setTyping(true);
@@ -903,22 +925,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         setTyping(false);
         push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.endText }, nodeId: v.nodeId, at: now() });
       }
-      if (r?.offer) {
-        await sleep(700);
-        if (runId.current !== token) return;
-        push({
-          kind: "offer",
-          id: lid(),
-          nodeId: v.nodeId,
-          productId: r.offer.productId,
-          offer: { productId: r.offer.productId, headline: r.offer.headline, ctaLabel: r.offer.ctaLabel },
-          at: now(),
-        });
-      }
       setAwaiting({ kind: "ai", nodeId: v.nodeId, placeholder });
     },
     [voice, push],
   );
+  /** fecha a tela da ligação encerrada (a oferta continua no chat) */
+  const closeVoice = useCallback(() => setVoice(null), []);
 
   const declineCall = useCallback(() => {
     if (!call) return;
@@ -1150,6 +1162,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     answerVoice,
     declineVoice,
     endVoice,
+    closeVoice,
     call,
     callError,
     answerCall,
