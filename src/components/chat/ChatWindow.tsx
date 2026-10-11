@@ -371,12 +371,22 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             offer={engine.voice.offer}
             product={engine.voice.offer ? funnel.products[engine.voice.offer.productId] : undefined}
             endText={engine.voice.endText}
-            onBuy={() => {
-              const v = engine.voice;
-              engine.closeVoice();
-              if (v?.offer) engine.openCheckout(v.nodeId, v.offer.productId);
-            }}
+            onBuy={() => void engine.buyVoice()}
             onClose={engine.closeVoice}
+            pay={engine.voice.pay}
+            payment={
+              engine.voice.offer
+                ? Object.values(payments)
+                    .filter((p) => p.offerNodeId === engine.voice!.nodeId && p.productId === engine.voice!.offer!.productId)
+                    .sort((a, b) => (a.status === "FAILED" ? 1 : 0) - (b.status === "FAILED" ? 1 : 0))[0]
+                : undefined
+            }
+            payerForm={
+              transport && engine.voice.offer
+                ? { loadMethods: () => transport.paymentMethods(engine.voice!.offer!.productId), initial: engine.payer, onSubmit: engine.submitVoicePayer }
+                : undefined
+            }
+            onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
           />
         )}
         {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}

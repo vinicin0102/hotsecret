@@ -1754,6 +1754,30 @@
     transform: scale(1.025);
   }
 }
+/* PIX gerado na própria tela da ligação: a foto encolhe para o pagamento caber */
+.voice-call.paying .call-top {
+  padding-top: max(28px, env(safe-area-inset-top));
+}
+.voice-call.paying .call-avatar-wrap {
+  display: none;
+}
+.voice-call.paying .call-kind {
+  margin-bottom: 4px;
+}
+.voice-offer.paying {
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+}
+.voice-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+.voice-pay .pix-code-box {
+  max-height: 64px;
+  overflow: hidden;
+}
 .voice-offer-skip {
   border: 0;
   background: none;

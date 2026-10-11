@@ -159,22 +159,7 @@ export function PixPopup({
     onSubmit: (payer: PayerData) => Promise<unknown>;
   };
 }) {
-  const [copied, setCopied] = useState(false);
   const { t, money } = useChatI18n();
-  const code = payment?.pixQrCode ?? "";
-  const failed = payment?.status === "FAILED";
-  const copy = async () => {
-    if (!code) return;
-    setCopied(true);
-    try {
-      await Promise.race([navigator.clipboard.writeText(code), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 1500))]);
-    } catch {
-      // navegadores sem permissão de clipboard: seleciona o texto para copiar manualmente
-      const el = document.getElementById("pix-code-text");
-      if (el) window.getSelection()?.selectAllChildren(el);
-    }
-    setTimeout(() => setCopied(false), 2500);
-  };
   return (
     <div className={`call-overlay pix ${overVideo ? "over-video" : ""}`} role="dialog" aria-label={t.payEyebrowPix}>
       {character.avatarUrl && !overVideo && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
@@ -200,65 +185,109 @@ export function PixPopup({
             </b>
           </div>
         )}
-        {payerForm && !payment ? (
-          <PayerForm
-            loadMethods={payerForm.loadMethods}
-            initial={payerForm.initial}
-            submitLabel={t.continue}
-            busyLabel={t.generatingKey}
-            onSubmit={payerForm.onSubmit}
-            onNoForm={() => undefined}
-            autoSubmit
-          />
-        ) : error ? (
-          <div className="error-text">{error}</div>
-        ) : !payment ? (
-          <div className="pix-wait">
-            <span className="once-spin" /> {t.generatingKey}
-          </div>
-        ) : failed ? (
-          <div className="error-text">{t.callNotApproved}</div>
-        ) : payment.nextAction ? (
-          <>
-            {/* dados de pagamento do gateway (SPEI, OXXO...) exatamente como vieram */}
-            <NextActionView action={payment.nextAction} amount={money(payment.amount, payment.currency)} compact />
-            <ol className="pix-steps" start={(payment.nextAction.instructions?.steps?.length ?? 0) + 1}>
-              <li>{t.step3}</li>
-            </ol>
-            <div className="pix-wait">
-              <span className="once-spin" /> {t.waitingPay}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="pix-label">
-              {t.keyOf} {character.name.trim().split(/\s+/)[0]}
-            </div>
-            <div className="pix-code-box" id="pix-code-text" onClick={copy}>
-              {code}
-            </div>
-            <button className="btn btn-primary btn-block cta-glow pix-copy" onClick={copy} disabled={!code}>
-              {copied ? t.keyCopied : t.copyKey}
-            </button>
-            <ol className="pix-steps">
-              <li>{t.step1}</li>
-              <li>{t.step2}</li>
-              <li>{t.step3}</li>
-            </ol>
-            <div className="pix-wait">
-              <span className="once-spin" /> {t.waitingPay}
-            </div>
-            {onSimulate && payment && (payment.provider === "sandbox" || payment.provider === "preview") && (
-              <div className="row" style={{ justifyContent: "center", marginTop: 8 }}>
-                <button className="btn btn-sm" onClick={() => onSimulate(payment.id, "APPROVED")}>
-                  {t.simApprove}
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        <PixPayBody character={character} payment={payment} error={error} payerForm={payerForm} onSimulate={onSimulate} />
       </div>
     </div>
+  );
+}
+
+/** corpo do pagamento (dados do comprador → gerando → código PIX para copiar / dados do gateway → aguardando) */
+export function PixPayBody({
+  character,
+  payment,
+  error,
+  payerForm,
+  onSimulate,
+  doneStep,
+}: {
+  character: PublicCharacter;
+  payment: PublicPaymentInfo | undefined;
+  error: string | null;
+  /** último passo ("a chamada começa sozinha…" por padrão) */
+  doneStep?: string;
+  payerForm?: {
+    loadMethods: () => Promise<PayMethods | null>;
+    initial: PayerData | null;
+    onSubmit: (payer: PayerData) => Promise<unknown>;
+  };
+  onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const { t, money } = useChatI18n();
+  const code = payment?.pixQrCode ?? "";
+  const failed = payment?.status === "FAILED";
+  const copy = async () => {
+    if (!code) return;
+    setCopied(true);
+    try {
+      await Promise.race([navigator.clipboard.writeText(code), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 1500))]);
+    } catch {
+      // navegadores sem permissão de clipboard: seleciona o texto para copiar manualmente
+      const el = document.getElementById("pix-code-text");
+      if (el) window.getSelection()?.selectAllChildren(el);
+    }
+    setTimeout(() => setCopied(false), 2500);
+  };
+  return (
+    <>
+      {payerForm && !payment ? (
+        <PayerForm
+          loadMethods={payerForm.loadMethods}
+          initial={payerForm.initial}
+          submitLabel={t.continue}
+          busyLabel={t.generatingKey}
+          onSubmit={payerForm.onSubmit}
+          onNoForm={() => undefined}
+          autoSubmit
+        />
+      ) : error ? (
+        <div className="error-text">{error}</div>
+      ) : !payment ? (
+        <div className="pix-wait">
+          <span className="once-spin" /> {t.generatingKey}
+        </div>
+      ) : failed ? (
+        <div className="error-text">{t.callNotApproved}</div>
+      ) : payment.nextAction ? (
+        <>
+          {/* dados de pagamento do gateway (SPEI, OXXO...) exatamente como vieram */}
+          <NextActionView action={payment.nextAction} amount={money(payment.amount, payment.currency)} compact />
+          <ol className="pix-steps" start={(payment.nextAction.instructions?.steps?.length ?? 0) + 1}>
+            <li>{doneStep ?? t.step3}</li>
+          </ol>
+          <div className="pix-wait">
+            <span className="once-spin" /> {t.waitingPay}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="pix-label">
+            {t.keyOf} {character.name.trim().split(/\s+/)[0]}
+          </div>
+          <div className="pix-code-box" id="pix-code-text" onClick={copy}>
+            {code}
+          </div>
+          <button className="btn btn-primary btn-block cta-glow pix-copy" onClick={copy} disabled={!code}>
+            {copied ? t.keyCopied : t.copyKey}
+          </button>
+          <ol className="pix-steps">
+            <li>{t.step1}</li>
+            <li>{t.step2}</li>
+            <li>{doneStep ?? t.step3}</li>
+          </ol>
+          <div className="pix-wait">
+            <span className="once-spin" /> {t.waitingPay}
+          </div>
+          {onSimulate && payment && (payment.provider === "sandbox" || payment.provider === "preview") && (
+            <div className="row" style={{ justifyContent: "center", marginTop: 8 }}>
+              <button className="btn btn-sm" onClick={() => onSimulate(payment.id, "APPROVED")}>
+                {t.simApprove}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </>
   );
 }
 
@@ -618,6 +647,10 @@ export function VoiceCall({
   endText,
   onBuy,
   onClose,
+  pay,
+  payment,
+  payerForm,
+  onSimulate,
 }: {
   character: PublicCharacter;
   url: string;
@@ -632,6 +665,15 @@ export function VoiceCall({
   endText?: string;
   onBuy?: () => void;
   onClose?: () => void;
+  /** tocou no botão: o PIX é gerado aqui mesmo */
+  pay?: { needPayer: boolean; error?: string };
+  payment?: PublicPaymentInfo;
+  payerForm?: {
+    loadMethods: () => Promise<PayMethods | null>;
+    initial: PayerData | null;
+    onSubmit: (payer: PayerData) => Promise<unknown>;
+  };
+  onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
 }) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const started = useRef<number>(0);
@@ -669,7 +711,7 @@ export function VoiceCall({
   if (phase === "ringing") return <IncomingCall character={character} kind="voice" onAccept={accept} onDecline={onDecline} />;
 
   return (
-    <div className={`call-overlay voice-call ${phase === "ended" ? "ended" : ""}`} role="dialog" aria-label={`${t.voiceCall} · ${character.name}`}>
+    <div className={`call-overlay voice-call ${phase === "ended" ? "ended" : ""} ${pay ? "paying" : ""}`} role="dialog" aria-label={`${t.voiceCall} · ${character.name}`}>
       {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
       <div className="call-top">
         <div className="call-kind">{t.voiceCall}</div>
@@ -697,8 +739,8 @@ export function VoiceCall({
         )}
       </div>
       {phase === "ended" && offer && product && (
-        <div className="voice-offer" role="group" aria-label={offer.headline || product.name}>
-          {endText && <p className="voice-offer-text">{endText}</p>}
+        <div className={`voice-offer ${pay ? "paying" : ""}`} role="group" aria-label={offer.headline || product.name}>
+          {endText && !pay && <p className="voice-offer-text">{endText}</p>}
           <div className="voice-offer-card">
             {product.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -712,9 +754,15 @@ export function VoiceCall({
               </div>
             </div>
           </div>
-          <button className="voice-offer-btn" onClick={onBuy}>
-            {offer.ctaLabel || t.wantAccess}
-          </button>
+          {pay ? (
+            <div className="voice-pay">
+              <PixPayBody character={character} payment={payment} error={pay.error ?? null} payerForm={pay.needPayer ? payerForm : undefined} onSimulate={onSimulate} doneStep={t.buyingB} />
+            </div>
+          ) : (
+            <button className="voice-offer-btn" onClick={onBuy}>
+              {offer.ctaLabel || t.wantAccess}
+            </button>
+          )}
           <button className="voice-offer-skip" onClick={onClose}>
             {t.upNotNow}
           </button>

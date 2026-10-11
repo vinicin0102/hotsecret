@@ -83,6 +83,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     /** oferta do fim da ligação: aparece na própria tela da chamada encerrada */
     offer?: { productId: string; headline?: string; ctaLabel?: string };
     endText?: string;
+    /** tocou no botão da oferta: o PIX é gerado ali mesmo, na tela da ligação */
+    pay?: { needPayer: boolean; error?: string };
   } | null>(null);
   const [call, setCall] = useState<{
     nodeId: string;
@@ -929,8 +931,66 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     },
     [voice, push],
   );
-  /** fecha a tela da ligação encerrada (a oferta continua no chat) */
-  const closeVoice = useCallback(() => setVoice(null), []);
+  /** fecha a tela da ligação encerrada (a oferta continua no chat; um PIX já gerado também vai para o chat) */
+  const closeVoice = useCallback(() => {
+    const v = voice;
+    setVoice(null);
+    if (!v?.pay || !v.offer) return;
+    const pending = Object.values(payments).find((p) => p.offerNodeId === v.nodeId && p.productId === v.offer!.productId && p.status !== "APPROVED");
+    if (pending)
+      setItems((prev) => (prev.some((i) => i.kind === "payment" && i.paymentId === pending.id) ? prev : [...prev, { kind: "payment", id: lid(), paymentId: pending.id, at: now() }]));
+  }, [voice, payments]);
+  /** tocou no botão da oferta na tela da ligação: gera o PIX ali mesmo (igual ao VIP) */
+  const buyVoice = useCallback(async () => {
+    const v = voice;
+    if (!v?.offer) return;
+    const { nodeId } = v;
+    const productId = v.offer.productId;
+    const product = funnel.products[productId];
+    setVoice({ ...v, pay: { needPayer: false } });
+    track("offer_clicked", nodeId, { productId, voiceCall: v.id });
+    track("checkout_started", nodeId, { productId, voiceCall: v.id });
+    if (product && transportRef.current?.mode === "live") {
+      pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
+    }
+    setCheckoutOpened(true);
+    // quem clicou em comprar não recebe mais as mensagens de apoio
+    if (followUpOffers.current.size > 0) {
+      followUpOffers.current.clear();
+      runId.current++;
+      setTyping(false);
+    }
+    if (product?.externalCheckoutUrl) {
+      setVoice(null);
+      window.open(product.externalCheckoutUrl, "_blank", "noopener");
+      return;
+    }
+    if (product?.payerForm && !payerRef.current && transportRef.current?.mode === "live") {
+      setVoice((cur) => (cur && cur.id === v.id ? { ...cur, pay: { needPayer: true } } : cur));
+      return;
+    }
+    try {
+      await submitCheckout(nodeId, { method: "PIX", productId }, { silent: true });
+    } catch (e) {
+      const needPayer = e instanceof ApiError && (e.data.code === "payer_required" || e.data.code === "invalid_fields");
+      setVoice((cur) => (cur && cur.id === v.id ? { ...cur, pay: needPayer ? { needPayer: true } : { needPayer: false, error: e instanceof Error ? e.message : tx.generateError } } : cur));
+    }
+  }, [voice, funnel.products, submitCheckout, track]); // eslint-disable-line react-hooks/exhaustive-deps
+  const submitVoicePayer = useCallback(
+    async (data: PayerData) => {
+      const v = voice;
+      if (!v?.offer) return;
+      await submitCheckout(v.nodeId, { method: "PIX", payer: data, productId: v.offer.productId }, { silent: true });
+      setVoice((cur) => (cur && cur.id === v.id ? { ...cur, pay: { needPayer: false } } : cur));
+    },
+    [voice, submitCheckout],
+  );
+  // pagou o PIX gerado na tela da ligação: fecha a tela (o fluxo segue como em qualquer compra)
+  useEffect(() => {
+    if (!voice?.pay || !voice.offer) return;
+    const ok = Object.values(payments).some((p) => p.offerNodeId === voice.nodeId && p.productId === voice.offer!.productId && p.status === "APPROVED");
+    if (ok) setVoice(null);
+  }, [voice, payments]);
 
   const declineCall = useCallback(() => {
     if (!call) return;
@@ -1163,6 +1223,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     declineVoice,
     endVoice,
     closeVoice,
+    buyVoice,
+    submitVoicePayer,
     call,
     callError,
     answerCall,
