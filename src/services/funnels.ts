@@ -13,7 +13,7 @@ import type {
 import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY } from "@/types/flow";
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
-import { brainOffers } from "./ai/brain";
+import { brainOffers, brainVoiceCalls } from "./ai/brain";
 import { providerNameForCurrency } from "./payments/index";
 import { zenithDefaultPayer } from "./payments/zenith";
 import { asCurrency } from "@/lib/format";
@@ -206,8 +206,10 @@ async function buildPublicFunnel(
   // ofertas dos cérebros usados nos blocos de IA
   const brainIds = fullGraph.nodes.filter((n) => n.type === "ai").map((n) => (n.content as { brainId?: string }).brainId).filter((v): v is string => !!v);
   if (brainIds.length) {
-    for (const b of await prisma.brain.findMany({ where: { id: { in: brainIds } }, select: { offers: true } })) {
+    for (const b of await prisma.brain.findMany({ where: { id: { in: brainIds } }, select: { offers: true, voiceCalls: true } })) {
       productIds.push(...brainOffers(b).flatMap((o) => [o.productId, o.downsellProductId].filter((v): v is string => !!v)));
+      // produto escolhido direto na ligação de voz
+      productIds.push(...brainVoiceCalls(b).flatMap((v) => (v.productId ? [v.productId] : [])));
     }
   }
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, active: true } });

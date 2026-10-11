@@ -45,15 +45,17 @@ export default apiHandler({
     if (endText) await addConversationMessage(session.conversationId, "bot", "text", { text: endText }, node.id);
 
     // oferta do fim da ligação: card de compra do produto escolhido (ex.: chamada de vídeo)
+    // oferta do cérebro ou produto escolhido direto na ligação
     const o = call.offerId ? brainOffers(brain).find((x) => x.id === call.offerId) : undefined;
-    const p = o ? await prisma.product.findFirst({ where: { id: o.productId, active: true } }) : null;
-    if (!o || !p) return { endText, offer: null };
-    const offer = { productId: p.id, headline: o.headline || p.name, ctaLabel: o.ctaLabel || undefined, style: "card" as const };
+    const productId = o?.productId ?? call.productId;
+    const p = productId ? await prisma.product.findFirst({ where: { id: productId, active: true } }) : null;
+    if (!p) return { endText, offer: null };
+    const offer = { productId: p.id, headline: o?.headline || p.name, ctaLabel: o?.ctaLabel || undefined, style: "card" as const };
     await addConversationMessage(
       session.conversationId,
       "bot",
       "offer",
-      { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, currency: p.currency, aiOfferId: o.id, style: "card" } as Prisma.InputJsonValue,
+      { productId: p.id, name: p.name, headline: offer.headline, ctaLabel: offer.ctaLabel ?? null, price: p.price, originalPrice: p.originalPrice, currency: p.currency, aiOfferId: o?.id ?? null, style: "card" } as Prisma.InputJsonValue,
       node.id,
     );
     await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "offer_viewed", nodeId: node.id, data: { productId: p.id, ai: true, voiceCall: callId } });

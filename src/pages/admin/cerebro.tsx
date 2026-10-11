@@ -74,6 +74,7 @@ interface VoiceCallItem {
   url: string;
   when?: string;
   offerId?: string;
+  productId?: string;
   endText?: string;
 }
 interface Product {
@@ -1011,19 +1012,38 @@ export default function CerebroPage() {
                     <div className="grid-2">
                       <div className="field">
                         <label>Oferta no fim da ligação (botão na tela da chamada)</label>
-                        <select className="select" value={v.offerId ?? ""} onChange={(e) => setV({ offerId: e.target.value })}>
+                        <select
+                          className="select"
+                          value={v.offerId ? `o:${v.offerId}` : v.productId ? `p:${v.productId}` : ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setV(val.startsWith("o:") ? { offerId: val.slice(2), productId: "" } : val.startsWith("p:") ? { offerId: "", productId: val.slice(2) } : { offerId: "", productId: "" });
+                          }}
+                        >
                           <option value="">— nenhuma —</option>
-                          {draft.offers.map((o) => {
-                            const p = products.find((x) => x.id === o.productId);
-                            return (
-                              <option key={o.id} value={o.id}>
-                                {(o.headline || p?.name || "Oferta") + (p ? ` · ${formatBRL(p.price)}` : "")}
-                                {o.style === "call" ? " (chamada de vídeo)" : ""}
+                          {draft.offers.length > 0 && (
+                            <optgroup label="Ofertas deste cérebro">
+                              {draft.offers.map((o) => {
+                                const p = products.find((x) => x.id === o.productId);
+                                return (
+                                  <option key={o.id} value={`o:${o.id}`}>
+                                    {(o.headline || p?.name || "Oferta") + (p ? ` · ${formatBRL(p.price)}` : "")}
+                                    {o.style === "call" ? " (chamada de vídeo)" : ""}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          )}
+                          <optgroup label="Todos os produtos">
+                            {products.map((p) => (
+                              <option key={p.id} value={`p:${p.id}`}>
+                                {p.name} · {formatBRL(p.price)}
+                                {p.active === false ? " (inativo)" : ""}
                               </option>
-                            );
-                          })}
+                            ))}
+                          </optgroup>
                         </select>
-                        {draft.offers.length === 0 && <p className="hint">Cadastre a oferta (ex.: chamada de vídeo) em Ofertas acima.</p>}
+                        <p className="hint">Escolha uma oferta deste cérebro ou qualquer produto seu (o botão mostra o nome e o preço do produto).</p>
                       </div>
                       <div className="field">
                         <label>Mensagem no fim da ligação</label>

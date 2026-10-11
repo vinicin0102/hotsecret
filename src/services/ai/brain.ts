@@ -210,6 +210,8 @@ export interface BrainVoiceCall {
   when?: string;
   /** oferta do cérebro mostrada quando a ligação termina */
   offerId?: string;
+  /** ou qualquer produto, direto (sem ser oferta do cérebro) */
+  productId?: string;
   /** mensagem enviada no chat quando a ligação termina */
   endText?: string;
 }

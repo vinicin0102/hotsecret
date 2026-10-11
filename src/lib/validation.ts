@@ -256,6 +256,8 @@ export const brainSchema = z.object({
         when: optTxt(500),
         /** oferta do cérebro mostrada quando a ligação termina */
         offerId: z.string().max(64).optional(),
+        /** ou qualquer produto (sem precisar cadastrar como oferta do cérebro) */
+        productId: z.string().max(64).optional(),
         endText: optTxt(300),
       }),
     )

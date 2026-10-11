@@ -13,7 +13,7 @@ import { getProvider, providerNameForCurrency } from "./index";
 import { createZenithCheckout, type ZenithPayerInput } from "./zenith-checkout";
 import { asCurrency } from "@/lib/format";
 import { sendMetaPurchase } from "../meta-capi";
-import { brainOffers } from "../ai/brain";
+import { brainOffers, brainVoiceCalls } from "../ai/brain";
 import { publicNextAction } from "./zenith";
 
 const ALLOWED_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
@@ -111,7 +111,10 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     const brainId = (node.content as { brainId?: string }).brainId;
     const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
     const offers = brain ? brainOffers(brain) : [];
-    let allowed = !!input.productId && offers.some((o) => o.productId === input.productId || o.downsellProductId === input.productId);
+    let allowed =
+      !!input.productId &&
+      (offers.some((o) => o.productId === input.productId || o.downsellProductId === input.productId) ||
+        (brain ? brainVoiceCalls(brain).some((v) => v.productId === input.productId) : false));
     if (!allowed && input.productId) {
       // upsells marcados nos vídeos das ofertas em chamada
       const videoIds = offers.filter((o) => (o.style === "call" || o.style === "live") && o.videoId).map((o) => o.videoId!);

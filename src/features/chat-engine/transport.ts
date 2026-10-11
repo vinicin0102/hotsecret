@@ -362,14 +362,18 @@ export function createPreviewTransport(
       const res = await fetch(withBase(`/api/admin/brains/${brainId}`));
       if (!res.ok) return { endText: null, offer: null };
       const { brain } = (await res.json()) as {
-        brain: { voiceCalls?: { id: string; offerId?: string; endText?: string }[]; offers: { id: string; productId: string; headline?: string; ctaLabel?: string }[] };
+        brain: {
+          voiceCalls?: { id: string; offerId?: string; productId?: string; endText?: string }[];
+          offers: { id: string; productId: string; headline?: string; ctaLabel?: string }[];
+        };
       };
       const call = brain.voiceCalls?.find((v) => v.id === callId);
       const o = call?.offerId ? brain.offers.find((x) => x.id === call.offerId) : undefined;
+      const pid = o?.productId ?? call?.productId;
       if (call?.endText) history?.push({ role: "bot", text: call.endText });
       return {
         endText: call?.endText || null,
-        offer: o && products[o.productId] ? { productId: o.productId, headline: o.headline, ctaLabel: o.ctaLabel, style: "card" } : null,
+        offer: pid && products[pid] ? { productId: pid, headline: o?.headline, ctaLabel: o?.ctaLabel, style: "card" } : null,
       };
     },
     async sendPhoto(_nodeId, photo) {
