@@ -363,8 +363,8 @@ export function createPreviewTransport(
       if (!res.ok) return { endText: null, offer: null };
       const { brain } = (await res.json()) as {
         brain: {
-          voiceCalls?: { id: string; offerId?: string; productId?: string; endText?: string }[];
-          offers: { id: string; productId: string; headline?: string; ctaLabel?: string }[];
+          voiceCalls?: { id: string; offerId?: string; productId?: string; videoId?: string; endText?: string }[];
+          offers: { id: string; productId: string; headline?: string; ctaLabel?: string; style?: string; videoId?: string }[];
         };
       };
       const call = brain.voiceCalls?.find((v) => v.id === callId);
@@ -373,7 +373,10 @@ export function createPreviewTransport(
       if (call?.endText) history?.push({ role: "bot", text: call.endText });
       return {
         endText: call?.endText || null,
-        offer: pid && products[pid] ? { productId: pid, headline: o?.headline, ctaLabel: o?.ctaLabel, style: "card" } : null,
+        offer:
+          pid && products[pid]
+            ? { productId: pid, headline: o?.headline, ctaLabel: o?.ctaLabel, style: "card", hasVideo: !!(call?.videoId || ((o?.style === "call" || o?.style === "live") && o?.videoId)) }
+            : null,
       };
     },
     async sendPhoto(_nodeId, photo) {
@@ -399,8 +402,12 @@ export function createPreviewTransport(
       const cfg = aiNode(nodeId);
       let videoId = cfg?.videoId;
       if (!videoId && cfg?.brainId) {
-        const { brain } = await get<{ brain: { offers: { productId: string; style?: string; videoId?: string }[] } }>(`/api/admin/brains/${cfg.brainId}`);
-        videoId = brain.offers.find((o) => (o.productId === productId || (o as { downsellProductId?: string }).downsellProductId === productId) && (o.style === "call" || o.style === "live"))?.videoId;
+        const { brain } = await get<{
+          brain: { offers: { id: string; productId: string; style?: string; videoId?: string }[]; voiceCalls?: { offerId?: string; productId?: string; videoId?: string }[] };
+        }>(`/api/admin/brains/${cfg.brainId}`);
+        // vídeo escolhido na ligação de voz para o produto vendido no fim dela
+        videoId = brain.voiceCalls?.find((v) => v.videoId && ((v.offerId ? brain.offers.find((o) => o.id === v.offerId)?.productId : undefined) ?? v.productId) === productId)?.videoId;
+        videoId ||= brain.offers.find((o) => (o.productId === productId || (o as { downsellProductId?: string }).downsellProductId === productId) && (o.style === "call" || o.style === "live"))?.videoId;
       }
       if (!videoId) return null;
       const [{ video }, { products: list }] = await Promise.all([

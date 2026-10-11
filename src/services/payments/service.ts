@@ -117,7 +117,10 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
         (brain ? brainVoiceCalls(brain).some((v) => v.productId === input.productId) : false));
     if (!allowed && input.productId) {
       // upsells marcados nos vídeos das ofertas em chamada
-      const videoIds = offers.filter((o) => (o.style === "call" || o.style === "live") && o.videoId).map((o) => o.videoId!);
+      const videoIds = [
+        ...offers.filter((o) => (o.style === "call" || o.style === "live") && o.videoId).map((o) => o.videoId!),
+        ...(brain ? brainVoiceCalls(brain).flatMap((v) => (v.videoId ? [v.videoId] : [])) : []),
+      ];
       const videos = videoIds.length ? await prisma.video.findMany({ where: { id: { in: videoIds } } }) : [];
       allowed = videos.some((v) =>
         ((v.timeline as { markers?: { productId?: string; basicProductId?: string }[] } | null)?.markers ?? []).some(

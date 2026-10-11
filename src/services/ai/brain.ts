@@ -212,11 +212,17 @@ export interface BrainVoiceCall {
   offerId?: string;
   /** ou qualquer produto, direto (sem ser oferta do cérebro) */
   productId?: string;
+  /** vídeo liberado depois do pagamento (abre a chamada de vídeo) */
+  videoId?: string;
   /** mensagem enviada no chat quando a ligação termina */
   endText?: string;
 }
 export function brainVoiceCalls(brain: Pick<Brain, "voiceCalls">): BrainVoiceCall[] {
   return Array.isArray(brain.voiceCalls) ? (brain.voiceCalls as unknown as BrainVoiceCall[]).filter((v) => v?.id && v?.url) : [];
+}
+/** produto vendido no fim da ligação de voz (oferta do cérebro ou produto escolhido direto) */
+export function voiceCallProductId(call: BrainVoiceCall, offers: BrainOffer[]): string | undefined {
+  return (call.offerId ? offers.find((o) => o.id === call.offerId)?.productId : undefined) ?? (call.productId || undefined);
 }
 export function brainAudios(brain: Pick<Brain, "audios">): BrainAudio[] {
   return Array.isArray(brain.audios) ? (brain.audios as unknown as BrainAudio[]).filter((a) => a?.id && a?.url) : [];

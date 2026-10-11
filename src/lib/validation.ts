@@ -258,6 +258,8 @@ export const brainSchema = z.object({
         offerId: z.string().max(64).optional(),
         /** ou qualquer produto (sem precisar cadastrar como oferta do cérebro) */
         productId: z.string().max(64).optional(),
+        /** vídeo da aba Vídeos liberado depois do pagamento (abre a chamada de vídeo) */
+        videoId: z.string().max(64).optional(),
         endText: optTxt(300),
       }),
     )

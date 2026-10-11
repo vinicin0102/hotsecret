@@ -6,6 +6,7 @@ import { useFetch } from "@/hooks/useFetch";
 import { api, uploadFile } from "@/lib/client";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
+import { withBase } from "@/lib/paths";
 import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
 import type { VipOfferTexts } from "@/types/flow";
 
@@ -75,6 +76,7 @@ interface VoiceCallItem {
   when?: string;
   offerId?: string;
   productId?: string;
+  videoId?: string;
   endText?: string;
 }
 interface Product {
@@ -1044,6 +1046,21 @@ export default function CerebroPage() {
                           </optgroup>
                         </select>
                         <p className="hint">Escolha uma oferta deste cérebro ou qualquer produto seu (o botão mostra o nome e o preço do produto).</p>
+                      </div>
+                      <div className="field">
+                        <label>Vídeo liberado depois do pagamento</label>
+                        <select className="select" value={v.videoId ?? ""} onChange={(e) => setV({ videoId: e.target.value })}>
+                          <option value="">— nenhum (libera o produto normalmente) —</option>
+                          {videos.map((vd) => (
+                            <option key={vd.id} value={vd.id}>
+                              {vd.name}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="hint">
+                          Pagou a oferta da ligação: abre a chamada de vídeo com este vídeo (trechos FREE/VIP, falas e upsells marcados em{" "}
+                          <a href={withBase("/admin/videos")}>▶ Vídeos</a>). O botão “Entrar na chamada” também fica no chat.
+                        </p>
                       </div>
                       <div className="field">
                         <label>Mensagem no fim da ligação</label>

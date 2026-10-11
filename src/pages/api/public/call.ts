@@ -6,7 +6,7 @@ import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
 import { normalizeTimeline } from "@/types/video";
 import type { AiContent, OfferContent } from "@/types/flow";
-import { brainOffers } from "@/services/ai/brain";
+import { brainOffers, brainVoiceCalls, voiceCallProductId } from "@/services/ai/brain";
 
 const schema = z.object({
   token: z.string().min(10).max(2000),
@@ -28,8 +28,11 @@ export default apiHandler({
     if (node.type === "ai") {
       const brainId = (node.content as AiContent).brainId;
       const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
-      const withVideo = brain ? brainOffers(brain).filter((o) => (o.style === "call" || o.style === "live") && o.videoId) : [];
-      videoId = withVideo.find((o) => o.productId === productId || o.downsellProductId === productId)?.videoId;
+      const offers = brain ? brainOffers(brain) : [];
+      const withVideo = offers.filter((o) => (o.style === "call" || o.style === "live") && o.videoId);
+      // vídeo escolhido na ligação de voz para o produto vendido no fim dela
+      const voice = brain && productId ? brainVoiceCalls(brain).find((v) => v.videoId && voiceCallProductId(v, offers) === productId) : undefined;
+      videoId = voice?.videoId ?? withVideo.find((o) => o.productId === productId || o.downsellProductId === productId)?.videoId;
       if (!videoId && productId && withVideo.length) {
         // ingresso comprado numa "Oferta" marcada no vídeo: a chamada é a desse vídeo
         const vids = await prisma.video.findMany({ where: { id: { in: withVideo.map((o) => o.videoId!) } } });

@@ -81,7 +81,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     phase: "ringing" | "active" | "ended";
     seconds?: number;
     /** oferta do fim da ligação: aparece na própria tela da chamada encerrada */
-    offer?: { productId: string; headline?: string; ctaLabel?: string };
+    offer?: { productId: string; headline?: string; ctaLabel?: string; hasVideo?: boolean };
     endText?: string;
     /** tocou no botão da oferta: o PIX é gerado ali mesmo, na tela da ligação */
     pay?: { needPayer: boolean; error?: string };
@@ -911,7 +911,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       if (runId.current !== token) return;
       const offer = r?.offer ? { productId: r.offer.productId, headline: r.offer.headline, ctaLabel: r.offer.ctaLabel } : undefined;
       if (offer) {
-        setVoice({ ...v, phase: "ended", seconds, offer, endText: r?.endText || undefined });
+        // pagou e o produto tem vídeo: a chamada de vídeo abre direto (o botão "Entrar na chamada" também fica no chat)
+        if (r?.offer?.hasVideo) callProducts.current.add(offer.productId);
+        setVoice({ ...v, phase: "ended", seconds, offer: { ...offer, hasVideo: !!r?.offer?.hasVideo }, endText: r?.endText || undefined });
         if (r?.endText) push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.endText }, nodeId: v.nodeId, at: now() });
         push({ kind: "offer", id: lid(), nodeId: v.nodeId, productId: offer.productId, offer, at: now() });
         setAwaiting({ kind: "ai", nodeId: v.nodeId, placeholder });
@@ -989,7 +991,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   useEffect(() => {
     if (!voice?.pay || !voice.offer) return;
     const ok = Object.values(payments).some((p) => p.offerNodeId === voice.nodeId && p.productId === voice.offer!.productId && p.status === "APPROVED");
-    if (ok) setVoice(null);
+    if (!ok) return;
+    setVoice(null);
+    if (voice.offer.hasVideo) setCall({ nodeId: voice.nodeId, phase: "active", payProductId: voice.offer.productId, productId: voice.offer.productId });
   }, [voice, payments]);
 
   const declineCall = useCallback(() => {
