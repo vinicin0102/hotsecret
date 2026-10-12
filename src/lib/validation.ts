@@ -28,6 +28,9 @@ const delaySettings = z.object({
 /** textos da oferta Canal VIP AO VIVO (bloco Oferta e Cérebro) */
 const lines = (max: number, each: number) => z.array(txt(each)).max(max).transform((a) => a.map((v) => v.trim()).filter(Boolean));
 export const vipTextsSchema = z.object({
+  previewUrl: optUrl,
+  previewTitle: optTxt(80),
+  previewButton: optTxt(60),
   badge: optTxt(60),
   title: optTxt(80),
   highlight: optTxt(60),

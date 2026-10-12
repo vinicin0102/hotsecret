@@ -90,6 +90,10 @@ export interface TarotCard {
 }
 /** Textos da oferta "Canal VIP AO VIVO" (vazios = textos padrão do país do fluxo). */
 export interface VipOfferTexts {
+  /** prévia ao tocar no card: vídeo ou foto da live com título ("Já estou começando 🔴") e o botão que já gera o PIX */
+  previewUrl?: string;
+  previewTitle?: string;
+  previewButton?: string;
   /** selo do topo ("UPGRADE EXCLUSIVO 💎") */
   badge?: string;
   /** título ("QUER O ACESSO") e a parte em destaque ("TOTAL? 💦") */

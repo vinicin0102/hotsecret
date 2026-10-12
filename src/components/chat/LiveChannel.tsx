@@ -190,6 +190,43 @@ export function VipOfferModal({
   const v: VipOfferTexts = offer.vip ?? {};
   if (!product) return null;
   const benefits = (v.benefits ?? []).filter(Boolean);
+  if (v.previewUrl) {
+    // prévia da live: vídeo/foto com o título e o botão que já gera o PIX
+    const isVideo = /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(v.previewUrl);
+    return (
+      <div className="vip-overlay" role="dialog" aria-label={v.previewTitle || t.vipPreviewTitle}>
+        <div className="vip-modal vip-preview">
+          <button className="vip-close" onClick={onClose} aria-label={t.close}>
+            ✕
+          </button>
+          <div className="vip-preview-media">
+            {isVideo ? (
+              <video src={v.previewUrl} autoPlay muted loop playsInline disablePictureInPicture onClick={(e) => (e.currentTarget.muted = !e.currentTarget.muted)} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={v.previewUrl} alt="" />
+            )}
+            <span className="live-badge vip-preview-live">● {t.liveBadge}</span>
+          </div>
+          <h2 className="vip-preview-title">{v.previewTitle || t.vipPreviewTitle}</h2>
+          {product.originalPrice && product.originalPrice > product.price ? (
+            <div className="vip-old">
+              {t.vipFrom} {money(product.originalPrice, product.currency)}
+            </div>
+          ) : null}
+          <div className="vip-price">{money(product.price, product.currency)}</div>
+          <button className="vip-ticket main" onClick={() => onPick(product.id)}>
+            {v.previewButton || t.generate} 🔥
+          </button>
+          {basic && (
+            <button className="vip-ticket basic" onClick={() => onPick(basic.id)}>
+              {v.basicLabel || t.vipBasic} ({money(basic.price, basic.currency)})
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="vip-overlay" role="dialog" aria-label={v.title || t.vipTitle}>
       <div className="vip-modal">

@@ -86,6 +86,22 @@ export function VipOfferEditor({
           )}
         </div>
       )}
+      {!inCall && (
+        <div className="vip-editor-preview">
+          <div className="field">
+            <label>Prévia ao tocar no card (vídeo ou foto — opcional)</label>
+            <UploadInput value={v.previewUrl ?? ""} onChange={(url) => set({ previewUrl: url })} accept="image/*,video/*" />
+            <span className="hint">
+              Com prévia, ao tocar no card abre a prévia da live com o título e o botão que <b>já gera o PIX</b> (sem a tela de benefícios). Vídeo toca
+              sem som, em loop; tocar no vídeo liga o som. Vídeos curtos e leves.
+            </span>
+          </div>
+          <div className="grid-2">
+            {field("previewTitle", "Título da prévia", "Já estou começando 🔴")}
+            {field("previewButton", "Botão da prévia", "GERAR PIX")}
+          </div>
+        </div>
+      )}
       <div className="grid-2">
         {field("badge", "Selo do topo", "UPGRADE EXCLUSIVO 💎")}
         {field("intro", "Frase acima dos benefícios", "Libere a ligação privada completa e ganhe acesso a:")}
