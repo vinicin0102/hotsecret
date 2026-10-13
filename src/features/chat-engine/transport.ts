@@ -150,7 +150,11 @@ export interface ChatTransport {
   /** continue: o lead voltou para a IA (ex.: dúvida depois dos botões de oferta); message = o que ele respondeu */
   ai(nodeId: string, message: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined"): Promise<AiReply>;
   /** ligação de voz terminou (o lead atendeu): mensagem final + oferta */
-  voiceCallEnded(nodeId: string, callId: string, seconds: number): Promise<{ endText: string | null; offer: AiReply["offer"]; audio?: { url: string } | null }>;
+  voiceCallEnded(
+    nodeId: string,
+    callId: string,
+    seconds: number,
+  ): Promise<{ endText: string | null; offer: (AiReply["offer"] & { previewUrl?: string; previewTitle?: string }) | null; audio?: { url: string } | null }>;
   /** foto do lead (já comprimida) → link da foto gravada na conversa */
   sendPhoto(nodeId: string, photo: Blob): Promise<string>;
   /** tarot: cartas reveladas (só depois do pagamento aprovado) */
@@ -364,7 +368,7 @@ export function createPreviewTransport(
       if (!res.ok) return { endText: null, offer: null };
       const { brain } = (await res.json()) as {
         brain: {
-          voiceCalls?: { id: string; offerId?: string; productId?: string; videoId?: string; endText?: string }[];
+          voiceCalls?: { id: string; offerId?: string; productId?: string; videoId?: string; endText?: string; previewUrl?: string; previewTitle?: string }[];
           offers: { id: string; productId: string; headline?: string; ctaLabel?: string; style?: string; videoId?: string }[];
           audios?: { id: string; url: string; when?: string }[];
         };
@@ -382,7 +386,14 @@ export function createPreviewTransport(
         audio: after ? { url: after.url } : null,
         offer:
           pid && products[pid]
-            ? { productId: pid, headline: o?.headline, ctaLabel: o?.ctaLabel, style: "card", hasVideo: !!(call?.videoId || ((o?.style === "call" || o?.style === "live") && o?.videoId)) }
+            ? {
+                productId: pid,
+                headline: o?.headline,
+                ctaLabel: o?.ctaLabel,
+                style: "card",
+                hasVideo: !!(call?.videoId || ((o?.style === "call" || o?.style === "live") && o?.videoId)),
+                ...(call?.previewUrl ? { previewUrl: call.previewUrl, previewTitle: call.previewTitle || undefined } : {}),
+              }
             : null,
       };
     },

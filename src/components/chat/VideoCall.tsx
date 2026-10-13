@@ -660,7 +660,7 @@ export function VoiceCall({
   onDecline: () => void;
   onEnd: (seconds: number) => void;
   /** oferta do fim da ligação: o botão aparece aqui mesmo, na tela da chamada encerrada */
-  offer?: { headline?: string; ctaLabel?: string };
+  offer?: { headline?: string; ctaLabel?: string; previewUrl?: string; previewTitle?: string };
   product?: PublicProduct;
   endText?: string;
   onBuy?: () => void;
@@ -740,6 +740,18 @@ export function VoiceCall({
       </div>
       {phase === "ended" && offer && product && (
         <div className={`voice-offer ${pay ? "paying" : ""}`} role="group" aria-label={offer.headline || product.name}>
+          {offer.previewUrl && !pay && (
+            <div className="voice-offer-preview">
+              {/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(offer.previewUrl) ? (
+                <video src={offer.previewUrl} autoPlay muted loop playsInline disablePictureInPicture onClick={(e) => (e.currentTarget.muted = !e.currentTarget.muted)} />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={offer.previewUrl} alt="" />
+              )}
+              <span className="live-badge voice-offer-live">● {t.liveBadge}</span>
+              {offer.previewTitle && <div className="voice-offer-preview-title">{offer.previewTitle}</div>}
+            </div>
+          )}
           {endText && !pay && <p className="voice-offer-text">{endText}</p>}
           <div className="voice-offer-card">
             {product.imageUrl && (

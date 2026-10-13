@@ -58,7 +58,14 @@ export default apiHandler({
     const p = productId ? await prisma.product.findFirst({ where: { id: productId, active: true } }) : null;
     if (!p) return { endText, offer: null, audio };
     const hasVideo = !!(call.videoId || (o && (o.style === "call" || o.style === "live") && o.videoId));
-    const offer = { productId: p.id, headline: o?.headline || p.name, ctaLabel: o?.ctaLabel || undefined, style: "card" as const, hasVideo };
+    const offer = {
+      productId: p.id,
+      headline: o?.headline || p.name,
+      ctaLabel: o?.ctaLabel || undefined,
+      style: "card" as const,
+      hasVideo,
+      ...(call.previewUrl ? { previewUrl: call.previewUrl, previewTitle: call.previewTitle || undefined } : {}),
+    };
     await addConversationMessage(
       session.conversationId,
       "bot",

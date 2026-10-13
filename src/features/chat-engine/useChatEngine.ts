@@ -81,7 +81,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     phase: "ringing" | "active" | "ended";
     seconds?: number;
     /** oferta do fim da ligação: aparece na própria tela da chamada encerrada */
-    offer?: { productId: string; headline?: string; ctaLabel?: string; hasVideo?: boolean };
+    offer?: { productId: string; headline?: string; ctaLabel?: string; hasVideo?: boolean; previewUrl?: string; previewTitle?: string };
     endText?: string;
     /** tocou no botão da oferta: o PIX é gerado ali mesmo, na tela da ligação */
     pay?: { needPayer: boolean; error?: string };
@@ -913,7 +913,13 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       if (offer) {
         // pagou e o produto tem vídeo: a chamada de vídeo abre direto (o botão "Entrar na chamada" também fica no chat)
         if (r?.offer?.hasVideo) callProducts.current.add(offer.productId);
-        setVoice({ ...v, phase: "ended", seconds, offer: { ...offer, hasVideo: !!r?.offer?.hasVideo }, endText: r?.endText || undefined });
+        setVoice({
+          ...v,
+          phase: "ended",
+          seconds,
+          offer: { ...offer, hasVideo: !!r?.offer?.hasVideo, previewUrl: r?.offer?.previewUrl, previewTitle: r?.offer?.previewTitle },
+          endText: r?.endText || undefined,
+        });
         if (r?.endText) push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.endText }, nodeId: v.nodeId, at: now() });
         if (r?.audio) push({ kind: "message", id: lid(), sender: "bot", type: "audio", content: { url: r.audio.url }, nodeId: v.nodeId, at: now() });
         push({ kind: "offer", id: lid(), nodeId: v.nodeId, productId: offer.productId, offer, at: now() });

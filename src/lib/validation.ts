@@ -263,6 +263,9 @@ export const brainSchema = z.object({
         productId: z.string().max(64).optional(),
         /** vídeo da aba Vídeos liberado depois do pagamento (abre a chamada de vídeo) */
         videoId: z.string().max(64).optional(),
+        /** prévia (vídeo ou foto) mostrada com a oferta na tela da ligação encerrada */
+        previewUrl: optUrl,
+        previewTitle: optTxt(80),
         endText: optTxt(300),
       }),
     )

@@ -77,6 +77,8 @@ interface VoiceCallItem {
   offerId?: string;
   productId?: string;
   videoId?: string;
+  previewUrl?: string;
+  previewTitle?: string;
   endText?: string;
 }
 interface Product {
@@ -1046,6 +1048,18 @@ export default function CerebroPage() {
                           </optgroup>
                         </select>
                         <p className="hint">Escolha uma oferta deste cérebro ou qualquer produto seu (o botão mostra o nome e o preço do produto).</p>
+                      </div>
+                      <div className="field">
+                        <label>Prévia da oferta (vídeo ou foto — opcional)</label>
+                        <UploadInput value={v.previewUrl ?? ""} onChange={(url) => setV({ previewUrl: url })} accept="image/*,video/*" />
+                        <input
+                          className="input"
+                          style={{ marginTop: 8 }}
+                          placeholder="Título na prévia (opcional) — ex.: Já estou começando 🔴"
+                          value={v.previewTitle ?? ""}
+                          onChange={(e) => setV({ previewTitle: e.target.value })}
+                        />
+                        <p className="hint">Aparece em cima do botão da oferta quando a ligação termina. Vídeo toca sem som, em loop (tocar liga o som).</p>
                       </div>
                       <div className="field">
                         <label>Vídeo liberado depois do pagamento</label>

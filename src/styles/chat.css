@@ -1696,6 +1696,54 @@
     transform: translateY(24px);
   }
 }
+/* prévia na oferta do fim da ligação */
+.voice-offer-preview {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 4 / 5;
+  max-height: 34vh;
+  width: 100%;
+}
+.voice-offer-preview video,
+.voice-offer-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.voice-offer-live {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+.voice-offer-preview-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 26px 12px 10px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  font-weight: 900;
+  font-size: 17px;
+  text-align: center;
+}
+.voice-offer-preview,
+.voice-offer > * {
+  flex-shrink: 0;
+}
+/* com prévia, a foto redonda some para a oferta caber na tela */
+.voice-call:has(.voice-offer-preview) .call-avatar-wrap {
+  display: none;
+}
+.voice-call:has(.voice-offer-preview) .call-top {
+  padding-top: max(28px, env(safe-area-inset-top));
+}
+.voice-offer:has(.voice-offer-preview) {
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+}
 .voice-offer-text {
   margin: 0;
   font-size: 15px;

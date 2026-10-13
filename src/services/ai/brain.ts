@@ -216,6 +216,9 @@ export interface BrainVoiceCall {
   productId?: string;
   /** vídeo liberado depois do pagamento (abre a chamada de vídeo) */
   videoId?: string;
+  /** prévia (vídeo ou foto) mostrada com a oferta na tela da ligação encerrada */
+  previewUrl?: string;
+  previewTitle?: string;
   /** mensagem enviada no chat quando a ligação termina */
   endText?: string;
 }

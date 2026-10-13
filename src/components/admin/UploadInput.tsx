@@ -37,10 +37,12 @@ export function UploadInput({
   return (
     <div>
       <div className="upload-field">
-        {isImage && value && (
+        {isImage && value && /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(value) ? (
+          <video className="preview" src={value} muted playsInline preload="metadata" />
+        ) : isImage && value ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="preview" src={value} alt="" />
-        )}
+        ) : null}
         <input className="input" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
         <button type="button" className="btn btn-sm" onClick={() => ref.current?.click()} disabled={busy}>
           {busy ? (pct != null ? `${pct}%` : "Enviando...") : "Upload"}
