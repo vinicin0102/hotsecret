@@ -3,10 +3,24 @@
 import type { TrackingIds } from "@/types/flow";
 
 type Fbq = ((...args: unknown[]) => void) & { callMethod?: (...a: unknown[]) => void; queue?: unknown[]; loaded?: boolean; version?: string; push?: unknown };
+/** fila do pixel do TikTok (array com os métodos, como no snippet oficial) */
+type Ttq = unknown[] & {
+  methods: string[];
+  setAndDefer: (obj: Ttq, m: string) => void;
+  instance: (id: string) => Ttq;
+  load: (id: string, opts?: Record<string, unknown>) => void;
+  page: () => void;
+  track: (e: string, p?: Record<string, unknown>, o?: Record<string, unknown>) => void;
+  _i: Record<string, Ttq>;
+  _u?: string;
+  _t: Record<string, number>;
+  _o: Record<string, Record<string, unknown>>;
+  [m: string]: unknown;
+};
 type W = Window & {
   fbq?: Fbq;
   _fbq?: Fbq;
-  ttq?: { load: (id: string) => void; page: () => void; track: (e: string, p?: Record<string, unknown>, o?: Record<string, unknown>) => void } & Record<string, unknown>;
+  ttq?: Ttq;
   TiktokAnalyticsObject?: string;
   dataLayer?: unknown[];
   gtag?: (...args: unknown[]) => void;
@@ -45,16 +59,37 @@ export function initPixels(ids: TrackingIds | undefined, offerPixels: string[] =
   if (!ids) return;
 
   if (ids.tiktokPixelId && !w.ttq) {
-    const methods = ["page", "track", "identify", "instances", "debug", "on", "off", "once", "ready", "alias", "group", "enableCookie", "disableCookie"];
-    const queue: unknown[] = [];
-    const ttq = { _q: queue } as unknown as NonNullable<W["ttq"]>;
-    for (const m of methods) (ttq as Record<string, unknown>)[m] = (...a: unknown[]) => queue.push([m, ...a]);
-    ttq.load = (id: string) => {
-      (ttq as Record<string, unknown>)._i = { [id]: [] };
-      addScript(`https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=${id}&lib=ttq`);
+    // snippet oficial do TikTok (fila "ttq" com _i/_u/_t/_o, que o events.js lê ao carregar)
+    const t = "ttq";
+    w.TiktokAnalyticsObject = t;
+    const ttq = (w.ttq = (w.ttq || []) as unknown as Ttq);
+    ttq.methods = ["page", "track", "identify", "instances", "debug", "on", "off", "once", "ready", "alias", "group", "enableCookie", "disableCookie", "holdConsent", "revokeConsent", "grantConsent"];
+    ttq.setAndDefer = (obj, m) => {
+      obj[m] = (...args: unknown[]) => obj.push([m, ...args]);
     };
-    w.TiktokAnalyticsObject = "ttq";
-    w.ttq = ttq;
+    for (const m of ttq.methods) ttq.setAndDefer(ttq, m);
+    ttq.instance = (id) => {
+      const e = ttq._i[id] || ([] as unknown as Ttq);
+      for (const m of ttq.methods) ttq.setAndDefer(e, m);
+      return e;
+    };
+    ttq.load = (id, opts) => {
+      const r = "https://analytics.tiktok.com/i18n/pixel/events.js";
+      ttq._i = ttq._i || {};
+      ttq._i[id] = [] as unknown as Ttq;
+      ttq._i[id]._u = r;
+      ttq._t = ttq._t || {};
+      ttq._t[id] = +new Date();
+      ttq._o = ttq._o || {};
+      ttq._o[id] = opts || {};
+      const sc = document.createElement("script");
+      sc.type = "text/javascript";
+      sc.async = true;
+      sc.src = `${r}?sdkid=${id}&lib=${t}`;
+      const first = document.getElementsByTagName("script")[0];
+      if (first?.parentNode) first.parentNode.insertBefore(sc, first);
+      else document.head.appendChild(sc);
+    };
     ttq.load(ids.tiktokPixelId);
     ttq.page();
   }
