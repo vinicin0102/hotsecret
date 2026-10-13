@@ -7,7 +7,7 @@ import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
 import { addConversationMessage } from "@/services/payments/service";
 import { trackEvent } from "@/services/tracking";
-import { brainOffers, brainVoiceCalls } from "@/services/ai/brain";
+import { afterCallAudio, brainAudios, brainOffers, brainVoiceCalls } from "@/services/ai/brain";
 import type { AiContent } from "@/types/flow";
 
 const schema = z.object({
@@ -36,7 +36,7 @@ export default apiHandler({
     const msgs = await prisma.message.findMany({ where: { conversationId: session.conversationId, type: "voice_call" }, select: { content: true } });
     const status = (m: { content: unknown }) => (m.content as { status?: string; callId?: string } | null) ?? {};
     if (!msgs.some((m) => status(m).status === "ringing" && status(m).callId === callId)) throw new HttpError(404, "Ligação não encontrada");
-    if (msgs.some((m) => status(m).status === "ended" && status(m).callId === callId)) return { endText: null, offer: null };
+    if (msgs.some((m) => status(m).status === "ended" && status(m).callId === callId)) return { endText: null, offer: null, audio: null };
 
     await addConversationMessage(session.conversationId, "user", "voice_call", { status: "ended", callId, seconds, text: `Atendeu a ligação de voz (${seconds}s)` }, node.id);
     await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "voice_call_ended", nodeId: node.id, data: { callId, seconds } });
@@ -44,12 +44,19 @@ export default apiHandler({
     const endText = call.endText?.trim() || null;
     if (endText) await addConversationMessage(session.conversationId, "bot", "text", { text: endText }, node.id);
 
+    // áudio marcado para "logo após a ligação" (uma vez por conversa)
+    const sentAudios = await prisma.message.findMany({ where: { conversationId: session.conversationId, type: "audio" }, select: { content: true } });
+    const past = sentAudios.map((m) => `audio_id "${String((m.content as { aiAudioId?: string } | null)?.aiAudioId ?? "")}"`).join("\n");
+    const after = afterCallAudio(brainAudios(brain), past);
+    if (after) await addConversationMessage(session.conversationId, "bot", "audio", { url: after.url, caption: "", aiAudioId: after.id }, node.id);
+    const audio = after ? { url: after.url } : null;
+
     // oferta do fim da ligação: card de compra do produto escolhido (ex.: chamada de vídeo)
     // oferta do cérebro ou produto escolhido direto na ligação
     const o = call.offerId ? brainOffers(brain).find((x) => x.id === call.offerId) : undefined;
     const productId = o?.productId ?? call.productId;
     const p = productId ? await prisma.product.findFirst({ where: { id: productId, active: true } }) : null;
-    if (!p) return { endText, offer: null };
+    if (!p) return { endText, offer: null, audio };
     const hasVideo = !!(call.videoId || (o && (o.style === "call" || o.style === "live") && o.videoId));
     const offer = { productId: p.id, headline: o?.headline || p.name, ctaLabel: o?.ctaLabel || undefined, style: "card" as const, hasVideo };
     await addConversationMessage(
@@ -60,6 +67,6 @@ export default apiHandler({
       node.id,
     );
     await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "offer_viewed", nodeId: node.id, data: { productId: p.id, ai: true, voiceCall: callId } });
-    return { endText, offer };
+    return { endText, offer, audio };
   },
 });

@@ -14,6 +14,8 @@ const money = (cents: number | null | undefined, currency?: string | null) =>
       : formatBRL(cents);
 import type { TarotCard, VipOfferTexts } from "@/types/flow";
 import { readStoredImage } from "@/services/storage";
+import { afterCallAudio } from "@/lib/audio-match";
+export { afterCallAudio };
 import {
   callDeepSeek,
   DEEPSEEK_MODELS,
@@ -362,6 +364,7 @@ ${brainVoiceCalls(brain)
   }# Áudios gravados
 ${audios || "(nenhum áudio cadastrado)"}
 Para enviar um áudio, coloque o audio_id em "audio_id" (no máximo um por resposta, e não repita um áudio já enviado). Use "" quando não enviar.
+ORDEM DO DONO: quando a situação descrita num áudio acontecer (ex.: o lead perguntar se é seguro ou se é golpe), ENVIE aquele áudio nessa mesma resposta — não troque o áudio por texto.
 
 # Prévias (fotos e vídeos)
 ${images || "(nenhuma imagem cadastrada)"}
@@ -771,7 +774,7 @@ ${flowOffersSection(input.flowOffers)}`;
 }
 
 const STOP = new Set(
-  "cuando quiere quieres pedir pidan ofrecer mandar enviar sobre para pero esta este eso como algo alguna mensaje mensajes quando quiser pedir pedirem oferecer ofertar lead leads mandar enviar sobre para pelo pela mais muito tambem depois antes ainda voce voces essa esse isso esta este quer querer gostar falar falou disser disse alguma algum coisa conversa mensagem mensagens".split(" "),
+  "cuando quiere quieres pedir pidan ofrecer mandar enviar sobre para pero esta este eso como algo alguna mensaje mensajes quando quiser pedir pedirem oferecer ofertar lead leads mandar enviar sobre para pelo pela mais muito tambem depois antes ainda voce voces essa esse isso esta este quer querer gostar falar falou disser disse alguma algum coisa conversa mensagem mensagens perguntar perguntarem pergunte perguntou pergunta perguntas perguntando preguntar pregunten pregunte pregunta preguntas preguntando falarem disserem escrever escreverem escrevam mandarem logo".split(" "),
 );
 const keyWords = (v: string) =>
   new Set(
@@ -813,6 +816,9 @@ export function assistReply(
   const past = history.map((t) => t.text).join("\n");
   const recentBot = history.slice(-6).filter((t) => t.role === "bot").map((t) => t.text).join("\n");
   const out = { ...reply };
+  // áudio já enviado não repete; o de "logo após a ligação" só sai quando a ligação de voz termina
+  const afterCall = (a: BrainAudio) => voiceCalls.length > 0 && !!afterCallAudio([a], "");
+  if (out.audio && (past.includes(`audio_id "${out.audio.id}"`) || afterCall(out.audio))) out.audio = null;
 
   // ligação de voz (uma por conversa): toca quando o lead aceita o convite, pede para ligar ou demonstra interesse
   // — a tela de ligação tem Atender/Recusar, então quem decide é ele
@@ -924,21 +930,48 @@ export function assistReply(
   }
 
   if (!out.audio && audios.length) {
-    let best: BrainAudio | null = null;
-    let score = 0;
-    for (const a of audios) {
-      if (past.includes(`audio_id "${a.id}"`)) continue;
-      const w = keyWords(a.when ?? "");
-      const hit = overlap(said, w);
-      // descrição curta (1–2 palavras-chave): basta 1 acerto; longa: precisa de 2
-      if (hit >= (w.size <= 2 ? 1 : 2) && hit > score) [best, score] = [a, hit];
-    }
+    const best = matchAudio(
+      audios.filter((a) => !afterCall(a)),
+      lastLead,
+      past,
+    );
     if (best) out.audio = best;
   }
   if (!out.messages.length && !out.offer && !out.image && !out.audio) return reply;
   return out;
 }
 
+/** frases entre aspas na descrição ("se é seguro", "se é golpe"): basta o lead falar uma delas */
+const quotedPhrases = (v: string) => [...v.matchAll(/["“”'‘’]([^"“”'‘’]{2,80})["“”'‘’]/g)].map((m) => m[1]);
+/** assuntos com sinônimos: "é golpe?", "é confiável?", "é fake?" valem para um áudio sobre segurança */
+const AUDIO_TOPICS: RegExp[] = [/\b(golpe|golpista|seguro|segura|seguranca|confiavel|confio|confiar|fake|falso|falsa|enganacao|estafa|fraude|confiable)\b/],
+  topicOf = (v: string) => AUDIO_TOPICS.filter((re) => re.test(plain(v)));
+/**
+ * áudio cuja descrição bate com a última mensagem do lead (não repete um já enviado):
+ * frase entre aspas que ele falou, mesmo assunto (sinônimos) ou palavras-chave da descrição.
+ */
+export function matchAudio(audios: BrainAudio[], lastLead: string, past: string): BrainAudio | null {
+  const said = keyWords(lastLead);
+  const lead = plain(lastLead);
+  let best: BrainAudio | null = null;
+  let score = 0;
+  for (const a of audios) {
+    if (past.includes(`audio_id "${a.id}"`)) continue;
+    const when = a.when ?? "";
+    // frase entre aspas: todas as palavras-chave dela aparecem na mensagem do lead
+    const quoted = quotedPhrases(when).some((q) => {
+      const k = keyWords(q);
+      return k.size ? overlap(said, k) === k.size : lead.includes(plain(q));
+    });
+    const sameTopic = topicOf(when).some((re) => re.test(lead));
+    const w = keyWords(when);
+    const hit = overlap(said, w);
+    // descrição curta (1–2 palavras-chave): basta 1 acerto; longa: precisa de 2
+    const s = quoted ? 10 : sameTopic ? 5 : hit >= (w.size <= 2 ? 1 : 2) ? hit : 0;
+    if (s > score) [best, score] = [a, s];
+  }
+  return best;
+}
 // as intenções são testadas no texto sem acentos (português e espanhol)
 const YES_INTENT =
   /\b(sim|s|ss|pode|podes|liga|ligar|me liga|bora|vamos|vamo|claro|quero|aceito|ok|okay|okey|beleza|blz|manda|ta|ta bom|uhum|aham|yes|com certeza|si+|sisi|sip|dale|va|vale|orale|andale|por supuesto|llamame|llama|marcame|quiero|acepto|bueno|sale|simon|obvio|de una|joya|metele|listo|porfa|por favor)\b/i;

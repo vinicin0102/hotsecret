@@ -915,6 +915,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         if (r?.offer?.hasVideo) callProducts.current.add(offer.productId);
         setVoice({ ...v, phase: "ended", seconds, offer: { ...offer, hasVideo: !!r?.offer?.hasVideo }, endText: r?.endText || undefined });
         if (r?.endText) push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.endText }, nodeId: v.nodeId, at: now() });
+        if (r?.audio) push({ kind: "message", id: lid(), sender: "bot", type: "audio", content: { url: r.audio.url }, nodeId: v.nodeId, at: now() });
         push({ kind: "offer", id: lid(), nodeId: v.nodeId, productId: offer.productId, offer, at: now() });
         setAwaiting({ kind: "ai", nodeId: v.nodeId, placeholder });
         return;
@@ -928,6 +929,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         if (runId.current !== token) return;
         setTyping(false);
         push({ kind: "message", id: lid(), sender: "bot", type: "text", content: { text: r.endText }, nodeId: v.nodeId, at: now() });
+      }
+      if (r?.audio) {
+        // áudio de "logo após a ligação"
+        await sleep(900);
+        if (runId.current !== token) return;
+        push({ kind: "message", id: lid(), sender: "bot", type: "audio", content: { url: r.audio.url }, nodeId: v.nodeId, at: now() });
       }
       setAwaiting({ kind: "ai", nodeId: v.nodeId, placeholder });
     },
