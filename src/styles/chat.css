@@ -2409,13 +2409,25 @@
 }
 .vip-preview-media {
   position: relative;
-  margin: 18px 0 14px;
+  margin: 16px 0 12px;
   border-radius: 16px;
   overflow: hidden;
   background: #000;
-  aspect-ratio: 9 / 13;
-  max-height: 52vh;
+  aspect-ratio: 4 / 3;
+  max-height: 30vh;
   width: 100%;
+}
+/* com benefícios: lista compacta para caber tudo sem rolar */
+.vip-preview-benefits {
+  margin: 10px 0 12px;
+  padding: 8px 12px;
+}
+.vip-preview-benefits .vip-benefit {
+  padding: 4px 0;
+  font-size: 12px;
+}
+.vip-preview .vip-price {
+  margin-bottom: 10px;
 }
 .vip-preview-media video,
 .vip-preview-media img {

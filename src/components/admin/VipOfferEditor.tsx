@@ -92,7 +92,7 @@ export function VipOfferEditor({
             <label>Prévia ao tocar no card (vídeo ou foto — opcional)</label>
             <UploadInput value={v.previewUrl ?? ""} onChange={(url) => set({ previewUrl: url })} accept="image/*,video/*" />
             <span className="hint">
-              Com prévia, ao tocar no card abre a prévia da live com o título e o botão que <b>já gera o PIX</b> (sem a tela de benefícios). Vídeo toca
+              Com prévia, ao tocar no card abre a prévia da live com o título, os <b>benefícios</b> (abaixo) e o botão que <b>já gera o PIX</b>. Vídeo toca
               sem som, em loop; tocar no vídeo liga o som. Vídeos curtos e leves.
             </span>
           </div>

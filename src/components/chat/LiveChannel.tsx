@@ -209,6 +209,15 @@ export function VipOfferModal({
             <span className="live-badge vip-preview-live">● {t.liveBadge}</span>
           </div>
           <h2 className="vip-preview-title">{v.previewTitle || t.vipPreviewTitle}</h2>
+          {benefits.length > 0 && (
+            <div className="vip-benefits vip-preview-benefits">
+              {benefits.map((b, i) => (
+                <div key={i} className="vip-benefit">
+                  <span>⭐</span> {b}
+                </div>
+              ))}
+            </div>
+          )}
           {product.originalPrice && product.originalPrice > product.price ? (
             <div className="vip-old">
               {t.vipFrom} {money(product.originalPrice, product.currency)}
