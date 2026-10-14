@@ -1265,3 +1265,48 @@ code.inline {
 .vf-slider input {
   flex: 1;
 }
+
+/* Armazenamento (Cloudflare R2) */
+.storage-checks {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  display: grid;
+  gap: 6px;
+}
+.storage-checks li {
+  font-size: 14px;
+}
+.storage-checks li.bad {
+  color: var(--danger, #ff6b6b);
+}
+.storage-cors pre {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+.storage-progress {
+  margin-top: 14px;
+}
+.storage-progress .bar {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.storage-progress .bar span {
+  display: block;
+  height: 100%;
+  background: var(--gold, #d4af37);
+  transition: width 0.3s;
+}
+.storage-failed ul {
+  font-size: 12px;
+  margin: 6px 0 10px;
+  word-break: break-all;
+}
+.storage-rewrite {
+  margin-top: 14px;
+}

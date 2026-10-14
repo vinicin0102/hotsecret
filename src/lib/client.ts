@@ -30,12 +30,16 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
 }
 
 /** PUT com progresso (fetch não informa o andamento do envio). */
-function putWithProgress(url: string, file: File, onProgress?: (pct: number) => void): Promise<{ ok: boolean; status: number; text: string }> {
+function putWithProgress(
+  url: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+  headers: Record<string, string> = { "Content-Type": file.type, "x-upsert": "false" },
+): Promise<{ ok: boolean; status: number; text: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", file.type);
-    xhr.setRequestHeader("x-upsert", "false");
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(Math.round((e.loaded / e.total) * 100));
     xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, text: xhr.responseText });
     xhr.onerror = () => reject(new Error("rede"));
@@ -57,15 +61,15 @@ export async function uploadFile(
     file = (await optimizeVideo(file, (p) => onProgress?.(p, "optimizing"))).file;
   }
   const up = onProgress ? (p: number) => onProgress(p, "uploading") : undefined;
-  const ticket = await api<{ mode: "direct" | "server"; uploadUrl?: string; publicUrl?: string; maxServerBytes: number }>(
+  const ticket = await api<{ mode: "direct" | "server"; uploadUrl?: string; publicUrl?: string; headers?: Record<string, string>; maxServerBytes: number }>(
     "/api/admin/upload-ticket",
     { body: { mime: file.type, size: file.size } },
   );
-  // 1) envio direto ao Supabase Storage (sem passar pelo limite de 4,5MB da Vercel)
+  // 1) envio direto ao armazenamento (Cloudflare R2 ou Supabase), sem passar pelo limite de 4,5MB da Vercel
   let directError = "";
   if (ticket.mode === "direct" && ticket.uploadUrl && ticket.publicUrl) {
     try {
-      const res = await putWithProgress(ticket.uploadUrl, file, up);
+      const res = await putWithProgress(ticket.uploadUrl, file, up, ticket.headers);
       if (res.ok) return ticket.publicUrl;
       const body = res.text.slice(0, 300);
       let detail = body;
@@ -73,12 +77,15 @@ export async function uploadFile(
         const j = JSON.parse(body) as { message?: string; error?: string };
         detail = j.message || j.error || body;
       } catch {
-        /* texto puro */
+        // R2 responde em XML: <Code>…</Code><Message>…</Message>
+        detail = /<Message>([^<]*)<\/Message>/.exec(body)?.[1] || /<Code>([^<]*)<\/Code>/.exec(body)?.[1] || body;
       }
-      directError = `O armazenamento (Supabase) recusou o arquivo (${res.status}${detail ? `: ${detail}` : ""}).`;
+      directError = `O armazenamento recusou o arquivo (${res.status}${detail ? `: ${detail}` : ""}).`;
       console.warn("[upload] envio direto falhou", res.status, body);
     } catch (e) {
-      directError = "A conexão caiu durante o envio para o armazenamento (Supabase). Tente de novo numa rede mais estável.";
+      directError = ticket.headers
+        ? "O envio para o Cloudflare R2 foi bloqueado ou a conexão caiu. Se for o primeiro envio, confira a CORS do bucket em Armazenamento → Testar conexão."
+        : "A conexão caiu durante o envio para o armazenamento (Supabase). Tente de novo numa rede mais estável.";
       console.warn("[upload] envio direto falhou", e);
     }
   }

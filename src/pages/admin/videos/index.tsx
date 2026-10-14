@@ -107,7 +107,7 @@ export default function VideosPage() {
         {error && <p className="error-text">{error}</p>}
         <p className="hint">
           Todo vídeo enviado é <b>otimizado no seu navegador</b> antes de subir (720p, leve, começa a tocar na hora) — pode mandar o arquivo do celular
-          (MP4 ou MOV). Vídeos já enviados: toque em <b>⚡ Otimizar</b>. Vídeos longos: no plano grátis do Supabase o limite é 50 MB por arquivo.
+          (MP4 ou MOV). Vídeos já enviados: toque em <b>⚡ Otimizar</b>. Vídeos de até 500 MB.
         </p>
       </div>
       <div className="entity-grid">

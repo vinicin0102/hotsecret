@@ -16,6 +16,7 @@ const NAV = [
   { href: "/admin/videos", label: "Vídeos", ico: "▶" },
   { href: "/admin/pagamentos", label: "Pagamentos", ico: "¤" },
   { href: "/admin/analytics", label: "Analytics", ico: "↗" },
+  { href: "/admin/armazenamento", label: "Armazenamento", ico: "☁" },
 ];
 
 export interface AdminUser {
