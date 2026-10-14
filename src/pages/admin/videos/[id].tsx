@@ -1,4 +1,5 @@
 // Editor do vídeo da chamada: trilhas FREE (loop antes de pagar), VIP (depois de pagar, com upsells) e CHAT (falas).
+import { VideoFrameEditor } from "@/components/admin/VideoFrameEditor";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -630,6 +631,17 @@ export default function VideoEditorPage() {
             {(selMarker.at < tl.vip.start || selMarker.at > tl.vip.end) && <p className="error-text">Este marcador está fora do trecho VIP e não vai aparecer.</p>}
           </>
         )}
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <h3>📱 Enquadramento no celular do lead</h3>
+        </div>
+        <p className="hint" style={{ marginTop: -6 }}>
+          Exatamente o que aparece na tela da chamada, nos dois formatos de celular mais comuns. Acompanha o vídeo de cima (dê play para ver em
+          movimento). Depois de ajustar, clique em <b>Salvar</b>.
+        </p>
+        <VideoFrameEditor url={video.url} posterUrl={video.posterUrl} now={now} playing={playing} frame={tl.frame} onChange={(frame) => setTl({ ...tl, frame })} />
       </div>
     </AdminLayout>
   );

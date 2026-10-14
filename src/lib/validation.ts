@@ -321,6 +321,7 @@ export const videoSchema = z.object({
           }),
         )
         .max(50),
+      frame: z.object({ fit: z.enum(["cover", "contain"]), x: z.number().min(0).max(100), y: z.number().min(0).max(100) }).optional(),
     })
     .optional(),
 });

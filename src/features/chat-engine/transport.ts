@@ -3,7 +3,7 @@ import { afterCallAudio } from "@/lib/audio-match";
 import { withBase } from "@/lib/paths";
 import type { FlowNode, LivePreview, TarotCard, VipOfferTexts } from "@/types/flow";
 import { metaCookies } from "./pixels";
-import type { ChatCue, TimeRange, UpsellMarker, VideoTimeline } from "@/types/video";
+import type { ChatCue, TimeRange, UpsellMarker, VideoFrame, VideoTimeline } from "@/types/video";
 import { normalizeTimeline } from "@/types/video";
 
 export interface ClientEvent {
@@ -96,6 +96,8 @@ export interface CallVideo {
   free: TimeRange;
   vip: TimeRange;
   chat: ChatCue[];
+  /** enquadramento na tela do celular (null/ausente = preenche a tela, centralizado) */
+  frame?: VideoFrame | null;
   markers: (UpsellMarker & {
     product: { id: string; name: string; price: number; originalPrice: number | null; currency?: string };
     /** oferta com 2 ingressos: o acesso básico */
@@ -441,6 +443,7 @@ export function createPreviewTransport(
         free: tl.free,
         vip: tl.vip,
         chat: tl.chat,
+        frame: tl.frame ?? null,
         markers: tl.markers
           .filter((m) => byId.has(m.productId))
           .map((m) => {

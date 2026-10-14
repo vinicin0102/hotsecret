@@ -485,6 +485,7 @@ export function CallScreen({
         <video
           ref={vRef}
           className="call-video"
+          style={video.frame ? { objectFit: video.frame.fit, objectPosition: `${video.frame.x}% ${video.frame.y}%` } : undefined}
           src={video.url}
           poster={video.posterUrl || undefined}
           playsInline

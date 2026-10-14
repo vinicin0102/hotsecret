@@ -57,6 +57,7 @@ export default apiHandler({
         free: timeline.free,
         vip: timeline.vip,
         chat: timeline.chat,
+        frame: timeline.frame ?? null,
         markers: timeline.markers
           .filter((m) => byId.has(m.productId))
           .map((m) => {

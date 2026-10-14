@@ -66,6 +66,21 @@ export interface VideoTimeline {
   vip: TimeRange;
   chat: ChatCue[];
   markers: UpsellMarker[];
+  /** enquadramento na tela do celular do lead (padrão: preenche a tela, centralizado) */
+  frame?: VideoFrame;
+}
+
+/** como o vídeo aparece na tela da chamada: "cover" preenche (corta bordas) ou "contain" mostra inteiro; x/y = ponto de foco (0–100%) */
+export interface VideoFrame {
+  fit: "cover" | "contain";
+  x: number;
+  y: number;
+}
+export const DEFAULT_FRAME: VideoFrame = { fit: "cover", x: 50, y: 50 };
+export function normalizeFrame(raw: unknown): VideoFrame {
+  const f = (raw ?? {}) as Partial<VideoFrame>;
+  const pct = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v * 10) / 10)) : 50);
+  return { fit: f.fit === "contain" ? "contain" : "cover", x: pct(f.x), y: pct(f.y) };
 }
 
 export function defaultTimeline(durationMs: number): VideoTimeline {
@@ -93,6 +108,7 @@ export function normalizeTimeline(raw: unknown, durationMs: number): VideoTimeli
       .filter((c) => c.end > c.start)
       .sort((a, b) => a.start - b.start),
     markers: (Array.isArray(t.markers) ? t.markers : []).map((m) => ({ ...m, at: clamp(m.at, 0) })).sort((a, b) => a.at - b.at),
+    ...(t.frame ? { frame: normalizeFrame(t.frame) } : {}),
   };
 }
 
