@@ -43,7 +43,20 @@ function putWithProgress(url: string, file: File, onProgress?: (pct: number) => 
   });
 }
 
-export async function uploadFile(file: File, onProgress?: (pct: number) => void): Promise<string> {
+/**
+ * Envia um arquivo do painel. Vídeos são otimizados antes (720p H.264, começa a tocar na hora) —
+ * onProgress recebe a etapa: "optimizing" (otimizando no navegador) ou "uploading" (enviando).
+ */
+export async function uploadFile(
+  file: File,
+  onProgress?: (pct: number, stage?: "optimizing" | "uploading") => void,
+  opts: { optimize?: boolean } = {},
+): Promise<string> {
+  if (opts.optimize !== false && file.type.startsWith("video/")) {
+    const { optimizeVideo } = await import("./video-optimize");
+    file = (await optimizeVideo(file, (p) => onProgress?.(p, "optimizing"))).file;
+  }
+  const up = onProgress ? (p: number) => onProgress(p, "uploading") : undefined;
   const ticket = await api<{ mode: "direct" | "server"; uploadUrl?: string; publicUrl?: string; maxServerBytes: number }>(
     "/api/admin/upload-ticket",
     { body: { mime: file.type, size: file.size } },
@@ -52,7 +65,7 @@ export async function uploadFile(file: File, onProgress?: (pct: number) => void)
   let directError = "";
   if (ticket.mode === "direct" && ticket.uploadUrl && ticket.publicUrl) {
     try {
-      const res = await putWithProgress(ticket.uploadUrl, file, onProgress);
+      const res = await putWithProgress(ticket.uploadUrl, file, up);
       if (res.ok) return ticket.publicUrl;
       const body = res.text.slice(0, 300);
       let detail = body;

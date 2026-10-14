@@ -45,12 +45,33 @@ export default function VideosPage() {
     if (!f) return;
     setError(null);
     try {
-      const label = `Enviando ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`;
-      setBusy(`${label}...`);
-      const url = await uploadFile(f, (pct) => setBusy(`${label}... ${pct}%`));
+      const label = `Enviando ${f.name}`;
+      setBusy(`Preparando ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)...`);
+      const url = await uploadFile(f, (pct, stage) => setBusy(stage === "optimizing" ? `Otimizando ${f.name} para tocar sem travar... ${pct}%` : `${label}... ${pct}%`));
       await create(f.name, url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha no envio");
+      setBusy(null);
+    }
+  };
+  /** vídeo já enviado: baixa, deixa leve (720p) e troca o arquivo — trechos, falas e upsells continuam iguais */
+  const optimize = async (v: VideoRow) => {
+    setError(null);
+    try {
+      setBusy(`Otimizando ${v.name}... 0%`);
+      const { optimizeVideoUrl, notOptimizedMessage } = await import("@/lib/video-optimize");
+      const r = await optimizeVideoUrl(v.url, (p) => setBusy(`Otimizando ${v.name}... ${p}%`));
+      if (!r?.changed) {
+        setBusy(null);
+        setError(`${v.name}: ${notOptimizedMessage(r)}`);
+        return;
+      }
+      const url = await uploadFile(r.file, (p) => setBusy(`Enviando ${v.name} otimizado... ${p}%`), { optimize: false });
+      await api(`/api/admin/videos/${v.id}`, { method: "PUT", body: { name: v.name, url, posterUrl: v.posterUrl, durationMs: v.durationMs, timeline: v.timeline } });
+      setBusy(null);
+      void reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao otimizar");
       setBusy(null);
     }
   };
@@ -70,7 +91,7 @@ export default function VideosPage() {
         </button>
       }
     >
-      <input ref={fileRef} type="file" accept="video/mp4,video/webm" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      <input ref={fileRef} type="file" accept="video/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
           <input className="input" placeholder="Ou cole o link de um vídeo (MP4) hospedado em outro lugar" value={link} onChange={(e) => setLink(e.target.value)} />
@@ -84,7 +105,10 @@ export default function VideosPage() {
         </div>
         {busy && <p className="hint">{busy}</p>}
         {error && <p className="error-text">{error}</p>}
-        <p className="hint">MP4 (H.264) toca em qualquer celular. Vídeos longos: no plano grátis do Supabase o limite é 50 MB por arquivo; acima disso, cole um link.</p>
+        <p className="hint">
+          Todo vídeo enviado é <b>otimizado no seu navegador</b> antes de subir (720p, leve, começa a tocar na hora) — pode mandar o arquivo do celular
+          (MP4 ou MOV). Vídeos já enviados: toque em <b>⚡ Otimizar</b>. Vídeos longos: no plano grátis do Supabase o limite é 50 MB por arquivo.
+        </p>
       </div>
       <div className="entity-grid">
         {data?.videos.map((v) => (
@@ -100,6 +124,9 @@ export default function VideosPage() {
               <Link className="btn btn-sm btn-primary" href={`/admin/videos/${v.id}`}>
                 Editar
               </Link>
+              <button className="btn btn-sm" disabled={!!busy} title="Deixa o vídeo leve (720p) para tocar sem travar" onClick={() => void optimize(v)}>
+                ⚡ Otimizar
+              </button>
               <button className="btn btn-sm btn-ghost" onClick={() => remove(v)}>
                 Excluir
               </button>
