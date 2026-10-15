@@ -39,6 +39,11 @@ export function resolveDatabaseUrl(): string | undefined {
 }
 
 /** Schema das tabelas — usado para qualificar o SQL escrito à mão (seguro com pooler de transações). */
+/** schema (área) das tabelas do sistema no banco — consultas diretas ($queryRaw) precisam dele explícito */
+export function dbSchema(): string {
+  return currentSchema();
+}
+
 function currentSchema(): string {
   const fromUrl = /[?&]schema=([^&]+)/.exec(resolveDatabaseUrl() ?? "")?.[1];
   return decodeURIComponent(process.env.DB_SCHEMA || fromUrl || "public").replace(/[^a-zA-Z0-9_]/g, "") || "public";

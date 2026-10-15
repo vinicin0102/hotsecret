@@ -1310,3 +1310,55 @@ code.inline {
 .storage-rewrite {
   margin-top: 14px;
 }
+
+/* Limpeza do banco */
+.db-tables {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 16px;
+}
+.db-table-row {
+  display: grid;
+  grid-template-columns: 1fr auto 80px;
+  gap: 12px;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.db-table-row b {
+  text-align: right;
+}
+.db-cleanups {
+  display: grid;
+  gap: 10px;
+}
+.db-cleanup {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.db-cleanup.danger {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.db-cleanup .hint {
+  margin: 4px 0 8px;
+}
+.db-cleanup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.db-days {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.db-days .input {
+  width: 74px;
+  padding: 4px 8px;
+}

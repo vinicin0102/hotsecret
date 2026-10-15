@@ -1,7 +1,7 @@
 // Cloudflare R2: teste de conexão (envio, link público, CORS) e migração dos arquivos do Supabase Storage
 // (copia cada arquivo com o mesmo caminho e depois troca os links salvos no banco).
 import { createHash } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { dbSchema, prisma } from "@/lib/prisma";
 import { presignUrl } from "@/lib/s3-sign";
 import { r2Config, r2Delete, r2Head, r2Put, r2PublicUrl, supabaseConfig, type R2Config } from "@/services/storage";
 
@@ -189,7 +189,7 @@ const SKIP_TABLES = new Set(["events", "webhook_logs", "media"]);
 async function textColumns(): Promise<Map<string, { column: string; type: string }[]>> {
   const rows = await prisma.$queryRaw<{ table_name: string; column_name: string; data_type: string }[]>`
     SELECT table_name, column_name, data_type FROM information_schema.columns
-    WHERE table_schema = current_schema()
+    WHERE table_schema = ${dbSchema()}
       AND data_type IN ('text', 'character varying', 'json', 'jsonb')
       AND table_name NOT LIKE '\\_prisma%'
     ORDER BY table_name, column_name`;
@@ -202,6 +202,8 @@ async function textColumns(): Promise<Map<string, { column: string; type: string
 }
 
 const q = (id: string) => `"${id.replace(/"/g, '""')}"`;
+/** tabela com o schema do sistema: "schema"."tabela" */
+const qt = (table: string) => `${q(dbSchema())}.${q(table)}`;
 
 function prefixes() {
   const sb = supabaseConfig();
@@ -223,14 +225,14 @@ export async function rewriteTable(table: string, dryRun: boolean): Promise<{ ta
   if (!cols) throw new Error("Tabela inválida");
   if (dryRun) {
     const where = cols.map((c) => `strpos(${q(c.column)}::text, $1) > 0`).join(" OR ");
-    const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM ${q(table)} WHERE ${where}`, from);
+    const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM ${qt(table)} WHERE ${where}`, from);
     return { table, n: Number(rows[0]?.n ?? 0) };
   }
   let n = 0;
   for (const c of cols) {
     const cast = c.type === "character varying" ? "text" : c.type;
     n += await prisma.$executeRawUnsafe(
-      `UPDATE ${q(table)} SET ${q(c.column)} = replace(${q(c.column)}::text, $1, $2)::${cast} WHERE strpos(${q(c.column)}::text, $1) > 0`,
+      `UPDATE ${qt(table)} SET ${q(c.column)} = replace(${q(c.column)}::text, $1, $2)::${cast} WHERE strpos(${q(c.column)}::text, $1) > 0`,
       from,
       to,
     );

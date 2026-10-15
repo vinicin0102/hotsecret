@@ -255,6 +255,170 @@ export default function Armazenamento() {
           )}
         </div>
       )}
+      <DbCleanupCard />
     </AdminLayout>
+  );
+}
+
+type CleanupId = "webhook_logs" | "webhook_events" | "events" | "media" | "leads";
+interface DbInfo {
+  tables: { table: string; bytes: number; rows: number }[];
+  appBytes: number;
+  databaseBytes: number;
+  defaults: Record<CleanupId, number>;
+}
+const TABLE_LABEL: Record<string, string> = {
+  events: "Eventos (analytics)",
+  messages: "Mensagens das conversas",
+  leads: "Leads",
+  conversations: "Conversas",
+  webhook_logs: "Registros de webhooks",
+  webhook_events: "Webhooks já processados",
+  media: "Arquivos guardados no banco",
+  payments: "Pagamentos",
+  funnel_nodes: "Blocos dos fluxos",
+  brains: "Cérebros",
+};
+const CLEANUP_INFO: { id: CleanupId; title: string; what: string; days: boolean; danger?: boolean }[] = [
+  { id: "webhook_logs", title: "Registros de webhooks antigos", what: "Histórico técnico dos avisos do gateway de pagamento. Os pagamentos continuam salvos.", days: true },
+  { id: "webhook_events", title: "Controle de webhooks antigos", what: "Lista usada para não processar o mesmo aviso duas vezes. O gateway não reenvia avisos tão antigos.", days: true },
+  {
+    id: "events",
+    title: "Eventos antigos do analytics",
+    what: "Visitas, cliques e respostas da IA. O Analytics deixa de mostrar o período apagado; leads, conversas e pagamentos continuam.",
+    days: true,
+  },
+  { id: "media", title: "Arquivos sem uso guardados no banco", what: "Fotos e áudios enviados que nenhum fluxo, produto, cérebro ou conversa usa mais.", days: false },
+  {
+    id: "leads",
+    title: "Leads abandonados",
+    what: "Leads que nunca pagaram nada e não conversam há muito tempo — some junto a conversa, as mensagens e as etiquetas deles. Não dá para desfazer.",
+    days: true,
+    danger: true,
+  },
+];
+const fmtNum = (n: number) => n.toLocaleString("pt-BR");
+
+function DbCleanupCard() {
+  const { data, reload } = useFetch<DbInfo>("/api/admin/db-cleanup");
+  const [days, setDays] = useState<Partial<Record<CleanupId, number>>>({});
+  const [preview, setPreview] = useState<Partial<Record<CleanupId, { count: number; bytes?: number }>>>({});
+  const [busy, setBusy] = useState<CleanupId | null>(null);
+  const [done, setDone] = useState<Partial<Record<CleanupId, number>>>({});
+  const [error, setError] = useState("");
+  if (!data) return null;
+  const daysOf = (id: CleanupId) => days[id] ?? data.defaults[id];
+
+  const check = async (id: CleanupId) => {
+    setBusy(id);
+    setError("");
+    try {
+      const r = await api<{ count: number; bytes?: number }>("/api/admin/db-cleanup", { body: { action: "preview", id, days: daysOf(id) } });
+      setPreview((p) => ({ ...p, [id]: r }));
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const run = async (id: CleanupId, title: string) => {
+    const n = preview[id]?.count ?? 0;
+    if (!confirm(`Apagar ${fmtNum(n)} item(ns) de "${title}"? Não dá para desfazer.`)) return;
+    setBusy(id);
+    setError("");
+    let total = 0;
+    try {
+      for (let i = 0; i < 200; i++) {
+        const r = await api<{ deleted: number; more: boolean }>("/api/admin/db-cleanup", { body: { action: "run", id, days: daysOf(id) } });
+        total += r.deleted;
+        setDone((d) => ({ ...d, [id]: total }));
+        if (!r.more) break;
+      }
+      await api("/api/admin/db-cleanup", { body: { action: "vacuum", id } }).catch(() => undefined);
+      setPreview((p) => ({ ...p, [id]: undefined }));
+      reload();
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="card-head">
+        <h3>🧹 Limpeza do banco de dados</h3>
+        <span className="pill">{gb(data.databaseBytes)}</span>
+      </div>
+      <p className="hint">
+        O banco inteiro tem <b>{gb(data.databaseBytes)}</b>, sendo <b>{gb(data.appBytes)}</b> das tabelas do sistema. Nada é apagado sem você tocar em{" "}
+        <b>Apagar</b> e confirmar.
+      </p>
+      <div className="db-tables">
+        {data.tables.slice(0, 8).map((t) => (
+          <div key={t.table} className="db-table-row">
+            <span>{TABLE_LABEL[t.table] ?? t.table}</span>
+            <span className="muted">{fmtNum(t.rows)} linhas</span>
+            <b>{gb(t.bytes)}</b>
+          </div>
+        ))}
+      </div>
+      {error && <p className="error-text">{error}</p>}
+      <div className="db-cleanups">
+        {CLEANUP_INFO.map((c) => {
+          const p = preview[c.id];
+          return (
+            <div key={c.id} className={`db-cleanup ${c.danger ? "danger" : ""}`} data-testid={`clean-${c.id}`}>
+              <div className="db-cleanup-head">
+                <b>{c.title}</b>
+                {c.days && (
+                  <label className="db-days">
+                    mais de
+                    <input
+                      type="number"
+                      className="input"
+                      min={1}
+                      value={daysOf(c.id)}
+                      onChange={(e) => {
+                        setDays((d) => ({ ...d, [c.id]: Number(e.target.value) || data.defaults[c.id] }));
+                        setPreview((pv) => ({ ...pv, [c.id]: undefined }));
+                      }}
+                    />
+                    dias
+                  </label>
+                )}
+              </div>
+              <p className="hint">{c.what}</p>
+              <div className="row">
+                <button className="btn btn-sm" disabled={busy !== null} onClick={() => check(c.id)}>
+                  {busy === c.id && !p ? "Contando…" : "Ver quanto sai"}
+                </button>
+                {p && (
+                  <>
+                    <span className="hint" data-testid={`count-${c.id}`}>
+                      {fmtNum(p.count)} item(ns){p.bytes ? ` · ${gb(p.bytes)}` : ""}
+                    </span>
+                    {p.count > 0 && (
+                      <button className={`btn btn-sm ${c.danger ? "btn-danger" : "btn-primary"}`} disabled={busy !== null} onClick={() => run(c.id, c.title)}>
+                        {busy === c.id ? "Apagando…" : "Apagar"}
+                      </button>
+                    )}
+                  </>
+                )}
+                {done[c.id] !== undefined && busy !== c.id && (
+                  <span className="hint" data-testid={`done-${c.id}`}>
+                    ✅ {fmtNum(done[c.id]!)} apagado(s)
+                  </span>
+                )}
+                {busy === c.id && done[c.id] !== undefined && <span className="hint">{fmtNum(done[c.id]!)} apagado(s)…</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="hint" style={{ marginTop: 12 }}>
+        Depois de apagar, o banco reaproveita o espaço para os dados novos. O número no Supabase (Database Size) pode demorar a cair.
+      </p>
+    </div>
   );
 }
