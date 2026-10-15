@@ -16,6 +16,7 @@ import { PaymentStatus } from "./PaymentStatus";
 import { DeliveryCard } from "./DeliveryCard";
 import { CallScreen, IncomingCall, PixPopup, VoiceCall } from "./VideoCall";
 import { Particles } from "./Particles";
+import { BgVideo } from "./BgVideo";
 import { LiveHeader, LiveIncomingCall, LivePreviewButton, LivePreviewCard, VipExitModal, VipOfferCard, VipOfferModal, VipPaySheet } from "./LiveChannel";
 
 /** o lead pediu prévia/provinha (pt + es): aparece o botão "Ver prévia" */
@@ -312,7 +313,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
       <div className="chat-window">
         {bgVideo && (
           <>
-            <video className="chat-bg-video" src={bgVideo} autoPlay muted loop playsInline preload="auto" disablePictureInPicture aria-hidden="true" />
+            <BgVideo src={bgVideo} />
             <div className="chat-bg-dim" style={{ background: `rgba(8, 4, 10, ${(funnel.appearance?.bgDim ?? 35) / 100})` }} />
           </>
         )}
