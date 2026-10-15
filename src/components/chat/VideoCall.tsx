@@ -71,6 +71,30 @@ const PhoneIcon = ({ down }: { down?: boolean }) => (
     />
   </svg>
 );
+const SpeakerIcon = ({ off }: { off?: boolean }) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+    <path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z" />
+    {off ? (
+      <path d="M16 9l5 6m0-6l-5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    ) : (
+      <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+    )}
+  </svg>
+);
+const CamOffIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path fill="currentColor" d="M17 10.5V7a1 1 0 0 0-1-1H8.8L17 14.2zM3.3 2.3 2 3.6 4.4 6H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12c.2 0 .4-.1.6-.2l3.8 3.8 1.3-1.3zM21 6.5l-4 4v.9l4 4z" />
+  </svg>
+);
+/** sinal de conexão da chamada (4 barras) */
+const SignalBars = () => (
+  <span className="call-signal" aria-hidden="true">
+    <i />
+    <i />
+    <i />
+    <i />
+  </span>
+);
 const CamIcon = () => (
   <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
     <path fill="currentColor" d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z" />
@@ -331,6 +355,9 @@ export function CallScreen({
   const [needsTap, setNeedsTap] = useState(false);
   const [upsell, setUpsell] = useState<CallVideo["markers"][number] | null>(null);
   const [upsellBuying, setUpsellBuying] = useState(false);
+  const [soundOff, setSoundOff] = useState(false);
+  /** corações que o lead manda tocando no ♥ (sobem pela tela) */
+  const [hearts, setHearts] = useState<{ id: number; x: number; d: number }[]>([]);
   const shown = useRef(new Set<string>());
 
   const forNode = Object.values(payments).filter((p) => p.offerNodeId === nodeId);
@@ -374,6 +401,7 @@ export function CallScreen({
     v.play().catch(() => {
       v.muted = true;
       setNeedsTap(true);
+      setSoundOff(true);
       void v.play().catch(() => undefined);
     });
   }, [video, paid, freePreview]);
@@ -400,6 +428,7 @@ export function CallScreen({
     v.play().catch(() => {
       v.muted = true;
       setNeedsTap(true);
+      setSoundOff(true);
       void v.play().catch(() => undefined);
     });
   }, [video, paid]);
@@ -476,6 +505,21 @@ export function CallScreen({
     setUpsell(null);
     void vRef.current?.play().catch(() => undefined);
   };
+  const toggleSound = () => {
+    const v = vRef.current;
+    const off = !soundOff;
+    if (v) {
+      v.muted = off;
+      if (!off) void v.play().catch(() => undefined);
+    }
+    setSoundOff(off);
+    setNeedsTap(false);
+  };
+  const sendHeart = () => {
+    const id = Date.now() + Math.random();
+    setHearts((h) => [...h.slice(-11), { id, x: Math.round(Math.random() * 40 - 20), d: 2 + Math.random() * 0.8 }]);
+    setTimeout(() => setHearts((h) => h.filter((x) => x.id !== id)), 3000);
+  };
   const cues = video ? video.chat.filter((c) => t >= c.start && t < c.end) : [];
   const mm = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
@@ -497,21 +541,40 @@ export function CallScreen({
       ) : (
         <div className="call-connecting">
           {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
-          <div className="call-status">{video === undefined ? tx.connecting : tx.cameraOff}</div>
+          <div className="call-connecting-inner">
+            {character.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="call-avatar" src={character.avatarUrl} alt="" />
+            ) : (
+              <div className="call-avatar">{character.name.slice(0, 1)}</div>
+            )}
+            <div className="call-status">{video === undefined ? tx.connecting : tx.cameraOff}</div>
+          </div>
         </div>
       )}
+      <div className="call-shade" aria-hidden="true" />
       <div className="call-hud">
         <div className="call-who">
           {character.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={character.avatarUrl} alt="" />
-          ) : null}
+          ) : (
+            <span className="call-who-initial">{character.name.slice(0, 1)}</span>
+          )}
           <div>
             <b>{character.name}</b>
             <small>
-              <span className="live-dot" /> {mm}
+              <span className="live-pill">
+                <span className="live-dot" /> {tx.liveBadge}
+              </span>
+              <span className="call-time">{mm}</span>
+              <SignalBars />
             </small>
           </div>
+        </div>
+        <div className="call-self" title={`${tx.you} · ${tx.yourCamOff}`}>
+          <CamOffIcon />
+          <span>{tx.you}</span>
         </div>
       </div>
       {needsTap && (
@@ -622,9 +685,24 @@ export function CallScreen({
         </div>
       )}
 
-      <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label={tx.hangUp}>
-        <PhoneIcon down />
-      </button>
+      <div className="call-hearts" aria-hidden="true">
+        {hearts.map((h) => (
+          <span key={h.id} style={{ "--x": `${h.x}px`, "--d": `${h.d}s` } as React.CSSProperties}>
+            ♥
+          </span>
+        ))}
+      </div>
+      <div className="call-controls">
+        <button className={`call-ctl ${soundOff ? "off" : ""}`} onClick={toggleSound} aria-label={soundOff ? tx.soundOff : tx.soundOn} aria-pressed={!soundOff}>
+          <SpeakerIcon off={soundOff} />
+        </button>
+        <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label={tx.hangUp}>
+          <PhoneIcon down />
+        </button>
+        <button className="call-ctl heart" onClick={sendHeart} aria-label={tx.sendHeart}>
+          ♥
+        </button>
+      </div>
     </div>
   );
 }
