@@ -182,40 +182,58 @@ export async function copyToR2(keys: string[]): Promise<CopyResult[]> {
   return results;
 }
 
-/** colunas de texto/JSON do banco (onde ficam os links das mídias) */
-async function textColumns(): Promise<{ table: string; column: string; type: string }[]> {
+/** tabelas de registro (eventos, webhooks, arquivos binários) não guardam links de mídia: ficam de fora */
+const SKIP_TABLES = new Set(["events", "webhook_logs", "media"]);
+
+/** colunas de texto/JSON do banco (onde ficam os links das mídias), por tabela */
+async function textColumns(): Promise<Map<string, { column: string; type: string }[]>> {
   const rows = await prisma.$queryRaw<{ table_name: string; column_name: string; data_type: string }[]>`
     SELECT table_name, column_name, data_type FROM information_schema.columns
     WHERE table_schema = current_schema()
       AND data_type IN ('text', 'character varying', 'json', 'jsonb')
-      AND table_name NOT LIKE '\\_prisma%'`;
-  return rows.map((r) => ({ table: r.table_name, column: r.column_name, type: r.data_type }));
+      AND table_name NOT LIKE '\\_prisma%'
+    ORDER BY table_name, column_name`;
+  const out = new Map<string, { column: string; type: string }[]>();
+  for (const r of rows) {
+    if (SKIP_TABLES.has(r.table_name)) continue;
+    out.set(r.table_name, [...(out.get(r.table_name) ?? []), { column: r.column_name, type: r.data_type }]);
+  }
+  return out;
 }
 
 const q = (id: string) => `"${id.replace(/"/g, '""')}"`;
 
-/**
- * Troca os links do Supabase pelos do R2 em todo o banco. dryRun = só conta.
- * Devolve quantos registros têm (ou tinham) links em cada tabela.
- */
-export async function rewriteUrls(dryRun: boolean): Promise<{ from: string; to: string; total: number; tables: Record<string, number> }> {
+function prefixes() {
   const sb = supabaseConfig();
   const r2 = r2Config();
   if (!sb || !r2) throw new Error("Configure o Supabase e o R2");
-  const from = sb.publicPrefix;
-  const to = `${r2.publicUrl}/`;
-  const tables: Record<string, number> = {};
-  let total = 0;
-  for (const c of await textColumns()) {
-    const cast = c.type === "character varying" ? "text" : c.type;
-    const where = `strpos(${q(c.column)}::text, $1) > 0`;
-    const n = dryRun
-      ? Number((await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM ${q(c.table)} WHERE ${where}`, from))[0]?.n ?? 0)
-      : await prisma.$executeRawUnsafe(`UPDATE ${q(c.table)} SET ${q(c.column)} = replace(${q(c.column)}::text, $1, $2)::${cast} WHERE ${where}`, from, to);
-    if (n > 0) {
-      tables[c.table] = (tables[c.table] ?? 0) + n;
-      total += n;
-    }
+  return { from: sb.publicPrefix, to: `${r2.publicUrl}/` };
+}
+
+/** tabelas que podem ter links do Supabase (o painel troca uma por vez, para não pesar no banco) */
+export async function rewriteTables(): Promise<{ from: string; to: string; tables: string[] }> {
+  const { from, to } = prefixes();
+  return { from: new URL(from).host, to: new URL(to).host, tables: [...(await textColumns()).keys()] };
+}
+
+/** Troca os links do Supabase pelos do R2 numa tabela. dryRun = só conta os registros com links. */
+export async function rewriteTable(table: string, dryRun: boolean): Promise<{ table: string; n: number }> {
+  const { from, to } = prefixes();
+  const cols = (await textColumns()).get(table);
+  if (!cols) throw new Error("Tabela inválida");
+  if (dryRun) {
+    const where = cols.map((c) => `strpos(${q(c.column)}::text, $1) > 0`).join(" OR ");
+    const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM ${q(table)} WHERE ${where}`, from);
+    return { table, n: Number(rows[0]?.n ?? 0) };
   }
-  return { from: new URL(from).host, to: new URL(to).host, total, tables };
+  let n = 0;
+  for (const c of cols) {
+    const cast = c.type === "character varying" ? "text" : c.type;
+    n += await prisma.$executeRawUnsafe(
+      `UPDATE ${q(table)} SET ${q(c.column)} = replace(${q(c.column)}::text, $1, $2)::${cast} WHERE strpos(${q(c.column)}::text, $1) > 0`,
+      from,
+      to,
+    );
+  }
+  return { table, n };
 }

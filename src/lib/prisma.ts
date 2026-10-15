@@ -7,10 +7,16 @@ function addParam(url: string, key: string, value: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
 }
 
+/** como addParam, mas troca o valor se já existir (a URL da integração pode vir com connection_limit=1) */
+function setParam(url: string, key: string, value: string): string {
+  const re = new RegExp(`([?&]${key}=)[^&]*`);
+  return re.test(url) ? url.replace(re, `$1${encodeURIComponent(value)}`) : addParam(url, key, value);
+}
+
 /**
  * URL do banco em tempo de execução. Integrações da Vercel expõem nomes diferentes
  * (Neon: DATABASE_URL; Supabase: POSTGRES_PRISMA_URL = pooler de transações).
- * Em serverless usamos o pooler de transações com 1 conexão por instância — a conexão
+ * Em serverless usamos o pooler de transações (até 5 conexões por instância) — a conexão
  * "direta"/de sessão do Supabase aceita poucos clientes e esgota com tráfego.
  * Com DB_SCHEMA, as tabelas ficam em um schema próprio (bancos compartilhados).
  */
@@ -21,8 +27,11 @@ export function resolveDatabaseUrl(): string | undefined {
   if (process.env.DB_SCHEMA) url = addParam(url, "schema", process.env.DB_SCHEMA);
   const pooled = /pgbouncer=true|:6543\b|pooler\./.test(url) && !/:5432\b/.test(url.replace(/\?.*$/, "").split("@").pop() ?? "");
   if (pooled) {
+    // a Vercel atende vários pedidos ao mesmo tempo na mesma instância: com 1 conexão, um pedido lento
+    // (ex.: dashboard) travava os outros (chat do lead) até estourar o tempo. O pooler aguenta várias.
     url = addParam(url, "pgbouncer", "true");
-    url = addParam(url, "connection_limit", "1");
+    url = setParam(url, "connection_limit", "5");
+    url = setParam(url, "pool_timeout", "20");
   } else if (process.env.VERCEL) {
     url = addParam(url, "connection_limit", "1");
   }

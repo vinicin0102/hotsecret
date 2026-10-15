@@ -16,7 +16,7 @@ async function resolve(env: Record<string, string | undefined>) {
   return out;
 }
 
-test("Supabase na Vercel: usa o pooler de transações com 1 conexão e schema próprio", async () => {
+test("Supabase na Vercel: usa o pooler de transações com 5 conexões e schema próprio", async () => {
   const url = await resolve({
     POSTGRES_PRISMA_URL: "postgres://u:p@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true",
     POSTGRES_URL_NON_POOLING: "postgres://u:p@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require",
@@ -26,7 +26,14 @@ test("Supabase na Vercel: usa o pooler de transações com 1 conexão e schema p
   assert.match(url!, /:6543\//);
   assert.match(url!, /schema=hotsecret/);
   assert.match(url!, /pgbouncer=true/);
-  assert.match(url!, /connection_limit=1/);
+  assert.match(url!, /connection_limit=5/);
+  assert.match(url!, /pool_timeout=20/);
+});
+
+test("pooler com connection_limit=1 na URL sobe para 5", async () => {
+  const url = await resolve({ POSTGRES_PRISMA_URL: "postgres://u:p@x.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1&sslmode=require", VERCEL: "1" });
+  assert.match(url!, /connection_limit=5&sslmode=require/);
+  assert.doesNotMatch(url!, /connection_limit=1/);
 });
 
 test("pooler sem pgbouncer=true recebe o parâmetro", async () => {

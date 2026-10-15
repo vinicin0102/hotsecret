@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { apiHandler, rateLimit, requireAdmin } from "@/lib/api";
-import { checkR2, copyToR2, listSupabaseObjects, rewriteUrls, storageStatus } from "@/services/storage-migrate";
+import { checkR2, copyToR2, listSupabaseObjects, rewriteTable, rewriteTables, storageStatus } from "@/services/storage-migrate";
 
 // Armazenamento: status e teste do Cloudflare R2 e migração dos arquivos do Supabase.
 // O painel copia em lotes pequenos (vídeos grandes vão um por vez) para caber no tempo da função.
@@ -10,7 +10,8 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("check") }),
   z.object({ action: z.literal("list") }),
   z.object({ action: z.literal("copy"), keys: z.array(z.string().min(1).max(300)).min(1).max(50) }),
-  z.object({ action: z.literal("rewrite"), dryRun: z.boolean() }),
+  z.object({ action: z.literal("tables") }),
+  z.object({ action: z.literal("rewrite"), table: z.string().min(1).max(100), dryRun: z.boolean() }),
 ]);
 
 export default apiHandler({
@@ -30,6 +31,7 @@ export default apiHandler({
     }
     if (body.action === "list") return { objects: await listSupabaseObjects() };
     if (body.action === "copy") return { results: await copyToR2(body.keys) };
-    return rewriteUrls(body.dryRun);
+    if (body.action === "tables") return rewriteTables();
+    return rewriteTable(body.table, body.dryRun);
   },
 });

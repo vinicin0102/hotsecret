@@ -109,12 +109,27 @@ export default function Armazenamento() {
       }
       setFailed(fails);
       setCopyFinished(true);
-      if (!fails.length) setPreview(await api("/api/admin/storage", { body: { action: "rewrite", dryRun: true } }));
+      if (!fails.length) setPreview(await scanTables(true));
     } catch (e) {
       setError(errMsg(e));
     } finally {
       setCopying(false);
     }
+  };
+
+  /** passa pelas tabelas uma por vez (cada pedido é curto e não trava o banco) */
+  const scanTables = async (dryRun: boolean) => {
+    const info = await api<{ from: string; to: string; tables: string[] }>("/api/admin/storage", { body: { action: "tables" } });
+    const tables: Record<string, number> = {};
+    let total = 0;
+    for (const table of info.tables) {
+      const { n } = await api<{ n: number }>("/api/admin/storage", { body: { action: "rewrite", table, dryRun } });
+      if (n > 0) {
+        tables[table] = n;
+        total += n;
+      }
+    }
+    return { from: info.from, to: info.to, total, tables };
   };
 
   const retryFailed = () => objs && copy(objs.filter((o) => failed.some((f) => f.key === o.key)));
@@ -124,7 +139,7 @@ export default function Armazenamento() {
     setBusy(true);
     setError("");
     try {
-      setRewritten(await api("/api/admin/storage", { body: { action: "rewrite", dryRun: false } }));
+      setRewritten(await scanTables(false));
       setPreview(null);
     } catch (e) {
       setError(errMsg(e));
@@ -235,7 +250,7 @@ export default function Armazenamento() {
           )}
           {rewritten && (
             <p className="hint" data-testid="r2-rewritten">
-              ✅ Pronto: {rewritten.total} registro(s) agora usam o R2. As mídias do funil já carregam do Cloudflare.
+              ✅ Pronto: {rewritten.total} link(s) trocados para o R2. As mídias do funil já carregam do Cloudflare.
             </p>
           )}
         </div>
