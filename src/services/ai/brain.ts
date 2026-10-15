@@ -585,7 +585,7 @@ ${voiceCalls.length ? `\n# Ligação de voz (uma por conversa: ligue com voice_c
 ${flowOffersSection(input.flowOffers)}`;
   const safeHistory = (): ChatTurn[] => input.history.slice(-6).map((t) => ({ role: t.role, text: t.imageUrl ? "[enviou uma foto]" : t.text.slice(0, 300) }));
 
-  const callOnce = async (safe = false): Promise<{ text: string; usage: BrainReply["usage"] & object; cut?: string }> => {
+  const callOnce = async (safe = false, plain = false): Promise<{ text: string; usage: BrainReply["usage"] & object; cut?: string }> => {
     if (target.provider === "deepseek") {
       // DeepSeek: sem visão e sem formato com schema → o formato vai nas instruções e o JSON é conferido aqui
       const system = safe
@@ -594,7 +594,8 @@ ${flowOffersSection(input.flowOffers)}`;
       const r = await callDeepSeek({
         apiKey: target.apiKey,
         model: target.model,
-        json: true,
+        // modo JSON da DeepSeek às vezes devolve conteúdo vazio: depois disso tenta sem ele (o formato vai nas instruções)
+        json: !plain,
         messages: mergeRoles([{ role: "system", content: system }, ...toPlainMessages(safe ? safeHistory() : input.history, true)]),
       });
       const cut =
@@ -717,17 +718,22 @@ ${flowOffersSection(input.flowOffers)}`;
   const started = Date.now();
   let problem = "";
   let safe = false;
+  let plain = false;
   for (let attempt = 0; attempt < 3 && Date.now() - started < 30_000; attempt++) {
     let r: Awaited<ReturnType<typeof callOnce>>;
     try {
-      r = await callOnce(safe);
+      r = await callOnce(safe, plain);
     } catch (e) {
       problem = describeAiError(e);
       if (isContentBlock(e) && !safe) {
         safe = true;
         continue;
       }
-      if (isRetryableAiError(e) && attempt < 2) continue;
+      if (isRetryableAiError(e) && attempt < 2) {
+        // servidor sobrecarregado (503/429): respira um pouco antes de tentar de novo
+        await new Promise((ok) => setTimeout(ok, 800));
+        continue;
+      }
       break;
     }
     usage.input += r.usage.input;
@@ -741,6 +747,7 @@ ${flowOffersSection(input.flowOffers)}`;
     const reply = interpret(r.text);
     if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images, voiceCalls, input.flowOffers), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
     problem = r.text.trim() ? "resposta fora do formato" : "resposta vazia";
+    if (!r.text.trim()) plain = true;
   }
   // sem resposta da IA (o motivo vai em "failure" → painel, Saúde da IA)
 
