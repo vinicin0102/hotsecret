@@ -10,7 +10,7 @@ import { withBase } from "@/lib/paths";
 import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
 import type { VipOfferTexts } from "@/types/flow";
 
-type Provider = "anthropic" | "deepseek";
+type Provider = "anthropic" | "deepseek" | "qwen";
 interface ProviderSettings {
   configured: boolean;
   fromEnv: boolean;
@@ -22,7 +22,7 @@ interface AiSettings extends ProviderSettings {
   provider: Provider;
   providers: Record<Provider, ProviderSettings>;
 }
-const PROVIDER_LABEL: Record<Provider, string> = { anthropic: "Claude (Anthropic)", deepseek: "DeepSeek" };
+const PROVIDER_LABEL: Record<Provider, string> = { anthropic: "Claude (Anthropic)", deepseek: "DeepSeek", qwen: "Qwen" };
 interface TarotCard {
   id: string;
   label?: string;
@@ -157,7 +157,7 @@ function ConnectionCard() {
       <div className="field">
         <label>Qual IA responde os leads</label>
         <div className="segmented">
-          {(["anthropic", "deepseek"] as const).map((p) => (
+          {(["anthropic", "deepseek", "qwen"] as const).map((p) => (
             <button
               key={p}
               type="button"
@@ -183,6 +183,16 @@ function ConnectionCard() {
           </a>{" "}
           (começa com <code className="inline">sk-ant-</code>). O Claude vê as fotos que o lead manda. O uso é cobrado pela Anthropic na sua conta.
         </p>
+      ) : provider === "qwen" ? (
+        <p className="hint" style={{ marginTop: -6 }}>
+          Crie a chave em{" "}
+          <a href="https://modelstudio.console.alibabacloud.com/" target="_blank" rel="noreferrer">
+            modelstudio.console.alibabacloud.com → API Key
+          </a>{" "}
+          (região <b>Singapura/internacional</b>; começa com <code className="inline">sk-</code>) e coloque saldo na conta do Alibaba Cloud. O Qwen
+          Flash é bem barato, mas não vê as fotos que o lead manda (ele só sabe que chegou uma foto). O uso é cobrado pelo Alibaba Cloud na sua
+          conta.
+        </p>
       ) : (
         <p className="hint" style={{ marginTop: -6 }}>
           Crie a chave em{" "}
@@ -202,7 +212,7 @@ function ConnectionCard() {
             className="input"
             type="password"
             autoComplete="off"
-            placeholder={s.configured ? `Deixe vazio para manter a atual (${s.keyHint})` : provider === "deepseek" ? "sk-..." : "sk-ant-..."}
+            placeholder={s.configured ? `Deixe vazio para manter a atual (${s.keyHint})` : provider === "anthropic" ? "sk-ant-..." : "sk-..."}
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />

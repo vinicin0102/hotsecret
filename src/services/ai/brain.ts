@@ -20,10 +20,13 @@ import {
   callDeepSeek,
   DEEPSEEK_MODELS,
   DEFAULT_DEEPSEEK_MODEL,
+  DEFAULT_QWEN_MODEL,
   DeepSeekError,
   describeDeepSeekError,
   extractJson,
   mergeRoles,
+  QWEN_MODELS,
+  VENDOR_LABEL,
   type DeepSeekMessage,
 } from "@/services/ai/deepseek";
 
@@ -76,7 +79,7 @@ export interface BrainAudio {
 
 // ---------- Configuração (chave criptografada no banco; nunca vai ao navegador) ----------
 const SETTING_KEY = "ai";
-export type AiProvider = "anthropic" | "deepseek";
+export type AiProvider = "anthropic" | "deepseek" | "qwen";
 interface StoredAiSettings {
   /** IA usada nas conversas (padrão: anthropic) */
   provider?: AiProvider;
@@ -86,6 +89,9 @@ interface StoredAiSettings {
   /** DeepSeek */
   deepseekKeySealed?: string;
   deepseekModel?: string;
+  /** Qwen (Alibaba Cloud Model Studio) */
+  qwenKeySealed?: string;
+  qwenModel?: string;
 }
 
 async function readSettings(): Promise<StoredAiSettings> {
@@ -100,10 +106,14 @@ function resolveModel(model?: string): AiModelId {
 function resolveDeepSeekModel(model?: string): string {
   return DEEPSEEK_MODELS.find((m) => m.id === model)?.id ?? DEFAULT_DEEPSEEK_MODEL;
 }
+function resolveQwenModel(model?: string): string {
+  return QWEN_MODELS.find((m) => m.id === model)?.id ?? DEFAULT_QWEN_MODEL;
+}
 const hint = (key: string | null) => (key ? `${key.slice(0, 7)}…${key.slice(-4)}` : null);
 
 function providerKey(s: StoredAiSettings, provider: AiProvider): string | null {
   if (provider === "deepseek") return (s.deepseekKeySealed && openSecret(s.deepseekKeySealed)) || process.env.DEEPSEEK_API_KEY || null;
+  if (provider === "qwen") return (s.qwenKeySealed && openSecret(s.qwenKeySealed)) || process.env.QWEN_API_KEY || null;
   return (s.apiKeySealed && openSecret(s.apiKeySealed)) || process.env.ANTHROPIC_API_KEY || null;
 }
 
@@ -113,6 +123,7 @@ export async function getAiSettingsPublic() {
   const provider: AiProvider = s.provider ?? "anthropic";
   const anthropicKey = providerKey(s, "anthropic");
   const deepseekKey = providerKey(s, "deepseek");
+  const qwenKey = providerKey(s, "qwen");
   const providers = {
     anthropic: {
       configured: !!anthropicKey,
@@ -127,6 +138,13 @@ export async function getAiSettingsPublic() {
       keyHint: hint(deepseekKey),
       model: resolveDeepSeekModel(s.deepseekModel),
       models: DEEPSEEK_MODELS as readonly { id: string; label: string }[],
+    },
+    qwen: {
+      configured: !!qwenKey,
+      fromEnv: !s.qwenKeySealed && !!process.env.QWEN_API_KEY,
+      keyHint: hint(qwenKey),
+      model: resolveQwenModel(s.qwenModel),
+      models: QWEN_MODELS as readonly { id: string; label: string }[],
     },
   };
   // campos de topo = IA ativa (compatível com a tela antiga)
@@ -143,6 +161,10 @@ export async function saveAiSettings(input: { provider?: AiProvider; apiKey?: st
     if (input.apiKey === null) delete next.deepseekKeySealed;
     else if (typeof input.apiKey === "string" && input.apiKey.trim()) next.deepseekKeySealed = sealSecret(input.apiKey.trim());
     if (input.model) next.deepseekModel = resolveDeepSeekModel(input.model);
+  } else if (provider === "qwen") {
+    if (input.apiKey === null) delete next.qwenKeySealed;
+    else if (typeof input.apiKey === "string" && input.apiKey.trim()) next.qwenKeySealed = sealSecret(input.apiKey.trim());
+    if (input.model) next.qwenModel = resolveQwenModel(input.model);
   } else {
     if (input.apiKey === null) delete next.apiKeySealed;
     else if (typeof input.apiKey === "string" && input.apiKey.trim()) next.apiKeySealed = sealSecret(input.apiKey.trim());
@@ -163,7 +185,7 @@ export class AiNotConfiguredError extends Error {
 
 type AiTarget =
   | { provider: "anthropic"; client: Anthropic; model: AiModelId }
-  | { provider: "deepseek"; apiKey: string; model: string };
+  | { provider: "deepseek" | "qwen"; apiKey: string; model: string };
 
 async function aiClient(timeoutMs = 25_000): Promise<AiTarget> {
   const s = await readSettings();
@@ -171,6 +193,7 @@ async function aiClient(timeoutMs = 25_000): Promise<AiTarget> {
   const apiKey = providerKey(s, provider);
   if (!apiKey) throw new AiNotConfiguredError();
   if (provider === "deepseek") return { provider, apiKey, model: resolveDeepSeekModel(s.deepseekModel) };
+  if (provider === "qwen") return { provider, apiKey, model: resolveQwenModel(s.qwenModel) };
   return { provider, client: new Anthropic({ apiKey, timeout: timeoutMs, maxRetries: 0 }), model: resolveModel(s.model) };
 }
 
@@ -586,12 +609,13 @@ ${flowOffersSection(input.flowOffers)}`;
   const safeHistory = (): ChatTurn[] => input.history.slice(-6).map((t) => ({ role: t.role, text: t.imageUrl ? "[enviou uma foto]" : t.text.slice(0, 300) }));
 
   const callOnce = async (safe = false, plain = false): Promise<{ text: string; usage: BrainReply["usage"] & object; cut?: string }> => {
-    if (target.provider === "deepseek") {
-      // DeepSeek: sem visão e sem formato com schema → o formato vai nas instruções e o JSON é conferido aqui
+    if (target.provider !== "anthropic") {
+      // DeepSeek/Qwen: sem visão e sem formato com schema → o formato vai nas instruções e o JSON é conferido aqui
       const system = safe
         ? [safeSystem(), jsonInstructions(schema, offerLabels)].join("\n\n")
         : [stableSystem(input.brain, products, !!input.flowOffers, false), volatile, jsonInstructions(schema, offerLabels)].filter(Boolean).join("\n\n");
       const r = await callDeepSeek({
+        vendor: target.provider,
         apiKey: target.apiKey,
         model: target.model,
         // modo JSON da DeepSeek às vezes devolve conteúdo vazio: depois disso tenta sem ele (o formato vai nas instruções)
@@ -602,7 +626,7 @@ ${flowOffersSection(input.flowOffers)}`;
         r.finish === "length"
           ? "resposta cortada (longa demais)"
           : r.finish === "content_filter"
-            ? "a DeepSeek bloqueou a resposta pelo filtro de conteúdo sensível (deixe o cérebro sugestivo, sem nada explícito)"
+            ? `${target.provider === "qwen" ? "o Qwen" : "a DeepSeek"} bloqueou a resposta pelo filtro de conteúdo sensível (deixe o cérebro sugestivo, sem nada explícito)`
             : undefined;
       return { text: r.text, usage: r.usage, cut };
     }
@@ -727,6 +751,11 @@ ${flowOffersSection(input.flowOffers)}`;
       problem = describeAiError(e);
       if (isContentBlock(e) && !safe) {
         safe = true;
+        continue;
+      }
+      // modelo sem suporte ao modo JSON: tenta sem ele (o formato vai nas instruções)
+      if (e instanceof DeepSeekError && e.status === 400 && /response_format|json/i.test(e.message) && !plain) {
+        plain = true;
         continue;
       }
       if (isRetryableAiError(e) && attempt < 2) {
@@ -1027,7 +1056,7 @@ function salesFallback(history: ChatTurn[], offers: BrainOffer[]): BrainOffer | 
 
 /** Bloqueio por conteúdo (filtro da DeepSeek ou recusa do Claude). */
 function isContentBlock(e: unknown): boolean {
-  if (e instanceof DeepSeekError) return /content|risk|sensitive/i.test(e.message) && e.status === 400;
+  if (e instanceof DeepSeekError) return /content|risk|sensitive|inappropriate|data_inspection/i.test(e.message) && e.status === 400;
   return false;
 }
 
@@ -1130,8 +1159,9 @@ ${about?.trim() ? `\n## O que o dono contou sobre o negócio\n${about.trim().sli
 ${IMPROVE_TASK[field]}`;
 
   const generate = async (timeoutMs: number): Promise<string> => {
-    if (target.provider === "deepseek") {
+    if (target.provider !== "anthropic") {
       const r = await callDeepSeek({
+        vendor: target.provider,
         apiKey: target.apiKey,
         model: target.model,
         maxTokens: 2500,
@@ -1169,8 +1199,8 @@ ${IMPROVE_TASK[field]}`;
 export async function testAiConnection(): Promise<{ ok: true; model: string } | { ok: false; error: string }> {
   try {
     const target = await aiClient();
-    if (target.provider === "deepseek") {
-      await callDeepSeek({ apiKey: target.apiKey, model: target.model, maxTokens: 50, messages: [{ role: "user", content: "Responda apenas: OK" }] });
+    if (target.provider !== "anthropic") {
+      await callDeepSeek({ vendor: target.provider, apiKey: target.apiKey, model: target.model, maxTokens: 50, messages: [{ role: "user", content: "Responda apenas: OK" }] });
       return { ok: true, model: target.model };
     }
     await target.client.messages.create({ model: target.model, max_tokens: 1024, messages: [{ role: "user", content: "Responda apenas: OK" }] });
