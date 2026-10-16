@@ -272,6 +272,22 @@ export function FunnelSettingsModal({
         </div>
       )}
 
+      <div className="section-title">Visual do chat</div>
+      <div className="field">
+        <div className="segmented">
+          <button type="button" className={appearance.theme !== "messenger" ? "active" : ""} onClick={() => setAppearance((a) => ({ ...a, theme: "default" }))}>
+            Hot Secret (padrão)
+          </button>
+          <button type="button" className={appearance.theme === "messenger" ? "active" : ""} onClick={() => setAppearance((a) => ({ ...a, theme: "messenger" }))}>
+            Mensageiro (estilo WhatsApp)
+          </button>
+        </div>
+        <p className="hint">
+          Mensageiro: fundo escuro com desenhos, balões cinza e verdes, ✓✓ azul, cabeçalho com foto/nome e a tela de dados do contato ao tocar no
+          nome. Não vale para o Canal VIP AO VIVO (que tem o visual de live).
+        </p>
+      </div>
+
       <div className="section-title">Vídeo de fundo</div>
       <p className="hint" style={{ marginTop: -4 }}>
         Toca em loop, sem som, atrás da conversa. Com vídeo, os balões ficam transparentes (efeito vidro). Use MP4 leve (até ~10 MB) para carregar

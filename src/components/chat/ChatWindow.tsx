@@ -4,7 +4,7 @@ import type { AudioContent, DeliveryContent, ImageContent, LinkContent, OfferCon
 import { getNode } from "@/features/chat-engine/engine";
 import { useChatEngine, type ChatItem, type ResumeState } from "@/features/chat-engine/useChatEngine";
 import type { ChatTransport } from "@/features/chat-engine/transport";
-import { ChatHeader } from "./ChatHeader";
+import { ChatHeader, MessengerHeader } from "./ChatHeader";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { OptionButtons } from "./OptionButtons";
@@ -56,6 +56,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   const i18n = useMemo(() => makeChatI18n(asChatLocale(funnel.locale)), [funnel.locale]);
   const { t } = i18n;
   const bgVideo = funnel.appearance?.bgVideoUrl || null;
+  /** tema mensageiro (balões verdes, fundo escuro com desenhos) */
+  const messenger = funnel.appearance?.theme === "messenger" && !live;
   // com vídeo de fundo: só as últimas mensagens ficam na tela (as antigas vão sumindo)
   const fadeOld = !!bgVideo && funnel.appearance?.fadeOld !== false;
   const visibleCount = funnel.appearance?.visibleCount ?? 5;
@@ -308,8 +310,11 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
 
   return (
     <ChatI18nContext.Provider value={i18n}>
-    <div className={`chat-shell ${embedded ? "embedded" : ""} ${bgVideo ? "has-bg-video" : ""} ${live ? "live-mode" : ""}`} lang={i18n.locale}>
-      {!embedded && <Particles />}
+    <div
+      className={`chat-shell ${embedded ? "embedded" : ""} ${bgVideo ? "has-bg-video" : ""} ${live ? "live-mode" : ""} ${messenger ? "theme-messenger" : ""}`}
+      lang={i18n.locale}
+    >
+      {!embedded && !messenger && <Particles />}
       <div className="chat-window">
         {bgVideo && (
           <>
@@ -433,7 +438,13 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onBuyMain={engine.buyFreeCall}
           />
         )}
-        {live ? <LiveHeader character={funnel.character} typing={typing} age={live.age} city={live.city} /> : <ChatHeader character={funnel.character} typing={typing} />}
+        {live ? (
+          <LiveHeader character={funnel.character} typing={typing} age={live.age} city={live.city} />
+        ) : messenger ? (
+          <MessengerHeader character={funnel.character} typing={typing} />
+        ) : (
+          <ChatHeader character={funnel.character} typing={typing} />
+        )}
         <div className={`chat-body ${fadeOld ? "fade-old" : ""}`} ref={bodyRef} aria-live="polite">
           {!bgVideo && <div className="day-sep">{t.today}</div>}
           {!bgVideo && (

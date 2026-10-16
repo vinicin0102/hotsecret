@@ -56,3 +56,76 @@ export function ChatHeader({ character, typing, onBack }: { character: PublicCha
     </>
   );
 }
+
+const Chevron = () => (
+  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+    <path d="M15 4 7 12l8 8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+const PhoneOutline = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <path
+      d="M6.6 3.5h2.6l1.4 4.2-2 1.4a12 12 0 0 0 6.3 6.3l1.4-2 4.2 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** Tema mensageiro: cabeçalho escuro (voltar, foto, nome, status) e, ao tocar no nome, a tela "Dados do contato". */
+export function MessengerHeader({ character, typing, onBack }: { character: PublicCharacter; typing: boolean; onBack?: () => void }) {
+  const [info, setInfo] = useState(false);
+  const { t } = useChatI18n();
+  const status = typing ? t.typing : /^online$/i.test(character.status.trim()) ? t.online : character.status;
+  return (
+    <>
+      <header className="chat-header ms-header">
+        <button className="ms-back" aria-label={t.aBack} onClick={() => (onBack ? onBack() : history.back())}>
+          <Chevron />
+        </button>
+        <button className="ms-who" onClick={() => setInfo(true)} aria-label={t.contactInfo}>
+          <Avatar character={character} size={38} />
+          <span className="ms-who-text">
+            <span className="name">{character.name}</span>
+            <span className={`status ${typing ? "is-typing" : ""}`}>{status}</span>
+          </span>
+        </button>
+        <button className="ms-call" aria-label={t.contactInfo} onClick={() => setInfo(true)}>
+          <PhoneOutline />
+        </button>
+      </header>
+      {info && (
+        <div className="ms-contact" role="dialog" aria-label={t.contactInfo}>
+          <div className="ms-contact-top">
+            <button className="ms-back" aria-label={t.aBack} onClick={() => setInfo(false)}>
+              <Chevron />
+            </button>
+            <span>{t.contactInfo}</span>
+          </div>
+          <div className="ms-contact-photo">
+            {character.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={character.avatarUrl} alt={character.name} />
+            ) : (
+              <span>{character.name.slice(0, 1)}</span>
+            )}
+          </div>
+          <div className="ms-contact-name">{character.name}</div>
+          <div className="ms-contact-status">{status}</div>
+          {character.description && (
+            <div className="ms-contact-card">
+              <small>{t.contactAbout}</small>
+              <p>{character.description}</p>
+            </div>
+          )}
+          <div className="ms-contact-card">
+            <p>🔒 {t.contactPrivate}</p>
+            <small>{t.botNotice}</small>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

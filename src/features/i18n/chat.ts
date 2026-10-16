@@ -154,6 +154,10 @@ const pt = {
   liveWants: "quer uma conversa com você...",
   swipeUp: "Deslize para cima para atender",
   liveBadge: "AO VIVO",
+  // tema mensageiro
+  contactInfo: "Dados do contato",
+  contactAbout: "Recado",
+  contactPrivate: "Conversa privada — só você está vendo.",
   // visual da oferta e da chamada
   exclusive: "Exclusivo",
   offPct: "{n}% off",
@@ -350,6 +354,9 @@ const es: ChatTexts = {
   liveWants: "quiere hablar contigo...",
   swipeUp: "Desliza hacia arriba para contestar",
   liveBadge: "EN VIVO",
+  contactInfo: "Datos del contacto",
+  contactAbout: "Info.",
+  contactPrivate: "Chat privado — solo tú lo estás viendo.",
   exclusive: "Exclusivo",
   offPct: "{n}% menos",
   you: "Tú",
@@ -431,6 +438,7 @@ const esAR: ChatTexts = {
   downsellDefault: "Está bien 🥺 ¿qué tal una llamada más cortita?",
   liveWants: "quiere hablar con vos...",
   you: "Vos",
+  contactPrivate: "Chat privado — solo vos lo estás viendo.",
   swipeUp: "Deslizá hacia arriba para atender",
   chatWith: "Hablá con",
   vipTitle: "¿QUERÉS EL ACCESO",

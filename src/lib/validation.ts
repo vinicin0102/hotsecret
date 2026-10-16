@@ -164,6 +164,7 @@ export const funnelMetaSchema = z.object({
       locale: z.enum(["pt-BR", "es-MX", "es-AR"]).optional(),
       appearance: z
         .object({
+          theme: z.enum(["default", "messenger"]).optional(),
           bgVideoUrl: optUrl,
           bgDim: z.number().int().min(0).max(90).optional(),
           fadeOld: z.boolean().optional(),

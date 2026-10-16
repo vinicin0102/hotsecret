@@ -233,6 +233,8 @@ export interface TrackingIds {
 
 /** Aparência do chat */
 export interface ChatAppearance {
+  /** visual do chat: "default" (Hot Secret) ou "messenger" (mensageiro escuro, balões verdes) */
+  theme?: "default" | "messenger";
   /** vídeo em loop (mudo) atrás da conversa; os balões ficam transparentes */
   bgVideoUrl?: string;
   /** escurecimento do vídeo de fundo, 0–90 (%) */
