@@ -3991,3 +3991,84 @@ img.call-avatar {
   background: #fff;
   color: #8e8e93;
 }
+
+/* ---------- DOWNSELL (recusou a chamada): card de oferta igual aos de compra + fala da personagem ---------- */
+.call-overlay.pix.down-offer {
+  padding-top: 58px;
+}
+.down-offer .call-bg {
+  filter: blur(22px) brightness(0.45);
+  transform: scale(1.15);
+}
+.down-wrap {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 380px;
+  margin: auto 0;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.down-say {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  animation: msgIn 0.35s ease-out;
+}
+.down-avatar {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--hs-rose);
+  box-shadow: 0 0 0 3px rgba(255, 79, 139, 0.18);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  background: linear-gradient(135deg, var(--wine), var(--pink));
+}
+.down-bubble {
+  position: relative;
+  padding: 10px 14px 11px;
+  border-radius: 18px 18px 18px 6px;
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: left;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.down-bubble b {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--hs-rose);
+}
+.down-wrap .msg-row {
+  justify-content: center;
+}
+.down-wrap .card-msg.offer-card {
+  width: 100%;
+  max-width: none;
+  text-align: left;
+}
+/* foto mais baixa que no chat: a fala, o preço e o botão cabem na tela do celular sem rolar */
+.down-wrap .offer-media .card-img {
+  aspect-ratio: 16 / 11;
+  max-height: 30vh;
+}
+.down-wrap .card-video video {
+  max-height: 30vh;
+}
+@media (prefers-reduced-motion: reduce) {
+  .down-say {
+    animation: none;
+  }
+}

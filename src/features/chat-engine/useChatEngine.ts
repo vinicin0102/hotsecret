@@ -71,6 +71,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   /** productId/offer: chamada de uma oferta do Cérebro (IA) */
   /**
    * Chamada de vídeo: ringing (tocando) → pix (pop-up só com o código PIX do produto principal ou do downsell)
+   * — ao recusar: downsell (card da oferta mais barata, igual aos de compra; o botão leva ao mesmo pop-up do PIX)
    * → active (vídeo, liberado só depois do pagamento). productId/offer: oferta do Cérebro.
    */
   /** ligação de voz do Cérebro: tocando → em andamento (áudio) → encerrada */
@@ -88,7 +89,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   } | null>(null);
   const [call, setCall] = useState<{
     nodeId: string;
-    phase: "ringing" | "pix" | "active";
+    phase: "ringing" | "downsell" | "pix" | "active";
     productId?: string;
     offer?: OfferContent;
     /** produto que está sendo pago no pop-up */
@@ -846,7 +847,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       callProducts.current.add(productId);
       setCallError(null);
       const product = funnel.products[productId];
-      track("offer_clicked", nodeId, { call: downsell ? "declined" : "answered", productId });
+      // a recusa (downsell) já foi registrada quando o card apareceu
+      if (!downsell) track("offer_clicked", nodeId, { call: "answered", productId });
       track("checkout_started", nodeId, { productId, ...(downsell ? { downsell: true } : {}) });
       if (product && transportRef.current?.mode === "live") {
         pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
@@ -1015,8 +1017,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     const nodeId = call.nodeId;
     const downsell = callOffer(call)?.downsellProductId;
     if (downsell && funnel.products[downsell]) {
-      // recusou: o mesmo pop-up com o downsell (chamada mais curta e mais barata)
-      void startCallPix(call, downsell, true);
+      // recusou: card do downsell (chamada mais curta e mais barata), no mesmo estilo dos cards de compra;
+      // o PIX só é gerado quando ele toca no botão
+      setCall({ ...call, phase: "downsell", payProductId: downsell, downsell: true });
+      track("offer_clicked", nodeId, { call: "declined", productId: downsell });
       return;
     }
     setCall(null);
@@ -1047,6 +1051,12 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     // fechou sem pagar: deixa o card no chat para comprar depois
     if (!paid) push({ kind: "offer", id: lid(), nodeId, ...(call.productId ? { productId: call.productId, offer: call.offer } : {}), at: now() });
   }, [call, payments, push]);
+
+  /** tocou no botão do card do downsell: gera o PIX como na compra principal */
+  const buyDownsell = useCallback(() => {
+    if (call?.phase !== "downsell" || !call.payProductId) return;
+    void startCallPix(call, call.payProductId, true);
+  }, [call, startCallPix]);
 
   /** formulário do pop-up da chamada: gera o pagamento com os dados do comprador */
   const submitCallPayer = useCallback(
@@ -1250,6 +1260,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     submitCallPayer,
     payer,
     declineCall,
+    buyDownsell,
     enterCall,
     hangUp,
     buyUpsell,

@@ -7,6 +7,7 @@ import { PaymentStatus } from "./PaymentStatus";
 import { PayerForm } from "./PayerForm";
 import { NextActionView } from "./NextAction";
 import { UpsellScreen } from "./UpsellScreen";
+import { OfferCard } from "./OfferCard";
 import { VipOfferModal, VipPaySheet } from "./LiveChannel";
 import type { OfferContent } from "@/types/flow";
 
@@ -153,13 +154,11 @@ export function IncomingCall({
   );
 }
 
-/** Pop-up só com o código PIX (copia e cola), ao atender ou ao recusar (downsell). */
+/** Pop-up só com o código PIX (copia e cola), ao atender ou depois do card do downsell. */
 export function PixPopup({
   character,
   product,
   payment,
-  downsell,
-  downsellText,
   error,
   onClose,
   onSimulate,
@@ -171,8 +170,6 @@ export function PixPopup({
   character: PublicCharacter;
   product: PublicProduct | undefined;
   payment: PublicPaymentInfo | undefined;
-  downsell?: boolean;
-  downsellText?: string;
   error: string | null;
   onClose: () => void;
   onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
@@ -197,9 +194,7 @@ export function PixPopup({
         ) : (
           <div className="pix-avatar">{character.name.slice(0, 1)}</div>
         )}
-        <div className="pix-title">
-          {downsell ? downsellText || t.downsellDefault : `${character.name} ${t.waitingInCall}`}
-        </div>
+        <div className="pix-title">{`${character.name} ${t.waitingInCall}`}</div>
         {product && (
           <div className="pix-product">
             {product.name}
@@ -210,6 +205,59 @@ export function PixPopup({
           </div>
         )}
         <PixPayBody character={character} payment={payment} error={error} payerForm={payerForm} onSimulate={onSimulate} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Recusou a chamada: o downsell aparece como card de oferta — o mesmo dos cards de compra do chat
+ * (foto, selo, preço com desconto, botão) — com a fala da personagem em cima. O botão gera o PIX
+ * no mesmo pop-up da compra principal.
+ */
+export function DownsellOffer({
+  character,
+  product,
+  text,
+  onBuy,
+  onClose,
+}: {
+  character: PublicCharacter;
+  product: PublicProduct | undefined;
+  text?: string;
+  onBuy: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useChatI18n();
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="call-overlay pix down-offer" role="dialog" aria-label={product?.name ?? t.downsellDefault}>
+      {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
+      <button className="pix-close" onClick={onClose} aria-label={t.close}>
+        ✕
+      </button>
+      <div className="down-wrap">
+        <div className="down-say">
+          {character.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="down-avatar" src={character.avatarUrl} alt="" />
+          ) : (
+            <div className="down-avatar">{character.name.slice(0, 1)}</div>
+          )}
+          <div className="down-bubble">
+            <b>{character.name}</b>
+            {text || t.downsellDefault}
+          </div>
+        </div>
+        <OfferCard
+          offer={{ productId: product?.id ?? "" }}
+          product={product}
+          disabled={busy}
+          onCta={() => {
+            setBusy(true);
+            onBuy();
+          }}
+        />
       </div>
     </div>
   );

@@ -14,7 +14,7 @@ import { TarotOffer } from "./TarotOffer";
 import { CheckoutCard } from "./CheckoutCard";
 import { PaymentStatus } from "./PaymentStatus";
 import { DeliveryCard } from "./DeliveryCard";
-import { CallScreen, IncomingCall, PixPopup, VoiceCall } from "./VideoCall";
+import { CallScreen, DownsellOffer, IncomingCall, PixPopup, VoiceCall } from "./VideoCall";
 import { Particles } from "./Particles";
 import { BgVideo } from "./BgVideo";
 import { LiveHeader, LiveIncomingCall, LivePreviewButton, LivePreviewCard, VipExitModal, VipOfferCard, VipOfferModal, VipPaySheet } from "./LiveChannel";
@@ -396,6 +396,15 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           />
         )}
         {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}
+        {engine.call?.phase === "downsell" && (
+          <DownsellOffer
+            character={funnel.character}
+            product={funnel.products[engine.call.payProductId ?? ""]}
+            text={(engine.call.offer ?? (getNode(engine.graph, engine.call.nodeId)?.content as OfferContent | undefined))?.downsellText}
+            onBuy={engine.buyDownsell}
+            onClose={engine.hangUp}
+          />
+        )}
         {(engine.call?.phase === "pix" || (engine.call?.phase === "active" && engine.call.free && engine.call.needPayer)) && (
           <PixPopup
             overVideo={engine.call.phase === "active"}
@@ -404,8 +413,6 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             payment={Object.values(payments)
               .filter((p) => p.offerNodeId === engine.call!.nodeId && p.productId === engine.call!.payProductId)
               .sort((a, b) => (a.status === "FAILED" ? 1 : 0) - (b.status === "FAILED" ? 1 : 0))[0]}
-            downsell={engine.call.downsell}
-            downsellText={(engine.call.offer ?? (getNode(engine.graph, engine.call.nodeId)?.content as OfferContent | undefined))?.downsellText}
             error={engine.callError}
             payerForm={
               engine.call.needPayer && transport
