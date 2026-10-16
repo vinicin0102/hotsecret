@@ -1,7 +1,7 @@
 // Ligação de voz do Cérebro: o lead atendeu e a ligação terminou → registra e devolve a mensagem final + a oferta.
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
@@ -20,7 +20,7 @@ const schema = z.object({
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "voice-call", 20, 60_000);
+    leadRateLimit(req, "voice-call", 20, 60_000);
     const { token, nodeId, callId, seconds } = schema.parse(req.body);
     const session = await requireLeadSession(token);
     const { graph, locked, unlocked } = await entitledNodes(session.funnelId, session.leadId);

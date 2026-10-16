@@ -1,7 +1,7 @@
 // Bloco Cérebro: a IA responde o lead. A chave da API fica só no servidor; preços e ofertas vêm do banco.
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { sanitizeText } from "@/lib/sanitize";
 import { requireLeadSession } from "@/services/conversation";
@@ -90,7 +90,7 @@ function toTurns(messages: Msg[]): ChatTurn[] {
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "ai-chat", 20, 60_000);
+    leadRateLimit(req, "ai-chat", 20, 60_000);
     const body = schema.parse(req.body);
     const session = await requireLeadSession(body.token);
     const { graph, locked, unlocked } = await entitledNodes(session.funnelId, session.leadId);
@@ -166,6 +166,9 @@ export default apiHandler({
     }
     if (reply.failure) {
       await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "ai_error", nodeId: node.id, data: { error: reply.failure, brain: brain.name } });
+    }
+    if (reply.backup) {
+      await trackEvent({ leadId: session.leadId, funnelId: session.funnelId, conversationId: session.conversationId, type: "ai_backup", nodeId: node.id, data: { provider: reply.backup, brain: brain.name } });
     }
 
     for (const m of reply.messages) await addConversationMessage(session.conversationId, "bot", "text", { text: m }, node.id);

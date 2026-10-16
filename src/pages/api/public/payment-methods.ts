@@ -1,7 +1,7 @@
 // Métodos de pagamento do produto, consultados no catálogo do gateway em tempo real (Zenith),
 // com os campos que o comprador precisa preencher. Nada de credencial ou dado interno sai daqui.
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { asCurrency } from "@/lib/format";
 import { requireLeadSession } from "@/services/conversation";
@@ -12,7 +12,7 @@ const schema = z.object({ token: z.string().min(10).max(2000), productId: z.stri
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "payment-methods", 30, 60_000);
+    leadRateLimit(req, "payment-methods", 30, 60_000);
     const body = schema.parse(req.body);
     const session = await requireLeadSession(body.token);
     const product = await prisma.product.findUnique({ where: { id: body.productId } });

@@ -21,6 +21,7 @@ interface ProviderSettings {
 interface AiSettings extends ProviderSettings {
   provider: Provider;
   providers: Record<Provider, ProviderSettings>;
+  backupProvider: Provider | null;
 }
 const PROVIDER_LABEL: Record<Provider, string> = { anthropic: "Claude (Anthropic)", deepseek: "DeepSeek", qwen: "Qwen" };
 interface TarotCard {
@@ -105,7 +106,10 @@ const EMPTY: Draft = {
 };
 
 function ConnectionCard() {
-  const { data, reload } = useFetch<{ settings: AiSettings; health?: { replies: number; failures: number; recent: { at: string; error: string }[] } }>(
+  const { data, reload } = useFetch<{
+    settings: AiSettings;
+    health?: { replies: number; failures: number; backups?: number; recent: { at: string; error: string; backup?: boolean }[] };
+  }>(
     "/api/admin/ai-settings",
   );
   const [key, setKey] = useState("");
@@ -246,6 +250,35 @@ function ConnectionCard() {
         )}
         {msg && <span className={msg.error ? "error-text" : "hint"}>{msg.text}</span>}
       </div>
+      <div className="field ai-backup">
+        <label htmlFor="ai-backup">IA reserva (responde quando a {PROVIDER_LABEL[active]} falhar)</label>
+        <select
+          id="ai-backup"
+          className="select"
+          value={all.backupProvider && all.backupProvider !== active ? all.backupProvider : ""}
+          disabled={busy}
+          onChange={(e) =>
+            save(
+              { backupProvider: e.target.value || null },
+              e.target.value ? `Salvo ✓ ${PROVIDER_LABEL[e.target.value as Provider]} é a reserva` : "Reserva desligada",
+            )
+          }
+        >
+          <option value="">Nenhuma</option>
+          {(["anthropic", "deepseek", "qwen"] as const)
+            .filter((p) => p !== active)
+            .map((p) => (
+              <option key={p} value={p} disabled={!all.providers?.[p]?.configured}>
+                {PROVIDER_LABEL[p]}
+                {all.providers?.[p]?.configured ? "" : " (coloque a chave primeiro)"}
+              </option>
+            ))}
+        </select>
+        <p className="hint">
+          Se a IA principal der erro, vier vazia ou ficar sem saldo, a reserva responde a mesma mensagem na hora — o lead nem percebe. Só gasta na reserva
+          quando a principal falha.
+        </p>
+      </div>
       {data?.health && (data.health.replies > 0 || data.health.recent.length > 0) && (
         <div className="ai-health">
           <div className="section-title">Saúde da IA (últimas 24h)</div>
@@ -254,12 +287,13 @@ function ConnectionCard() {
             <b className={data.health.failures ? "error-text" : "check-ok"}>
               {data.health.failures} falha(s){data.health.replies ? ` (${Math.round((data.health.failures / data.health.replies) * 100)}%)` : ""}
             </b>{" "}
-            — cada falha manda a "Mensagem se a IA falhar". Antes disso o sistema já tenta de novo sozinho.
+            {data.health.backups ? <> · {data.health.backups} salva(s) pela reserva</> : null} — cada falha manda a "Mensagem se a IA falhar". Antes
+            disso o sistema já tenta de novo sozinho{all.backupProvider ? " e passa para a reserva" : ""}.
           </p>
           {data.health.recent.length > 0 && (
             <ul className="ai-errors">
               {data.health.recent.map((e, i) => (
-                <li key={i}>
+                <li key={i} className={e.backup ? "is-backup" : ""}>
                   <span className="hint">{formatDateTime(e.at)}</span> {e.error}
                 </li>
               ))}

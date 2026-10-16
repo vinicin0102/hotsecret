@@ -285,7 +285,11 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
 /** Consulta o gateway quando o webhook atrasa (máx. 1 consulta a cada 8s por pagamento). */
 export async function syncPaymentWithProvider(payment: Payment): Promise<Payment> {
   if (!payment.providerPaymentId || payment.status === "APPROVED" || payment.status === "REFUNDED") return payment;
-  if (payment.lastSyncedAt && Date.now() - payment.lastSyncedAt.getTime() < 8000) return payment;
+  // consulta ao gateway com intervalo maior para PIX antigo (o webhook confirma na hora; isto é só reforço):
+  // até 2 min: a cada 8s · até 10 min: 20s · depois: 60s — com muitos leads ao mesmo tempo, não sobrecarrega o gateway
+  const age = Date.now() - payment.createdAt.getTime();
+  const gap = age < 2 * 60_000 ? 8_000 : age < 10 * 60_000 ? 20_000 : 60_000;
+  if (payment.lastSyncedAt && Date.now() - payment.lastSyncedAt.getTime() < gap) return payment;
   await prisma.payment.update({ where: { id: payment.id }, data: { lastSyncedAt: new Date() } });
   try {
     const info = await getProvider(payment.provider).fetchPayment(payment.providerPaymentId);

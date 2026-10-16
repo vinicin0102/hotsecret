@@ -1,6 +1,6 @@
 // Entrega do produto: o link de acesso só é revelado se existir pagamento APROVADO para o lead.
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
 
@@ -8,7 +8,7 @@ const schema = z.object({ token: z.string().min(10).max(2000), productId: z.stri
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "delivery", 30, 60_000);
+    leadRateLimit(req, "delivery", 30, 60_000);
     const body = schema.parse(req.body);
     const session = await requireLeadSession(body.token);
     const payment = await prisma.payment.findFirst({

@@ -1,6 +1,6 @@
 // Inicia (ou retoma) a sessão do visitante: cria lead + conversa, captura UTM/dispositivo e registra page_view.
 import { z } from "zod";
-import { apiHandler, getClientIp, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, getClientIp, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { signLeadToken, verifyLeadToken } from "@/lib/auth";
 import { parseUserAgent } from "@/lib/device";
@@ -55,7 +55,7 @@ const tu = (v?: string | null) => (v ? sanitizeText(v, 500) || null : null);
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "session", 30, 60_000);
+    leadRateLimit(req, "session", 30, 60_000);
     const body = schema.parse(req.body);
     const funnel = await prisma.funnel.findUnique({ where: { id: body.funnelId }, select: { id: true, status: true } });
     if (!funnel || funnel.status !== "PUBLISHED") throw new HttpError(404, "Fluxo indisponível");

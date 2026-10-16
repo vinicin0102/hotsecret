@@ -2,7 +2,7 @@
 // Os arquivos das prévias nunca vão na página: cada um só sai daqui, na ordem, e fica gravado na conversa.
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
 import { getFunnelSettings } from "@/services/funnels";
@@ -13,7 +13,7 @@ const schema = z.object({ token: z.string().min(10).max(2000) });
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "live-preview", 30, 60_000);
+    leadRateLimit(req, "live-preview", 30, 60_000);
     const { token } = schema.parse(req.body);
     const session = await requireLeadSession(token);
     const funnel = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } });

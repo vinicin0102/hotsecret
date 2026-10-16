@@ -1,6 +1,6 @@
 // Chamada de vídeo: devolve o vídeo e a linha do tempo (FREE/VIP/falas/upsells) quando o lead atende.
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
@@ -17,7 +17,7 @@ const schema = z.object({
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "call", 30, 60_000);
+    leadRateLimit(req, "call", 30, 60_000);
     const { token, nodeId, productId } = schema.parse(req.body);
     const session = await requireLeadSession(token);
     const { graph, locked, unlocked } = await entitledNodes(session.funnelId, session.leadId);

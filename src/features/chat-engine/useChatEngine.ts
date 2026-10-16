@@ -699,7 +699,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         /* rede instável: tenta no próximo ciclo */
       }
     };
-    const interval = setInterval(tick, hasPending ? 4000 : 20000);
+    // aba escondida (lead foi pagar no app do banco): não consulta; ao voltar, consulta na hora
+    const interval = setInterval(() => !document.hidden && void tick(), hasPending ? 4000 : 20000);
     const onVisible = () => document.visibilityState === "visible" && tick();
     document.addEventListener("visibilitychange", onVisible);
     void tick();

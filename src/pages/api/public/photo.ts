@@ -1,6 +1,6 @@
 // Foto enviada pelo lead no chat (câmera ou galeria). O navegador comprime antes de enviar.
 import type { NextApiRequest, NextApiResponse } from "next";
-import { assertSameOrigin, HttpError, rateLimit } from "@/lib/api";
+import { assertSameOrigin, HttpError, leadRateLimit } from "@/lib/api";
 import { isSpanishChat, leadError } from "@/lib/lead-errors";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     if (req.method !== "POST") throw new HttpError(405, "Método não permitido");
     assertSameOrigin(req);
-    rateLimit(req, "lead-photo", 10, 60_000);
+    leadRateLimit(req, "lead-photo", 10, 60_000);
     const session = await requireLeadSession(req.headers["x-lead-token"]);
     const nodeId = String(req.query.nodeId ?? "");
     if (!/^[a-zA-Z0-9_:-]{1,64}$/.test(nodeId)) throw new HttpError(400, "Bloco inválido");

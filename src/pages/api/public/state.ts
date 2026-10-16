@@ -1,7 +1,7 @@
 // Consulta periódica do chat: status dos pagamentos + mensagens geradas pelo servidor
 // (confirmação de pagamento, recuperação de checkout).
 import { z } from "zod";
-import { apiHandler, rateLimit } from "@/lib/api";
+import { apiHandler, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession, publicMessage } from "@/services/conversation";
 import { publicPayment, syncPaymentWithProvider } from "@/services/payments/service";
@@ -11,7 +11,7 @@ const schema = z.object({ token: z.string().min(10).max(2000), since: z.string()
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "state", 120, 60_000);
+    leadRateLimit(req, "state", 120, 60_000);
     const body = schema.parse(req.body);
     const session = await requireLeadSession(body.token);
     await checkRecoveryFor(session.conversationId);

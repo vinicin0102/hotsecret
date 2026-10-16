@@ -1362,3 +1362,14 @@ code.inline {
   width: 74px;
   padding: 4px 8px;
 }
+
+/* IA reserva */
+.ai-backup {
+  margin-top: 14px;
+}
+.ai-backup .hint {
+  margin-top: 6px;
+}
+.ai-errors li.is-backup {
+  color: var(--gold);
+}

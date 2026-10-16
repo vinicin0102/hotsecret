@@ -2,7 +2,7 @@
 // banco (nó do fluxo), nunca confiado ao navegador. Respostas do visitante são sanitizadas.
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { apiHandler, rateLimit } from "@/lib/api";
+import { apiHandler, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { sanitizeText } from "@/lib/sanitize";
 import { trackEvent } from "@/services/tracking";
@@ -48,7 +48,7 @@ const MEDIA_MESSAGE: Record<string, string> = { image: "image", video: "video", 
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "events", 300, 60_000);
+    leadRateLimit(req, "events", 300, 60_000);
     const body = schema.parse(req.body);
     const session = await requireLeadSession(body.token);
     const { leadId, conversationId, funnelId } = session;

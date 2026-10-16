@@ -1,7 +1,7 @@
 // Vídeo de visualização única: entrega o link UMA vez por lead (no play) e marca como visualizado.
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { apiHandler, HttpError, rateLimit } from "@/lib/api";
+import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes } from "@/services/funnels";
@@ -12,7 +12,7 @@ const OPENED = "video_once_opened";
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "view-once", 30, 60_000);
+    leadRateLimit(req, "view-once", 30, 60_000);
     const { token, nodeId } = schema.parse(req.body);
     const session = await requireLeadSession(token);
     const { graph, locked, unlocked } = await entitledNodes(session.funnelId, session.leadId);

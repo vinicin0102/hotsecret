@@ -1,4 +1,4 @@
-import { apiHandler, getClientIp, rateLimit } from "@/lib/api";
+import { apiHandler, getClientIp, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { checkoutSchema } from "@/lib/validation";
 import { requireLeadSession } from "@/services/conversation";
@@ -6,7 +6,7 @@ import { createCheckout, publicPayment } from "@/services/payments/service";
 
 export default apiHandler({
   POST: async (req) => {
-    rateLimit(req, "checkout", 10, 60_000);
+    leadRateLimit(req, "checkout", 10, 60_000);
     const body = checkoutSchema.parse(req.body);
     const session = await requireLeadSession(body.token);
     // dispositivo e cookies do pixel no momento da compra (melhoram a correspondência da API de Conversões)

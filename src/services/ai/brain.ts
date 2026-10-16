@@ -92,6 +92,8 @@ interface StoredAiSettings {
   /** Qwen (Alibaba Cloud Model Studio) */
   qwenKeySealed?: string;
   qwenModel?: string;
+  /** IA reserva: responde a mensagem quando a IA principal falha */
+  backupProvider?: AiProvider;
 }
 
 async function readSettings(): Promise<StoredAiSettings> {
@@ -148,12 +150,21 @@ export async function getAiSettingsPublic() {
     },
   };
   // campos de topo = IA ativa (compatível com a tela antiga)
-  return { provider, providers, ...providers[provider] };
+  return { provider, providers, backupProvider: s.backupProvider ?? null, ...providers[provider] };
 }
 
-export async function saveAiSettings(input: { provider?: AiProvider; apiKey?: string | null; model?: string }) {
+export async function saveAiSettings(input: { provider?: AiProvider; apiKey?: string | null; model?: string; backupProvider?: AiProvider | null }) {
   const s = await readSettings();
   const next: StoredAiSettings = { ...s };
+  if (input.backupProvider !== undefined) {
+    if (input.backupProvider) next.backupProvider = input.backupProvider;
+    else delete next.backupProvider;
+    // só a reserva mudou: não mexe na IA principal
+    if (!input.provider && input.apiKey === undefined && !input.model) {
+      await prisma.appSetting.upsert({ where: { key: SETTING_KEY }, create: { key: SETTING_KEY, value: next as object }, update: { value: next as object } });
+      return;
+    }
+  }
   const provider = input.provider ?? s.provider ?? "anthropic";
   // salvar chave/modelo de uma IA passa a usá-la; remover a chave não troca a IA em uso
   if (input.provider && input.apiKey !== null) next.provider = input.provider;
@@ -187,9 +198,11 @@ type AiTarget =
   | { provider: "anthropic"; client: Anthropic; model: AiModelId }
   | { provider: "deepseek" | "qwen"; apiKey: string; model: string };
 
-async function aiClient(timeoutMs = 25_000): Promise<AiTarget> {
+async function aiClient(timeoutMs = 25_000, which: "main" | "backup" = "main"): Promise<AiTarget> {
   const s = await readSettings();
-  const provider: AiProvider = s.provider ?? "anthropic";
+  const main: AiProvider = s.provider ?? "anthropic";
+  const provider: AiProvider = which === "backup" ? (s.backupProvider ?? main) : main;
+  if (which === "backup" && provider === main) throw new AiNotConfiguredError();
   const apiKey = providerKey(s, provider);
   if (!apiKey) throw new AiNotConfiguredError();
   if (provider === "deepseek") return { provider, apiKey, model: resolveDeepSeekModel(s.deepseekModel) };
@@ -466,6 +479,10 @@ export interface BrainReply {
   usage?: { input: number; output: number; cacheRead: number };
   /** a IA falhou e foi usada a "Mensagem se a IA falhar" (motivo, para o painel) */
   failure?: string;
+  /** a IA não respondeu (a resposta é a de segurança do sistema) */
+  noAi?: boolean;
+  /** respondeu pela IA reserva */
+  backup?: AiProvider;
 }
 
 /** Converte o histórico em mensagens da API (primeira sempre do usuário; papéis seguidos são agrupados pela API). */
@@ -529,7 +546,44 @@ Use as ofertas, os áudios e as prévias de verdade: sempre que a situação com
 Copie o id exatamente como está entre aspas. Nunca escreva os ids dentro de messages.`;
 }
 
-export async function runBrain(input: {
+type BrainInput = Parameters<typeof runBrainWith>[0];
+
+/**
+ * Resposta da IA: tenta a IA principal; se ela não responder (erro, resposta vazia, sem chave),
+ * a IA reserva (se configurada) responde a mesma mensagem.
+ */
+export async function runBrain(input: BrainInput): Promise<BrainReply> {
+  const started = Date.now();
+  let main: BrainReply | null = null;
+  let mainErr: unknown = null;
+  try {
+    main = await runBrainWith(input);
+    if (!main.noAi) return main;
+  } catch (e) {
+    mainErr = e;
+  }
+  // a função tem ~60s: só vale tentar a reserva se ainda houver tempo
+  const left = 50_000 - (Date.now() - started);
+  if (left > 8_000) {
+    const backup = await aiClient(Math.min(25_000, left), "backup").catch(() => null);
+    if (backup) {
+      try {
+        const r = await runBrainWith(input, backup, left);
+        if (!r.noAi) {
+          const why = main?.failure ?? (mainErr ? describeAiError(mainErr) : "sem resposta");
+          console.warn("[ai] IA principal falhou, respondeu a reserva:", backup.provider, "|", why);
+          return { ...r, failure: undefined, backup: backup.provider };
+        }
+      } catch (e) {
+        console.warn("[ai] IA reserva também falhou:", describeAiError(e));
+      }
+    }
+  }
+  if (main) return main;
+  throw mainErr;
+}
+
+async function runBrainWith(input: {
   brain: Brain;
   history: ChatTurn[];
   /** objetivo deste ponto do fluxo (bloco Cérebro) */
@@ -540,8 +594,8 @@ export async function runBrain(input: {
   flowOffers?: FlowOfferInfo[];
   /** idioma do fluxo (país): es-MX = espanhol do México, es-AR = espanhol da Argentina */
   language?: "pt-BR" | "es-MX" | "es-AR";
-}): Promise<BrainReply> {
-  const target = await aiClient();
+}, forced?: AiTarget, budgetMs = 30_000): Promise<BrainReply> {
+  const target = forced ?? (await aiClient());
   const offers = brainOffers(input.brain);
   const audios = brainAudios(input.brain);
   const images = brainImages(input.brain);
@@ -743,7 +797,7 @@ ${flowOffersSection(input.flowOffers)}`;
   let problem = "";
   let safe = false;
   let plain = false;
-  for (let attempt = 0; attempt < 3 && Date.now() - started < 30_000; attempt++) {
+  for (let attempt = 0; attempt < 3 && Date.now() - started < budgetMs; attempt++) {
     let r: Awaited<ReturnType<typeof callOnce>>;
     try {
       r = await callOnce(safe, plain);
@@ -794,6 +848,7 @@ ${flowOffersSection(input.flowOffers)}`;
       showOffers: true,
       usage,
       failure: `${problem || "sem resposta"} — botões de oferta soltos automaticamente`,
+      noAi: true,
     };
   }
   const sale = salesFallback(input.history, validOffers);
@@ -807,9 +862,10 @@ ${flowOffersSection(input.flowOffers)}`;
       end: false,
       usage,
       failure: `${problem || "sem resposta"} — oferta disparada automaticamente`,
+      noAi: true,
     };
   }
-  return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage, failure: problem || "sem resposta" };
+  return { messages: [fallbackText], offer: null, audio: null, image: null, end: false, usage, failure: problem || "sem resposta", noAi: true };
 }
 
 const STOP = new Set(

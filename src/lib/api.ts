@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { ZodError } from "zod";
 import { isSpanishChat, leadError } from "./lead-errors";
@@ -56,6 +57,22 @@ export function getClientIp(req: NextApiRequest): string {
 export function rateLimit(req: NextApiRequest, scope: string, limit: number, windowMs: number) {
   const r = checkRateLimit(`${scope}:${getClientIp(req)}`, limit, windowMs);
   if (!r.ok) throw new HttpError(429, `Muitas requisições. Tente novamente em ${r.retryAfter}s.`);
+}
+
+/**
+ * Limite do chat público por LEAD (token da conversa), não por IP: as operadoras de celular põem centenas de
+ * pessoas atrás do mesmo IP (CGNAT), e o limite por IP bloqueava leads de verdade em horário de pico.
+ * O IP continua com um teto 100x maior, só contra abuso (ex.: gerar PIX: 1.000 por minuto por IP).
+ */
+export function leadRateLimit(req: NextApiRequest, scope: string, perLead: number, windowMs: number) {
+  const body = req.body as { token?: unknown } | undefined;
+  const header = req.headers["x-lead-token"];
+  const token = typeof body?.token === "string" && body.token ? body.token : typeof header === "string" && header ? header : null;
+  const ip = checkRateLimit(`${scope}:ip:${getClientIp(req)}`, perLead * 100, windowMs);
+  if (!ip.ok) throw new HttpError(429, `Muitas requisições. Tente novamente em ${ip.retryAfter}s.`);
+  if (!token) return;
+  const lead = checkRateLimit(`${scope}:lead:${createHash("sha1").update(token).digest("hex").slice(0, 24)}`, perLead, windowMs);
+  if (!lead.ok) throw new HttpError(429, `Muitas requisições. Tente novamente em ${lead.retryAfter}s.`);
 }
 
 /** Bloqueia requisições de mutação vindas de outra origem (proteção CSRF). */
