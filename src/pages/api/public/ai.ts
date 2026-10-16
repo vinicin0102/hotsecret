@@ -11,6 +11,7 @@ import { trackEvent } from "@/services/tracking";
 import { describeAiError, publicOfferFormat, runBrain, type ChatTurn, type FlowOfferInfo } from "@/services/ai/brain";
 import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import { formatBRL, formatMoney } from "@/lib/format";
+import { leadPlaceFromHeaders, nearLeadRule } from "@/lib/geo";
 
 /** preço do histórico na moeda certa (a IA nunca deve ver R$ numa oferta em pesos) */
 const priceForAi = (cents: number, currency: unknown) =>
@@ -126,9 +127,22 @@ export default apiHandler({
       prisma.payment.findMany({ where: { leadId: session.leadId, status: "APPROVED" }, include: { product: { select: { name: true } } } }),
     ]);
     const vars = (lead?.variables ?? {}) as Record<string, string>;
+    // região do lead pelo IP: guardada na 1ª resposta, para a personagem dizer sempre o mesmo lugar perto dele
+    let place = typeof vars._regiao === "string" ? vars._regiao : "";
+    if (!place) {
+      place = leadPlaceFromHeaders(req.headers);
+      if (place) {
+        await prisma.lead
+          .update({ where: { id: session.leadId }, data: { variables: { ...vars, _regiao: place } } })
+          .catch((e) => console.warn("[ai] região do lead", e));
+      }
+    }
+    // chaves com "_" são internas (não são respostas do lead)
+    const answers = Object.entries(vars).filter(([k]) => !k.startsWith("_"));
     const context = [
       lead?.name || vars.name ? `Nome: ${lead?.name || vars.name}` : "",
-      Object.keys(vars).length ? `Respostas anteriores: ${Object.entries(vars).map(([k, v]) => `${k}=${v}`).join("; ")}` : "",
+      answers.length ? `Respostas anteriores: ${answers.map(([k, v]) => `${k}=${v}`).join("; ")}` : "",
+      nearLeadRule(place),
       paid.length ? `Já comprou: ${paid.map((p) => p.product.name).join(", ")} (não ofereça de novo o que já comprou; agradeça e siga o objetivo)` : "Ainda não comprou nada.",
     ]
       .filter(Boolean)

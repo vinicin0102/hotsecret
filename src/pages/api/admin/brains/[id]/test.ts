@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { apiHandler, HttpError, rateLimit, requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { leadPlaceFromHeaders, nearLeadRule } from "@/lib/geo";
 import { describeAiError, publicOfferFormat, runBrain, type FlowOfferInfo } from "@/services/ai/brain";
 
 export const config = { maxDuration: 60 };
@@ -36,7 +37,8 @@ export default apiHandler({
           })
           .filter((v): v is FlowOfferInfo => !!v);
       }
-      const r = await runBrain({ brain, history, goal, flowOffers, language });
+      // teste no painel: usa a região de quem está testando (igual ao lead no fluxo publicado)
+      const r = await runBrain({ brain, history, goal, flowOffers, language, context: nearLeadRule(leadPlaceFromHeaders(req.headers)) || undefined });
       return {
         messages: r.messages,
         audio: r.audio,
