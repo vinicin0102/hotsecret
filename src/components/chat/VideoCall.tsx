@@ -644,7 +644,6 @@ export function CallScreen({
             setUpsellBuying(true);
             onBuyUpsell(upsell.productId);
           }}
-          onSkip={closeUpsell}
           onSimulate={onSimulate}
         />
       )}
@@ -675,11 +674,6 @@ export function CallScreen({
               }}
             >
               {upsell.ctaLabel || tx.unlock}
-            </button>
-          )}
-          {!boughtUpsell(upsell.productId) && (
-            <button className="call-upsell-skip" onClick={closeUpsell}>
-              {tx.notNow}
             </button>
           )}
         </div>

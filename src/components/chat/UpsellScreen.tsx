@@ -1,5 +1,6 @@
 // Upsell da chamada em tela cheia: aviso por cima do vídeo → card "bloqueado" com o preço → folha do pagamento.
 // Os textos são do upsell (cada um com o seu tema); vazios usam o padrão do país do fluxo.
+// Sem "agora não": o lead paga para continuar ou desliga a chamada (o botão de desligar fica por cima).
 import { useState } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { PublicCharacter } from "@/types/flow";
@@ -13,7 +14,6 @@ export function UpsellScreen({
   payment,
   bought,
   onBuy,
-  onSkip,
   onSimulate,
 }: {
   marker: Marker;
@@ -22,7 +22,6 @@ export function UpsellScreen({
   payment: PublicPaymentInfo | undefined;
   bought: boolean;
   onBuy: () => void;
-  onSkip: () => void;
   onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
 }) {
   const { t, money } = useChatI18n();
@@ -89,9 +88,6 @@ export function UpsellScreen({
               {fill(s.payButton || s.button || t.upButton)} ({price})
             </button>
             <div className="up-foot">{fill(s.footNote || t.upFootNote)}</div>
-            <button className="up-skip" onClick={onSkip}>
-              {t.upNotNow}
-            </button>
           </div>
         </div>
       )}
@@ -145,9 +141,6 @@ export function UpsellScreen({
               )}
             </>
           )}
-          <button className="up-skip" onClick={onSkip}>
-            {t.upNotNow}
-          </button>
         </div>
       )}
     </div>

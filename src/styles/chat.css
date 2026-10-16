@@ -3556,3 +3556,31 @@ img.call-avatar {
 .pix-box {
   border-color: rgba(236, 199, 127, 0.16);
 }
+
+/* upsells sem "agora não": com a tela do upsell aberta, só o botão de desligar fica, no canto de cima
+   (pagar ou desligar — o lead nunca fica preso) */
+.call-overlay.active:has(.up-screen) .call-controls {
+  z-index: 35;
+  top: max(14px, env(safe-area-inset-top));
+  right: 14px;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  padding: 0;
+  gap: 0;
+  background: none;
+  border: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.call-overlay.active:has(.up-screen) .call-ctl {
+  display: none;
+}
+.call-overlay.active:has(.up-screen) .call-controls .call-hangup {
+  width: 46px;
+  height: 46px;
+}
+.call-overlay.active:has(.up-screen) .call-controls .call-hangup svg {
+  width: 22px;
+  height: 22px;
+}
