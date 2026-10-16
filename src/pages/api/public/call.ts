@@ -3,7 +3,8 @@ import { z } from "zod";
 import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
-import { entitledNodes } from "@/services/funnels";
+import { entitledNodes, getFunnelSettings } from "@/services/funnels";
+import { asCurrency, currencyOfLocale } from "@/lib/format";
 import { normalizeTimeline } from "@/types/video";
 import type { AiContent, OfferContent } from "@/types/flow";
 import { brainOffers, brainVoiceCalls, voiceCallProductId } from "@/services/ai/brain";
@@ -47,8 +48,13 @@ export default apiHandler({
     if (!video) return { video: null };
     const timeline = normalizeTimeline(video.timeline, video.durationMs);
     const ids = [...new Set(timeline.markers.flatMap((m) => [m.productId, m.basicProductId ?? ""]).filter(Boolean))];
-    const products = await prisma.product.findMany({ where: { id: { in: ids }, active: true } });
-    const byId = new Map(products.map((p) => [p.id, p]));
+    const [products, funnel] = await Promise.all([
+      prisma.product.findMany({ where: { id: { in: ids }, active: true } }),
+      prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } }),
+    ]);
+    // só produtos na moeda do país do fluxo (fluxo do Brasil = reais/PIX): upsell de outra moeda não aparece
+    const flowCurrency = currencyOfLocale(getFunnelSettings(funnel?.settings).locale);
+    const byId = new Map(products.filter((p) => asCurrency(p.currency) === flowCurrency).map((p) => [p.id, p]));
     return {
       video: {
         url: video.url,

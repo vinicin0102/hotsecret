@@ -1,6 +1,7 @@
 // Transporte do chat: "live" fala com a API (eventos persistidos), "preview" simula tudo em memória.
 import { afterCallAudio } from "@/lib/audio-match";
 import { withBase } from "@/lib/paths";
+import { asCurrency, currencyOfLocale } from "@/lib/format";
 import type { FlowNode, LivePreview, TarotCard, VipOfferTexts } from "@/types/flow";
 import { metaCookies } from "./pixels";
 import type { ChatCue, TimeRange, UpsellMarker, VideoFrame, VideoTimeline } from "@/types/video";
@@ -310,6 +311,8 @@ export function createPreviewTransport(
   livePreviews: () => Promise<LivePreview[]> = async () => [],
 ): ChatTransport {
   let previewsShown = 0;
+  /** preço/moeda dos produtos (os upsells do vídeo entram quando a chamada abre) */
+  const priced: Record<string, { price: number; currency?: string }> = { ...products };
   const opened = new Set<string>();
   const aiHistory = new Map<string, { role: "lead" | "bot"; text: string }[]>();
   const payments = new Map<string, PublicPaymentInfo>();
@@ -320,14 +323,14 @@ export function createPreviewTransport(
     async flush() {},
     async checkout(offerNodeId, form) {
       const productId = form.productId ?? graphOfferProduct(offerNodeId) ?? "";
-      const currency = products[productId]?.currency ?? "BRL";
+      const currency = priced[productId]?.currency ?? "BRL";
       // pesos: transferência com CLABE de exemplo (no Brasil, o PIX copia e cola de exemplo)
       const pesos = currency !== "BRL";
       const p: PublicPaymentInfo = {
         id: `preview_${++seq}`,
         status: "PENDING",
         method: form.method,
-        amount: products[productId]?.price ?? 0,
+        amount: priced[productId]?.price ?? 0,
         currency,
         ...(pesos
           ? {
@@ -432,10 +435,12 @@ export function createPreviewTransport(
       if (!videoId) return null;
       const [{ video }, { products: list }] = await Promise.all([
         get<{ video: { url: string; posterUrl: string | null; durationMs: number; timeline: VideoTimeline } }>(`/api/admin/videos/${videoId}`),
-        get<{ products: { id: string; name: string; price: number; originalPrice: number | null; active: boolean }[] }>("/api/admin/products"),
+        get<{ products: { id: string; name: string; price: number; originalPrice: number | null; currency?: string; active: boolean }[] }>("/api/admin/products"),
       ]);
       const tl = normalizeTimeline(video.timeline, video.durationMs);
-      const byId = new Map(list.filter((p) => p.active).map((p) => [p.id, p]));
+      // igual ao fluxo publicado: só produtos na moeda do país do fluxo
+      const byId = new Map(list.filter((p) => p.active && asCurrency(p.currency) === currencyOfLocale(language)).map((p) => [p.id, p]));
+      for (const p of byId.values()) priced[p.id] = { price: p.price, currency: p.currency };
       return {
         url: video.url,
         posterUrl: video.posterUrl,
@@ -451,8 +456,8 @@ export function createPreviewTransport(
             const b = m.basicProductId ? byId.get(m.basicProductId) : undefined;
             return {
               ...m,
-              product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice },
-              ...(b ? { basicProduct: { id: b.id, name: b.name, price: b.price, originalPrice: b.originalPrice } } : {}),
+              product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency },
+              ...(b ? { basicProduct: { id: b.id, name: b.name, price: b.price, originalPrice: b.originalPrice, currency: b.currency } } : {}),
             };
           }),
       };

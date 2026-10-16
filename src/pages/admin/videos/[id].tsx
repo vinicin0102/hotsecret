@@ -6,7 +6,7 @@ import { useRouter } from "next/router";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/client";
-import { formatBRL } from "@/lib/format";
+import { asCurrency, productOption } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { formatMs, normalizeTimeline, type VideoTimeline } from "@/types/video";
 import { UpsellScreenEditor } from "@/components/admin/UpsellScreenEditor";
@@ -24,6 +24,7 @@ interface Product {
   id: string;
   name: string;
   price: number;
+  currency?: string;
   active: boolean;
 }
 type Sel = { kind: "free" } | { kind: "vip" } | { kind: "chat"; id: string } | { kind: "marker"; id: string } | null;
@@ -540,7 +541,7 @@ export default function VideoEditorPage() {
                 <option value="">— selecione —</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} · {formatBRL(p.price)} {p.active ? "" : "(inativo)"}
+                    {productOption(p)} {p.active ? "" : "(inativo)"}
                   </option>
                 ))}
               </select>
@@ -554,6 +555,7 @@ export default function VideoEditorPage() {
               onBasicChange={(id) => setMarker({ basicProductId: id || undefined })}
               inCall
             />
+            <CurrencyHint products={products} ids={[selMarker.productId, selMarker.basicProductId]} />
             {selMarker.at >= tl.free.end && selMarker.at < tl.vip.start && (
               <p className="hint">Fica no fim do FREE: aparece quando o FREE acaba (Chamada de vídeo 02), no lugar da oferta automática.</p>
             )}
@@ -579,12 +581,13 @@ export default function VideoEditorPage() {
                   <option value="">— selecione —</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} · {formatBRL(p.price)} {p.active ? "" : "(inativo)"}
+                      {productOption(p)} {p.active ? "" : "(inativo)"}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+            <CurrencyHint products={products} ids={[selMarker.productId, selMarker.basicProductId]} />
             <div className="field">
               <label htmlFor="ve-m-text">Texto da oferta na tela</label>
               <input id="ve-m-text" className="input" placeholder="Ex.: quer que eu continue só pra você? 🔥" value={selMarker.text ?? ""} onChange={(e) => setMarker({ text: e.target.value })} />
@@ -644,5 +647,17 @@ export default function VideoEditorPage() {
         <VideoFrameEditor url={video.url} posterUrl={video.posterUrl} now={now} playing={playing} frame={tl.frame} onChange={(frame) => setTl({ ...tl, frame })} />
       </div>
     </AdminLayout>
+  );
+}
+
+/** produto que não é em reais: avisa onde ele cobra (no fluxo de outro país o upsell nem aparece) */
+function CurrencyHint({ products, ids }: { products: Product[]; ids: (string | undefined)[] }) {
+  const foreign = products.filter((p) => ids.includes(p.id) && asCurrency(p.currency) !== "BRL");
+  if (!foreign.length) return null;
+  return (
+    <p className="hint warn-text">
+      ⚠ {foreign.map((p) => `“${p.name}”`).join(" e ")} {foreign.length > 1 ? "são produtos" : "é produto"} em {asCurrency(foreign[0].currency)}: só
+      aparece{foreign.length > 1 ? "m" : ""} em fluxos do país dessa moeda. Em fluxo do Brasil, escolha um produto em reais (R$).
+    </p>
   );
 }

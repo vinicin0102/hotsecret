@@ -4,7 +4,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { UploadInput } from "@/components/admin/UploadInput";
 import { useFetch } from "@/hooks/useFetch";
 import { api, uploadFile } from "@/lib/client";
-import { formatBRL, formatDateTime } from "@/lib/format";
+import { formatBRL, formatDateTime, formatMoney, productOption } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { withBase } from "@/lib/paths";
 import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
@@ -86,6 +86,7 @@ interface Product {
   id: string;
   name: string;
   price: number;
+  currency?: string;
   active: boolean;
 }
 type Draft = Omit<Brain, "id"> & { id?: string };
@@ -788,7 +789,7 @@ export default function CerebroPage() {
                         <option value="">— selecione —</option>
                         {products.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} · {formatBRL(p.price)} {p.active ? "" : "(inativo)"}
+                            {productOption(p)} {p.active ? "" : "(inativo)"}
                           </option>
                         ))}
                       </select>
@@ -878,7 +879,7 @@ export default function CerebroPage() {
                             <option value="">— nenhum (a IA continua a conversa) —</option>
                             {products.map((p) => (
                               <option key={p.id} value={p.id}>
-                                {p.name} · {formatBRL(p.price)}
+                                {productOption(p)}
                               </option>
                             ))}
                           </select>
@@ -1075,7 +1076,7 @@ export default function CerebroPage() {
                                 const p = products.find((x) => x.id === o.productId);
                                 return (
                                   <option key={o.id} value={`o:${o.id}`}>
-                                    {(o.headline || p?.name || "Oferta") + (p ? ` · ${formatBRL(p.price)}` : "")}
+                                    {(o.headline || p?.name || "Oferta") + (p ? ` · ${formatMoney(p.price, p.currency)}` : "")}
                                     {o.style === "call" ? " (chamada de vídeo)" : ""}
                                   </option>
                                 );
@@ -1085,7 +1086,7 @@ export default function CerebroPage() {
                           <optgroup label="Todos os produtos">
                             {products.map((p) => (
                               <option key={p.id} value={`p:${p.id}`}>
-                                {p.name} · {formatBRL(p.price)}
+                                {productOption(p)}
                                 {p.active === false ? " (inativo)" : ""}
                               </option>
                             ))}

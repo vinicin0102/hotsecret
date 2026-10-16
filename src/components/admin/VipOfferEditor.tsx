@@ -1,7 +1,7 @@
 // Editor da oferta "Canal VIP AO VIVO" (bloco Oferta do fluxo e ofertas do Cérebro):
 // 2º ingresso (acesso básico), textos do upgrade, mensagens do pagamento e o pop-up de saída.
 import type { VipOfferTexts } from "@/types/flow";
-import { formatMoney } from "@/lib/format";
+import { productOption } from "@/lib/format";
 import { UploadInput } from "./UploadInput";
 import { withBase } from "@/lib/paths";
 
@@ -57,7 +57,7 @@ export function VipOfferEditor({
             .filter((p) => p.id !== mainProductId)
             .map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} · {formatMoney(p.price, p.currency)} {p.active === false ? "(inativo)" : ""}
+                {productOption(p)} {p.active === false ? "(inativo)" : ""}
               </option>
             ))}
         </select>

@@ -2,7 +2,7 @@
 import type { ChoiceButton, FlowNode, NodeType } from "@/types/flow";
 import { shortId } from "@/features/chat-engine/engine";
 import { UploadInput } from "@/components/admin/UploadInput";
-import { formatBRL } from "@/lib/format";
+import { productOption } from "@/lib/format";
 import { withBase } from "@/lib/paths";
 import { NODE_META, nodeTypeLabel } from "./nodeMeta";
 import { DelayEditor } from "./DelayEditor";
@@ -13,6 +13,7 @@ export interface SidebarProduct {
   id: string;
   name: string;
   price: number;
+  currency?: string;
   active: boolean;
 }
 export interface SidebarBrain {
@@ -375,7 +376,7 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                     <option value="">— nenhum (segue a saída “Recusou a chamada”) —</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} · {formatBRL(p.price)}
+                        {productOption(p)}
                       </option>
                     ))}
                   </select>
@@ -405,7 +406,7 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                 <option value="">— selecione —</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} · {formatBRL(p.price)} {p.active ? "" : "(inativo)"}
+                    {productOption(p)} {p.active ? "" : "(inativo)"}
                   </option>
                 ))}
               </select>

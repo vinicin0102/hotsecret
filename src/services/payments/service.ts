@@ -11,7 +11,8 @@ import { trackEvent } from "../tracking";
 import { addTagToLead, ensureTag } from "../tags";
 import { getProvider, providerNameForCurrency } from "./index";
 import { createZenithCheckout, type ZenithPayerInput } from "./zenith-checkout";
-import { asCurrency } from "@/lib/format";
+import { asCurrency, currencyOfLocale } from "@/lib/format";
+import { getFunnelSettings } from "../funnels";
 import { sendMetaPurchase } from "../meta-capi";
 import { brainOffers, brainVoiceCalls } from "../ai/brain";
 import { publicNextAction } from "./zenith";
@@ -133,11 +134,18 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
   const product = productId ? await prisma.product.findUnique({ where: { id: productId } }) : null;
   if (!product || !product.active) throw new HttpError(400, "Produto indisponível");
 
+  // o país do fluxo decide a moeda: fluxo do Brasil só cobra em reais (PIX), do México só em pesos.
+  // Produto de outra moeda (ex.: escolhido por engano num upsell do vídeo) nunca vira cobrança por outro meio.
+  const funnel = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { slug: true, settings: true } });
   const currency = asCurrency(product.currency);
+  const flowCurrency = currencyOfLocale(getFunnelSettings(funnel?.settings).locale);
+  if (currency !== flowCurrency) {
+    console.warn(`[checkout] produto ${product.id} em ${currency} recusado no fluxo ${session.funnelId} (${flowCurrency})`);
+    throw new HttpError(400, flowCurrency === "BRL" ? "Produto indisponível" : "Producto no disponible");
+  }
   const providerName = providerNameForCurrency(currency);
   const es = currency !== "BRL";
   if (providerName === "zenith") {
-    const funnel = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { slug: true } });
     return createZenithCheckout({ session, product, offerNodeId: input.offerNodeId, funnelSlug: funnel?.slug ?? "" }, input.payer);
   }
 
@@ -189,7 +197,6 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     data: { paymentId: payment.id, productId: product.id, amount: product.price, method: input.method },
   });
 
-  const funnel = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { slug: true } });
   let result;
   try {
     result = await provider.createPayment({

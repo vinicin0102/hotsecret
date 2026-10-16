@@ -17,6 +17,15 @@ export function formatMoney(cents: number | null | undefined, currency: unknown 
   return ((cents ?? 0) / 100).toLocaleString(locale, { style: "currency", currency: c });
 }
 
+/** opção de produto no painel: "Nome · R$ 19,90" ou "Nome · MX$ 199,00 (MXN)" — a moeda real sempre à vista */
+export function productOption(p: { name: string; price: number; currency?: string | null }): string {
+  const c = asCurrency(p.currency);
+  return `${p.name} · ${formatMoney(p.price, c)}${c === "BRL" ? "" : ` (${c})`}`;
+}
+
+/** moeda que o fluxo cobra, pelo país do fluxo (Brasil = reais/PIX) */
+export const currencyOfLocale = (locale: unknown): Currency => (locale === "es-MX" ? "MXN" : locale === "es-AR" ? "ARS" : "BRL");
+
 export function formatNumber(n: number): string {
   return n.toLocaleString("pt-BR");
 }

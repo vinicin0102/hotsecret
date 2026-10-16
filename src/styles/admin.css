@@ -1373,3 +1373,8 @@ code.inline {
 .ai-errors li.is-backup {
   color: var(--gold);
 }
+
+/* aviso de produto em outra moeda (editor de vídeo) */
+.hint.warn-text {
+  color: var(--gold);
+}
