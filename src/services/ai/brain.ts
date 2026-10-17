@@ -786,11 +786,14 @@ ${flowOffersSection(input.flowOffers)}`;
     for (let i = 0; i < messages.length; i++) {
       for (const o of validOffers) messages[i] = messages[i].replace(new RegExp(`\\(?\\[?"?${o.id}"?\\]?\\)?`, "g"), "").trim();
     }
+    // a IA escreveu a prévia como texto ("Á [prévia do VIP]", "[foto]"): a anotação sai do balão e a prévia vai de verdade
+    const noted = notedMedia(messages, images);
+    for (let i = 0; i < messages.length; i++) messages[i] = stripNotes(messages[i]);
     const cleanMessages = messages.filter(Boolean);
     messages.length = 0;
     messages.push(...cleanMessages);
     const audio = audios.find((a) => a.id === parsed!.audio_id) ?? null;
-    const image = images.find((a) => a.id === parsed!.image_id) ?? null;
+    const image = images.find((a) => a.id === parsed!.image_id) ?? noted;
     const vRaw = typeof parsed.voice_call_id === "string" ? parsed.voice_call_id.trim() : "";
     const voiceCall = vRaw ? (voiceCalls.find((v) => v.id === vRaw || v.id.toLowerCase() === vRaw.toLowerCase()) ?? null) : null;
     if (!messages.length && !offer && !audio && !image && !voiceCall) return null;
@@ -907,6 +910,35 @@ const plain = (v: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 const has = (re: RegExp, text: string) => re.test(plain(text));
+
+/** anotação entre colchetes que a IA às vezes escreve no balão ("[prévia do VIP]", "[foto]", "[áudio]") */
+const NOTE = /\s*\[[^\]\n]{1,80}\]\s*/g;
+/** tira as anotações do balão; o que sobrar sem palavra de verdade (ex.: "Á") some */
+export function stripNotes(m: string): string {
+  const out = m.replace(NOTE, " ").replace(/\s{2,}/g, " ").trim();
+  return (out.match(/\p{L}/gu) ?? []).length >= 2 || /\p{Extended_Pictographic}/u.test(out) ? out : "";
+}
+/** prévia que a IA quis mandar escrevendo no texto: VIP/grupo/canal → card do Grupo VIP; foto/vídeo/prévia → a prévia desse tipo */
+export function notedMedia(messages: string[], images: BrainMedia[]): BrainMedia | null {
+  for (const m of messages) {
+    for (const note of m.match(NOTE) ?? []) {
+      const k = plain(note);
+      if (/vip|grupo|canal|privad/.test(k)) {
+        const vip = images.find((x) => x.kind === "vip");
+        if (vip) return vip;
+      }
+      if (/previa|foto|imagem|video|provinha/.test(k)) {
+        const wantVideo = /video/.test(k);
+        const pick = images.find((x) => x.kind !== "vip" && (wantVideo ? x.kind === "video" : true)) ?? images.find((x) => x.kind !== "vip");
+        if (pick) return pick;
+      }
+    }
+  }
+  return null;
+}
+/** a resposta fala do VIP como bônus/presente ("vc ainda ganha meu canal VIP de bônus") */
+const BOT_VIP = /\b(vip|grupo privado|canal privado)\b/i;
+const BOT_VIP_GIFT = /(bonus|presente|brinde|de gra[cç]a|ganha|ganhar|leva junto|vem junto|por dentro|olha (como|so)|da uma olhada)/i;
 
 /**
  * Garante o envio quando o pedido do lead é claro e a IA não escolheu nada:
@@ -1033,9 +1065,12 @@ export function assistReply(
   }
 
   // pedido de prévia (pedir "chamada de vídeo" é ligação, não prévia)
-  // perguntou o que tem / o que ganha no VIP: manda o card do Grupo VIP (uma vez)
+  // prévia já mandada nesta conversa não repete
+  if (out.image && past.includes(`image_id "${out.image.id}"`)) out.image = null;
+  // perguntou o que tem / o que ganha no VIP, ou a resposta explica o VIP como bônus: manda o card do Grupo VIP (uma vez)
   const vipCard = images.find((m) => m.kind === "vip" && !past.includes(`image_id "${m.id}"`));
-  if (!out.image && vipCard && has(VIP_INTENT, lastLead)) out.image = vipCard;
+  const botText = out.messages.join(" ");
+  if (!out.image && vipCard && (has(VIP_INTENT, lastLead) || (has(BOT_VIP, botText) && has(BOT_VIP_GIFT, botText)))) out.image = vipCard;
   if (!out.image && images.length && has(PREVIEW_INTENT, lastLead) && !has(CALL_INTENT, lastLead)) {
     // pedido de prévia é foto/vídeo; o card do VIP só se não houver outra
     const unsent = images.filter((m) => !past.includes(`image_id "${m.id}"`)).sort((a, b) => Number(a.kind === "vip") - Number(b.kind === "vip"));

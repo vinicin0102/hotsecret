@@ -194,6 +194,7 @@ export default apiHandler({
     const vipCard = reply.image?.kind === "vip" && reply.image.groupId ? await vipPreviewCard(reply.image.groupId, { bonusText: reply.image.bonusText }) : null;
     if (reply.image?.kind === "vip") {
       if (vipCard) await addConversationMessage(session.conversationId, "bot", "vip_preview", { ...vipCard, aiImageId: reply.image.id } as Prisma.InputJsonValue, node.id);
+      else console.warn(`[ai] prévia do Grupo VIP não enviada: grupo ${reply.image.groupId} não existe ou não está publicado (cérebro ${brain.name})`);
     } else if (reply.image) {
       const kind = reply.image.kind === "video" ? "video" : "image";
       await addConversationMessage(session.conversationId, "bot", kind, { url: reply.image.url, caption: "", aiImageId: reply.image.id }, node.id);

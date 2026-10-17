@@ -26,3 +26,30 @@ test("pediu prévia/foto: manda a foto antes do card do VIP", () => {
   const r = assistReply(base, [{ role: "lead", text: "manda uma prévia" }], [], new Map(), [], [vip, foto]);
   assert.equal(r.image?.id, "im1");
 });
+
+test("IA escreveu '[prévia do VIP]' no texto: a anotação some e o card vai de verdade", async () => {
+  const { stripNotes, notedMedia } = await import("../src/services/ai/brain");
+  const msgs = ["E finalizando agora, vc ainda ganha meu canal VIP de bônus depois da chamada 😈", "Á [prévia do VIP]"];
+  assert.equal(notedMedia(msgs, [foto, vip])?.id, "vg1");
+  assert.equal(stripNotes("Á [prévia do VIP]"), "");
+  assert.equal(stripNotes("olha só [foto] amor"), "olha só amor");
+  assert.equal(stripNotes("😈 [vídeo]"), "😈");
+  assert.equal(notedMedia(["toma [vídeo]"], [foto, { id: "v1", url: "/v.mp4", kind: "video" }])?.id, "v1");
+  assert.equal(notedMedia(["sem anotação"], [foto, vip]), null);
+});
+
+test("resposta explicando o VIP de bônus leva o card (uma vez)", () => {
+  const r = assistReply({ ...base, messages: ["E finalizando agora, vc ainda ganha meu canal VIP de bônus depois da chamada 😈"] }, [{ role: "lead", text: "e o que mais?" }], [], new Map(), [], [foto, vip]);
+  assert.equal(r.image?.id, "vg1");
+  const again = assistReply(
+    { ...base, messages: ["lembra que vc ganha meu VIP de bônus"], image: vip },
+    [{ role: "bot", text: '[mandou a prévia do Grupo VIP "Bianca" (image_id "vg1")]' }, { role: "lead", text: "show" }],
+    [],
+    new Map(),
+    [],
+    [foto, vip],
+  );
+  assert.equal(again.image, null);
+  const plainTalk = assistReply({ ...base, messages: ["meu vip é top"] }, [{ role: "lead", text: "oi" }], [], new Map(), [], [foto, vip]);
+  assert.equal(plainTalk.image, null);
+});
