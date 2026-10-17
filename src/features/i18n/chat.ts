@@ -43,6 +43,8 @@ const pt = {
   vipUpsellText: "Quer ver tudo que eu posto no meu VIP? 😈",
   vipUnlockCta: "QUERO MEU VIP 🔥",
   vipOpen: "ABRIR MEU VIP",
+  vipAccessTitle: "Seu acesso ao meu VIP está liberado 🎁",
+  vipAccessSub: "Todas as fotos e vídeos, sem censura",
   vipBackToCall: "Voltar para a chamada",
   vipDoneStep: "O acesso libera sozinho assim que o PIX for confirmado",
   // checkout
@@ -262,6 +264,8 @@ const es: ChatTexts = {
   vipUpsellText: "¿Quieres ver todo lo que subo a mi VIP? 😈",
   vipUnlockCta: "QUIERO MI VIP 🔥",
   vipOpen: "ABRIR MI VIP",
+  vipAccessTitle: "Tu acceso a mi VIP está liberado 🎁",
+  vipAccessSub: "Todas las fotos y videos, sin censura",
   vipBackToCall: "Volver a la llamada",
   vipDoneStep: "El acceso se libera solo en cuanto se confirme el pago",
   finishAccess: "Finalizar acceso",

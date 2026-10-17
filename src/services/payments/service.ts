@@ -307,6 +307,8 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
     // venda na API de Conversões da Meta (falha aqui nunca afeta o pagamento)
     const approved = await prisma.payment.findUnique({ where: { id: paymentId } });
     if (approved) await sendMetaPurchase(approved).catch((e) => console.error("[meta-capi]", e));
+    // Grupo VIP liberado para quem comprou qualquer produto: o link de acesso aparece no chat
+    if (approved) await import("../vip").then((m) => m.grantVipAccessMessage(approved)).catch((e) => console.error("[vip-access]", e));
   }
   return prisma.payment.findUnique({ where: { id: paymentId } });
 }

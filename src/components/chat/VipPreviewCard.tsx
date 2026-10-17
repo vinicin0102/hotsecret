@@ -4,6 +4,7 @@
 // No upsell "Grupo VIP" da chamada, o rodapé (footer) traz o preço e o botão de compra.
 import type { ReactNode } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
+import { withBase } from "@/lib/paths";
 import type { VipPreviewCard as Card } from "@/services/vip";
 
 export function VipPreviewCard({ card, tag, footer }: { card: Card; tag?: string; footer?: ReactNode }) {
@@ -65,6 +66,34 @@ export function VipPreviewCard({ card, tag, footer }: { card: Card; tag?: string
           )}
           {footer ?? <div className="vipc-bonus">🎁 {card.bonus || t.vipBonus}</div>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Comprou (qualquer produto) e o VIP é liberado para compradores: card com o botão para abrir o grupo já liberado. */
+export function VipAccessCard({ name, avatarUrl, url }: { name: string; avatarUrl: string | null; url: string }) {
+  const { t } = useChatI18n();
+  return (
+    <div className="msg-row bot">
+      <div className="vipc vipc-access">
+        <div className="vipc-access-top">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="vipc-avatar" src={avatarUrl} alt="" />
+          ) : (
+            <span className="vipc-avatar">{name.slice(0, 1)}</span>
+          )}
+          <div>
+            <b>{t.vipAccessTitle}</b>
+            <small>
+              ♛ {name} · {t.vipAccessSub}
+            </small>
+          </div>
+        </div>
+        <a className="vipc-cta" href={withBase(url)} target="_blank" rel="noopener">
+          {t.vipOpen} <span aria-hidden="true">→</span>
+        </a>
       </div>
     </div>
   );

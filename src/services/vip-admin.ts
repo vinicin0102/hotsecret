@@ -27,6 +27,7 @@ export const vipGroupSchema = z.object({
       headline: txt(160),
       perks: z.array(z.string().trim().max(120)).max(8).optional(),
       ctaLabel: txt(40),
+      anyPurchase: z.boolean().optional(),
     })
     .default({}),
 });
@@ -47,6 +48,7 @@ export function vipGroupData(d: VipGroupInput) {
       ...(d.settings.headline ? { headline: d.settings.headline } : {}),
       ...(d.settings.perks?.filter(Boolean).length ? { perks: d.settings.perks.filter(Boolean) } : {}),
       ...(d.settings.ctaLabel ? { ctaLabel: d.settings.ctaLabel } : {}),
+      anyPurchase: d.settings.anyPurchase !== false,
     } as Prisma.InputJsonValue,
   };
 }

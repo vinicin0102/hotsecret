@@ -4973,3 +4973,33 @@ img.call-avatar {
 .vipu .vipc-tile {
   aspect-ratio: 4 / 3;
 }
+
+/* comprou → acesso ao Grupo VIP liberado (card com o botão no chat) */
+.vipc-access {
+  padding: 14px;
+}
+.vipc-access-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.vipc-access-top .vipc-avatar {
+  width: 52px;
+  height: 52px;
+  border-width: 2px;
+}
+.vipc-access-top div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vipc-access-top b {
+  font-size: 15px;
+  line-height: 1.3;
+}
+.vipc-access-top small {
+  font-size: 12.5px;
+  color: #cdbcc6;
+}

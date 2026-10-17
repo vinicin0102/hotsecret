@@ -35,7 +35,7 @@ interface Group {
   productId: string | null;
   locale: "pt-BR" | "es-MX" | "es-AR";
   published: boolean;
-  settings: { headline?: string; perks?: string[]; ctaLabel?: string };
+  settings: { headline?: string; perks?: string[]; ctaLabel?: string; anyPurchase?: boolean };
   posts: Post[];
 }
 interface Product {
@@ -91,7 +91,7 @@ export default function VipGroupEditor() {
           productId: g.productId,
           locale: g.locale,
           published: g.published,
-          settings: { headline: g.settings.headline ?? "", perks: g.settings.perks ?? [], ctaLabel: g.settings.ctaLabel ?? "" },
+          settings: { headline: g.settings.headline ?? "", perks: g.settings.perks ?? [], ctaLabel: g.settings.ctaLabel ?? "", anyPurchase: g.settings.anyPurchase !== false },
         },
       });
       setSaved("saved");
@@ -191,6 +191,18 @@ export default function VipGroupEditor() {
           </div>
 
           <div className="section-title">Assinatura VIP</div>
+          <label className="checkbox" style={{ marginBottom: 6 }}>
+            <input
+              type="checkbox"
+              checked={g.settings.anyPurchase !== false}
+              onChange={(e) => set({ settings: { ...g.settings, anyPurchase: e.target.checked } })}
+            />
+            Liberar o VIP para quem comprou qualquer produto
+          </label>
+          <p className="hint" style={{ marginTop: 0 }}>
+            Comprou qualquer coisa no chat, na chamada ou num upsell: entra no grupo já liberado. Depois do pagamento aparece no chat um card com o
+            botão <b>Abrir meu VIP</b> (do grupo da mesma modelo do fluxo).
+          </p>
           <div className="field">
             <label htmlFor="vg-prod">Produto da assinatura</label>
             <select id="vg-prod" className="select" value={g.productId ?? ""} onChange={(e) => set({ productId: e.target.value || null })}>

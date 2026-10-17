@@ -30,5 +30,8 @@ test("mídia e configurações vindas do banco", () => {
     { url: "/b.mp4", kind: "video" },
   ]);
   assert.deepEqual(vipMedia("x"), []);
-  assert.deepEqual(vipSettings({ headline: " Oi ", perks: ["a", "", 3], ctaLabel: "" }), { headline: "Oi", perks: ["a"] });
+  assert.deepEqual(vipSettings({ headline: " Oi ", perks: ["a", "", 3], ctaLabel: "" }), { headline: "Oi", perks: ["a"], anyPurchase: true });
+  // liberar para quem comprou qualquer produto: ligado por padrão, desliga só se marcado
+  assert.equal(vipSettings({}).anyPurchase, true);
+  assert.equal(vipSettings({ anyPurchase: false }).anyPurchase, false);
 });

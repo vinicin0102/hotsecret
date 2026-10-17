@@ -17,7 +17,7 @@ import { DeliveryCard } from "./DeliveryCard";
 import { CallScreen, DownsellOffer, IncomingCall, PixPopup, VoiceCall } from "./VideoCall";
 import { Particles } from "./Particles";
 import { BgVideo } from "./BgVideo";
-import { VipPreviewCard } from "./VipPreviewCard";
+import { VipAccessCard, VipPreviewCard } from "./VipPreviewCard";
 import type { VipPreviewCard as VipCard } from "@/services/vip";
 import { LiveHeader, LiveIncomingCall, LivePreviewButton, LivePreviewCard, VipExitModal, VipOfferCard, VipOfferModal, VipPaySheet } from "./LiveChannel";
 
@@ -165,6 +165,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
               />
             </MessageBubble>
           );
+        }
+        if (item.type === "vip_access") {
+          return <VipAccessCard key={item.id} name={String(c.name ?? "VIP")} avatarUrl={(c.avatarUrl as string) || null} url={String(c.url ?? "")} />;
         }
         if (item.type === "vip_preview") {
           return <VipPreviewCard key={item.id} card={c as unknown as VipCard} />;

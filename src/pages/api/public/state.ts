@@ -29,7 +29,7 @@ export default apiHandler({
     const messages = await prisma.message.findMany({
       where: {
         conversationId: session.conversationId,
-        type: { in: ["recovery", "payment_update"] },
+        type: { in: ["recovery", "payment_update", "vip_access"] },
         createdAt: { gt: Number.isNaN(since.getTime()) ? new Date(0) : since },
       },
       orderBy: { createdAt: "asc" },

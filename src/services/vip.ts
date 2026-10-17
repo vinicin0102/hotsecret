@@ -33,6 +33,8 @@ export interface VipSettings {
   perks?: string[];
   /** texto do botão de assinar */
   ctaLabel?: string;
+  /** quem comprou QUALQUER produto (chat, chamada, upsell…) também é VIP — padrão: sim */
+  anyPurchase?: boolean;
 }
 
 type GroupWithPosts = VipGroup & { posts: VipPost[] };
@@ -54,6 +56,7 @@ export function vipSettings(raw: unknown): VipSettings {
     ...(typeof s.headline === "string" && s.headline.trim() ? { headline: s.headline.trim() } : {}),
     ...(Array.isArray(s.perks) ? { perks: s.perks.filter((p): p is string => typeof p === "string" && !!p.trim()).map((p) => p.trim()) } : {}),
     ...(typeof s.ctaLabel === "string" && s.ctaLabel.trim() ? { ctaLabel: s.ctaLabel.trim() } : {}),
+    anyPurchase: s.anyPurchase !== false,
   };
 }
 
@@ -155,6 +158,8 @@ async function entitlements(group: VipGroup, leadId: string | null) {
   const owned = new Set(approved.map((p) => p.productId));
   const grants = approved.length ? await upsellGrantProducts(group.id) : new Set<string>();
   const subscribed =
+    // "Liberar para quem comprou qualquer produto": qualquer pagamento aprovado vale
+    (vipSettings(group.settings).anyPurchase && approved.length > 0) ||
     (!!group.productId && owned.has(group.productId)) ||
     approved.some((p) => grants.has(p.productId) || deliveryPointsToGroup(p.product.deliveryUrl, group.slug));
   return { owned, subscribed };
@@ -322,4 +327,30 @@ export type VipPreviewCard = NonNullable<Awaited<ReturnType<typeof vipPreviewCar
 /** link do grupo já como este lead (o que ele comprou no chat/na chamada vale lá) */
 export async function vipAccessUrl(group: { id: string; slug: string }, leadId: string): Promise<string> {
   return `/g/${group.slug}?acesso=${encodeURIComponent(await signVipToken({ leadId, groupId: group.id }))}`;
+}
+
+/**
+ * Pagamento aprovado no chat: se há Grupo VIP liberado para quem comprou qualquer produto, a conversa ganha o card
+ * "Seu acesso ao VIP está liberado" com o link do grupo já como este lead (uma vez por grupo). O grupo é o da mesma
+ * modelo do fluxo; sem nenhum da mesma modelo, vale o único grupo liberado.
+ */
+export async function grantVipAccessMessage(payment: { leadId: string; conversationId: string | null; funnelId: string | null }) {
+  if (!payment.conversationId) return;
+  const groups = (await prisma.vipGroup.findMany({ where: { published: true }, select: { id: true, slug: true, name: true, avatarUrl: true, characterId: true, settings: true } })).filter(
+    (g) => vipSettings(g.settings).anyPurchase,
+  );
+  if (!groups.length) return;
+  const funnel = payment.funnelId ? await prisma.funnel.findUnique({ where: { id: payment.funnelId }, select: { characterId: true } }) : null;
+  const group = groups.find((g) => !!funnel?.characterId && g.characterId === funnel.characterId) ?? (groups.length === 1 ? groups[0] : undefined);
+  if (!group) return;
+  const sent = await prisma.message.findMany({ where: { conversationId: payment.conversationId, type: "vip_access" }, select: { content: true } });
+  if (sent.some((m) => (m.content as { groupId?: string } | null)?.groupId === group.id)) return;
+  const character = group.characterId ? await prisma.character.findUnique({ where: { id: group.characterId }, select: { name: true, avatarUrl: true } }) : null;
+  const { addConversationMessage } = await import("./payments/service");
+  await addConversationMessage(payment.conversationId, "bot", "vip_access", {
+    groupId: group.id,
+    name: group.name || character?.name || "VIP",
+    avatarUrl: group.avatarUrl || character?.avatarUrl || null,
+    url: await vipAccessUrl(group, payment.leadId),
+  });
 }
