@@ -354,6 +354,15 @@ export const experimentSchema = z.object({
 /** nomes de campos de cartão (PAN, validade, CVC) — recusados no checkout */
 export const CARD_FIELD = /^(card|pan$|cvc|cvv|cvn|expir|exp(month|year)|securitycode)/i;
 
+/** dados do comprador pedidos pelo catálogo do gateway (Zenith). Nunca dados de cartão. */
+export const payerSchema = z.object({
+  methodCode: z.string().max(40).regex(/^[\w.-]+$/).optional(),
+  email: z.string().trim().max(200),
+  customer: z.record(z.string().max(40).regex(/^[A-Za-z][\w]{0,39}$/), z.string().max(200)).refine((o) => Object.keys(o).length <= 30)
+    // dados de cartão só existem nos campos hospedados do Zenith Elements — nunca passam por aqui
+    .refine((o) => !Object.keys(o).some((k) => CARD_FIELD.test(k)), "card_data_not_allowed"),
+});
+
 export const checkoutSchema = z.object({
   token: z.string().min(10).max(2000),
   offerNodeId: id,
@@ -361,15 +370,7 @@ export const checkoutSchema = z.object({
   productId: z.string().max(64).optional(),
   method: z.enum(["PIX", "CARD"]).default("PIX"),
   /** dados do comprador pedidos pelo catálogo do gateway (Zenith). Nunca dados de cartão. */
-  payer: z
-    .object({
-      methodCode: z.string().max(40).regex(/^[\w.-]+$/).optional(),
-      email: z.string().trim().max(200),
-      customer: z.record(z.string().max(40).regex(/^[A-Za-z][\w]{0,39}$/), z.string().max(200)).refine((o) => Object.keys(o).length <= 30)
-        // dados de cartão só existem nos campos hospedados do Zenith Elements — nunca passam por aqui
-        .refine((o) => !Object.keys(o).some((k) => CARD_FIELD.test(k)), "card_data_not_allowed"),
-    })
-    .optional(),
+  payer: payerSchema.optional(),
   // cookies do pixel da Meta (para a API de Conversões)
   fbp: z.string().max(200).regex(/^fb\.\d\.\d+\.\d+$/).optional().catch(undefined),
   fbc: z.string().max(400).regex(/^fb\.\d\.\d+\.[\w-]+$/).optional().catch(undefined),

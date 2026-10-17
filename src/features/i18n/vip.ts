@@ -1,0 +1,71 @@
+// Textos da página pública do Grupo VIP (o país do grupo decide o idioma).
+import type { ChatLocale } from "./chat";
+
+const pt = {
+  posts: "posts",
+  photos: "fotos",
+  videos: "vídeos",
+  subscribe: "ASSINAR VIP",
+  youAreVip: "💎 Você é VIP — tudo liberado",
+  headline: "Entra no meu VIP e vê tudo sem censura 🔥",
+  perksTitle: "Assinando, você tem:",
+  once: "pagamento único",
+  secure: "🔒 Compra segura · libera na hora em que o pagamento confirma",
+  vipContent: "Conteúdo VIP",
+  paidContent: "Conteúdo exclusivo",
+  subscribeToSee: "Assinar para ver · {p}",
+  unlockFor: "Desbloquear por {p}",
+  locked: "Bloqueado",
+  tabPosts: "Posts",
+  tabMedia: "Mídias",
+  pinned: "Fixado",
+  empty: "Nenhum post ainda.",
+  loading: "Carregando...",
+  error: "Não foi possível carregar. Toque para tentar de novo.",
+  payTitle: "Liberar conteúdo",
+  unlocked: "Liberado ✓",
+  doneStep: "O conteúdo libera sozinho assim que o pagamento for confirmado",
+  close: "Fechar",
+  retry: "Gerar outro pagamento",
+  draft: "Rascunho — só você está vendo esta página",
+  verified: "Perfil verificado",
+  more: "mais",
+  less: "menos",
+};
+export type VipTexts = typeof pt;
+
+const es: VipTexts = {
+  posts: "posts",
+  photos: "fotos",
+  videos: "videos",
+  subscribe: "SUSCRIBIRME AL VIP",
+  youAreVip: "💎 Eres VIP — todo desbloqueado",
+  headline: "Entra a mi VIP y mira todo sin censura 🔥",
+  perksTitle: "Al suscribirte tienes:",
+  once: "pago único",
+  secure: "🔒 Compra segura · se desbloquea en cuanto se confirma el pago",
+  vipContent: "Contenido VIP",
+  paidContent: "Contenido exclusivo",
+  subscribeToSee: "Suscríbete para ver · {p}",
+  unlockFor: "Desbloquear por {p}",
+  locked: "Bloqueado",
+  tabPosts: "Posts",
+  tabMedia: "Multimedia",
+  pinned: "Fijado",
+  empty: "Todavía no hay posts.",
+  loading: "Cargando...",
+  error: "No se pudo cargar. Toca para intentar de nuevo.",
+  payTitle: "Desbloquear contenido",
+  unlocked: "Desbloqueado ✓",
+  doneStep: "El contenido se desbloquea solo en cuanto se confirme el pago",
+  close: "Cerrar",
+  retry: "Generar otro pago",
+  draft: "Borrador — solo tú ves esta página",
+  verified: "Perfil verificado",
+  more: "más",
+  less: "menos",
+};
+
+const esAR: VipTexts = { ...es, youAreVip: "💎 Sos VIP — todo desbloqueado", headline: "Entrá a mi VIP y mirá todo sin censura 🔥", subscribeToSee: "Suscribite para ver · {p}", error: "No se pudo cargar. Tocá para intentar de nuevo.", draft: "Borrador — solo vos ves esta página", perksTitle: "Al suscribirte tenés:" };
+
+export const vipTexts = (l: ChatLocale): VipTexts => (l === "es-MX" ? es : l === "es-AR" ? esAR : pt);

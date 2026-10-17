@@ -1,7 +1,7 @@
 // Ciclo de vida dos pagamentos:
 // payment_created → payment_pending → payment_approved | payment_failed → payment_refunded
 // Um pagamento só é APROVADO quando o gateway confirma (webhook validado ou consulta à API).
-import type { Payment, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
+import type { Payment, PaymentMethod, PaymentStatus, Prisma, Product } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/api";
 import { randomBytes } from "node:crypto";
@@ -10,7 +10,7 @@ import type { LeadSession } from "@/lib/auth";
 import { trackEvent } from "../tracking";
 import { addTagToLead, ensureTag } from "../tags";
 import { getProvider, providerNameForCurrency } from "./index";
-import { createZenithCheckout, type ZenithPayerInput } from "./zenith-checkout";
+import { createZenithCheckout, type ChargeOwner, type ZenithPayerInput } from "./zenith-checkout";
 import { asCurrency, currencyOfLocale } from "@/lib/format";
 import { getFunnelSettings } from "../funnels";
 import { sendMetaPurchase } from "../meta-capi";
@@ -143,10 +143,30 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
     console.warn(`[checkout] produto ${product.id} em ${currency} recusado no fluxo ${session.funnelId} (${flowCurrency})`);
     throw new HttpError(400, flowCurrency === "BRL" ? "Produto indisponível" : "Producto no disponible");
   }
+  return chargeProduct(
+    { leadId: session.leadId, conversationId: session.conversationId, funnelId: session.funnelId },
+    product,
+    { method: input.method, payer: input.payer, offerNodeId: input.offerNodeId, returnPath: `/f/${funnel?.slug ?? ""}` },
+  );
+}
+
+/**
+ * Gera a cobrança do produto no gateway da moeda dele (reais: PIX; pesos: Zenith).
+ * Usado pelo chat (com conversa e bloco de oferta) e pelo Grupo VIP (sem conversa nem fluxo).
+ * Quem chama já conferiu que o produto pode ser vendido ali.
+ */
+export async function chargeProduct(
+  owner: ChargeOwner,
+  product: Product,
+  opts: { method: PaymentMethod; payer?: ZenithPayerInput; offerNodeId: string | null; returnPath: string },
+) {
+  const input = { method: opts.method, offerNodeId: opts.offerNodeId };
+  const session = owner;
+  const currency = asCurrency(product.currency);
   const providerName = providerNameForCurrency(currency);
   const es = currency !== "BRL";
   if (providerName === "zenith") {
-    return createZenithCheckout({ session, product, offerNodeId: input.offerNodeId, funnelSlug: funnel?.slug ?? "" }, input.payer);
+    return createZenithCheckout({ owner, product, offerNodeId: opts.offerNodeId, returnPath: opts.returnPath }, opts.payer);
   }
 
   // Reaproveita um pagamento pendente recente (evita cobranças duplicadas por duplo clique).
@@ -207,7 +227,7 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
       method: input.method,
       customer: payer,
       notificationUrl: absoluteUrl(`/api/webhooks/payments/${provider.name}`),
-      returnUrl: absoluteUrl(`/f/${funnel?.slug ?? ""}?payment=${payment.id}`),
+      returnUrl: absoluteUrl(`${opts.returnPath}?payment=${payment.id}`),
     });
   } catch (err) {
     console.error("[checkout] falha no gateway", err);
@@ -224,10 +244,12 @@ export async function createCheckout(session: LeadSession, input: CheckoutInput)
       redirectUrl: result.redirectUrl ?? null,
     },
   });
-  await addConversationMessage(session.conversationId, "user", "checkout", {
-    text: `Pedido: ${product.name} — ${input.method === "PIX" ? "PIX" : "Cartão"}`,
-    paymentId: payment.id,
-  }, input.offerNodeId);
+  if (session.conversationId) {
+    await addConversationMessage(session.conversationId, "user", "checkout", {
+      text: `Pedido: ${product.name} — ${input.method === "PIX" ? "PIX" : "Cartão"}`,
+      paymentId: payment.id,
+    }, input.offerNodeId);
+  }
   await applyPaymentStatus(payment.id, result.status === "CREATED" ? "PENDING" : result.status, "checkout");
   return (await prisma.payment.findUnique({ where: { id: updated.id } }))!;
 }

@@ -71,6 +71,32 @@ export async function signLeadToken(s: LeadSession): Promise<string> {
     .sign(secretKey());
 }
 
+/** visitante do Grupo VIP: o lead e o grupo (não há conversa nem fluxo) */
+export interface VipSession {
+  leadId: string;
+  groupId: string;
+}
+
+export async function signVipToken(s: VipSession): Promise<string> {
+  return new SignJWT({ gid: s.groupId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(s.leadId)
+    .setAudience("vip")
+    .setIssuedAt()
+    .setExpirationTime("365d")
+    .sign(secretKey());
+}
+
+export async function verifyVipToken(token: unknown): Promise<VipSession | null> {
+  if (typeof token !== "string" || !token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secretKey(), { audience: "vip" });
+    return { leadId: String(payload.sub), groupId: String(payload.gid) };
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyLeadToken(token: unknown): Promise<LeadSession | null> {
   if (typeof token !== "string" || !token) return null;
   try {

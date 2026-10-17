@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
+import { withVipAccess } from "@/services/vip";
 
 const schema = z.object({ token: z.string().min(10).max(2000), productId: z.string().max(64).optional().nullable() });
 
@@ -17,6 +18,7 @@ export default apiHandler({
       orderBy: { approvedAt: "desc" },
     });
     if (!payment) throw new HttpError(402, "Pagamento ainda não confirmado");
-    return { productName: payment.product.name, url: payment.product.deliveryUrl };
+    // link de um Grupo VIP: o comprador entra já liberado (o mesmo lead)
+    return { productName: payment.product.name, url: await withVipAccess(payment.product.deliveryUrl, session.leadId) };
   },
 });

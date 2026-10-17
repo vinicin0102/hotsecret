@@ -6,7 +6,6 @@ import type { Payment, Prisma, Product } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/api";
 import { absoluteUrl } from "@/lib/paths";
-import type { LeadSession } from "@/lib/auth";
 import { trackEvent } from "../tracking";
 import { addConversationMessage, applyPaymentStatus } from "./service";
 import {
@@ -83,11 +82,16 @@ export function publicZenithMethod(m: ZenithMethod) {
   };
 }
 
-export async function createZenithCheckout(
-  ctx: { session: LeadSession; product: Product; offerNodeId: string; funnelSlug: string },
-  payer: ZenithPayerInput | undefined,
-): Promise<Payment> {
-  const { session, product } = ctx;
+/** quem compra: o lead e, no chat, a conversa e o fluxo (no Grupo VIP não há conversa nem fluxo) */
+export interface ChargeOwner {
+  leadId: string;
+  conversationId: string | null;
+  funnelId: string | null;
+}
+type ZenithCtx = { owner: ChargeOwner; product: Product; offerNodeId: string | null; returnPath: string };
+
+export async function createZenithCheckout(ctx: ZenithCtx, payer: ZenithPayerInput | undefined): Promise<Payment> {
+  const { owner: session, product } = ctx;
   const currency = product.currency;
   const country = ZENITH_COUNTRY[currency];
   if (!country) throw new HttpError(400, T.unavailable);
@@ -106,7 +110,7 @@ export async function createZenithCheckout(
   const method = payer.methodCode ? methods.find((m) => m.code === payer.methodCode) : methods.length === 1 ? methods[0] : undefined;
   if (!method) throw new HttpError(422, T.chooseMethod, { code: "method_required" });
 
-  const returnUrl = absoluteUrl(`/f/${ctx.funnelSlug}`);
+  const returnUrl = absoluteUrl(ctx.returnPath);
   const build = (referenceId: string) =>
     buildZenithCheckoutPayload({
       method,
@@ -199,7 +203,7 @@ export async function createZenithCheckout(
   return send(withBody, ctx);
 }
 
-async function send(payment: Payment, ctx: { session: LeadSession; product: Product; offerNodeId: string }): Promise<Payment> {
+async function send(payment: Payment, ctx: ZenithCtx): Promise<Payment> {
   const outcome = await sendZenithIntent({
     idempotencyKey: payment.idempotencyKey!,
     body: payment.providerRequest!,
@@ -238,13 +242,15 @@ async function send(payment: Payment, ctx: { session: LeadSession; product: Prod
       providerRequest: null,
     },
   });
-  await addConversationMessage(
-    ctx.session.conversationId,
-    "user",
-    "checkout",
-    { text: `Pedido: ${ctx.product.name} — ${r.method?.displayName ?? payment.methodCode ?? ""}`.trim(), paymentId: payment.id },
-    ctx.offerNodeId,
-  );
+  if (ctx.owner.conversationId) {
+    await addConversationMessage(
+      ctx.owner.conversationId,
+      "user",
+      "checkout",
+      { text: `Pedido: ${ctx.product.name} — ${r.method?.displayName ?? payment.methodCode ?? ""}`.trim(), paymentId: payment.id },
+      ctx.offerNodeId,
+    );
+  }
   // aprovação NUNCA vem da resposta da criação: só do webhook assinado
   const st = mapZenithStatus(r.paymentStatus || r.status);
   await applyPaymentStatus(payment.id, st === "FAILED" ? "FAILED" : "PENDING", "checkout");

@@ -495,3 +495,48 @@ model Video {
 
   @@map("videos")
 }
+
+/// Grupo VIP de uma modelo: perfil com fotos/vídeos; o conteúdo VIP libera pagando a assinatura e posts pagos à parte
+model VipGroup {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  /// personagem/modelo (nome e foto do perfil quando o grupo não tem os próprios)
+  characterId String?
+  bio         String?
+  avatarUrl   String?
+  coverUrl    String?
+  /// produto da assinatura VIP: pago, libera todos os posts "Só VIP"
+  productId   String?
+  /// país do grupo: idioma da página e moeda cobrada (pt-BR = reais/PIX)
+  locale      String   @default("pt-BR")
+  published   Boolean  @default(false)
+  /// { headline, perks: string[], ctaLabel }
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts VipPost[]
+
+  @@map("vip_groups")
+}
+
+model VipPost {
+  id          String   @id @default(cuid())
+  groupId     String
+  caption     String?
+  /// [{ url, kind: "image" | "video", preview?: url da prévia borrada (o que aparece bloqueado) }]
+  media       Json     @default("[]")
+  /// free = todos veem · vip = assinantes · paid = paga à parte (productId)
+  access      String   @default("vip")
+  productId   String?
+  pinned      Boolean  @default(false)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group VipGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, publishedAt])
+  @@map("vip_posts")
+}
