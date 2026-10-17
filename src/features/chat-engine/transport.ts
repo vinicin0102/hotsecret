@@ -2,7 +2,7 @@
 import { afterCallAudio } from "@/lib/audio-match";
 import { withBase } from "@/lib/paths";
 import { asCurrency, currencyOfLocale } from "@/lib/format";
-import type { FlowNode, LivePreview, TarotCard, VipOfferTexts } from "@/types/flow";
+import { livePreviewReady, type FlowNode, type LivePreview, type TarotCard, type VipOfferTexts } from "@/types/flow";
 import { metaCookies } from "./pixels";
 import type { ChatCue, TimeRange, UpsellMarker, VideoFrame, VideoTimeline } from "@/types/video";
 import { normalizeTimeline } from "@/types/video";
@@ -518,15 +518,30 @@ export function createPreviewTransport(
       }
     },
     async livePreview() {
-      const list = (await livePreviews()).filter((p) => p.url);
+      const list = (await livePreviews()).filter(livePreviewReady);
       const p = list[previewsShown];
       if (!p) return null;
       previewsShown++;
+      const livePreview = { n: previewsShown, total: list.length };
+      if (p.kind === "vip") {
+        // card do Grupo VIP (no painel, mesmo em rascunho)
+        const res = await fetch(withBase(`/api/admin/vip/${p.groupId}/card`));
+        const card = res.ok ? ((await res.json()) as { card: VipPreviewCard }).card : null;
+        if (!card) return null;
+        return {
+          id: `preview_live_${previewsShown}`,
+          sender: "bot",
+          type: "vip_preview",
+          content: { ...card, bonus: p.caption?.trim() || null, livePreview },
+          nodeId: null,
+          createdAt: new Date().toISOString(),
+        } as ServerMessage;
+      }
       return {
         id: `preview_live_${previewsShown}`,
         sender: "bot",
         type: p.kind,
-        content: { url: p.url, caption: p.caption ?? "", livePreview: { n: previewsShown, total: list.length } },
+        content: { url: p.url, caption: p.caption ?? "", livePreview },
         nodeId: null,
         createdAt: new Date().toISOString(),
       } as ServerMessage;

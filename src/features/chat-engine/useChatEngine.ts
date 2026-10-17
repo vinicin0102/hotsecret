@@ -1228,7 +1228,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       setTyping(false);
       if (!m) return;
       seenServerMsgs.current.add(m.id);
-      push({ kind: "message", id: m.id, sender: "bot", type: m.type as "image" | "video" | "audio", content: m.content, nodeId: m.nodeId, at: m.createdAt });
+      push({ kind: "message", id: m.id, sender: "bot", type: m.type as "image" | "video" | "audio" | "vip_preview", content: m.content, nodeId: m.nodeId, at: m.createdAt });
     } finally {
       setTyping(false);
       setPreviewBusy(false);

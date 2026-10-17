@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { slugify } from "@/lib/format";
 import { withBase } from "@/lib/paths";
-import {
-  DEFAULT_FUNNEL_DELAY,
+import { livePreviewReady, DEFAULT_FUNNEL_DELAY,
   DEFAULT_RECOVERY,
   type FunnelDelay,
   type ChatAppearance,
@@ -11,9 +10,9 @@ import {
   type LivePreview,
   type LiveSettings,
   type RecoverySettings,
-  type TrackingIds,
-} from "@/types/flow";
+  type TrackingIds, } from "@/types/flow";
 import { DelayEditor } from "./DelayEditor";
+import { useFetch } from "@/hooks/useFetch";
 import { UploadInput } from "@/components/admin/UploadInput";
 
 export interface FunnelMeta {
@@ -51,6 +50,8 @@ export function FunnelSettingsModal({
     meta.settings?.locale === "es-MX" || meta.settings?.locale === "es-AR" ? meta.settings.locale : "pt-BR",
   );
   const [live, setLive] = useState<LiveSettings>({ ...(meta.settings?.live ?? {}) });
+  const { data: vipData } = useFetch<{ groups: { id: string; name: string; published: boolean }[] }>("/api/admin/vip");
+  const vipGroups = vipData?.groups ?? [];
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const setPreview = (i: number, patch: Partial<LivePreview>) =>
@@ -68,7 +69,7 @@ export function FunnelSettingsModal({
     setSaving(true);
     setError(null);
     try {
-      const cleanLive: LiveSettings = { ...live, previews: (live.previews ?? []).filter((p) => p.url) };
+      const cleanLive: LiveSettings = { ...live, previews: (live.previews ?? []).filter(livePreviewReady) };
       await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking, appearance, locale, live: cleanLive } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
@@ -196,10 +197,20 @@ export function FunnelSettingsModal({
                 <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
                   <b>Prévia {i + 1}</b>
                   <div className="row">
-                    <select className="select" style={{ width: "auto" }} value={p.kind} onChange={(e) => setPreview(i, { kind: e.target.value as LivePreview["kind"] })}>
+                    <select
+                      className="select"
+                      style={{ width: "auto" }}
+                      value={p.kind}
+                      onChange={(e) => {
+                        const kind = e.target.value as LivePreview["kind"];
+                        // Grupo VIP: já escolhe o primeiro grupo e sugere a frase do bônus
+                        setPreview(i, kind === "vip" ? { kind, groupId: p.groupId || vipGroups[0]?.id, caption: p.caption || "Vem de bônus na chamada de vídeo" } : { kind });
+                      }}
+                    >
                       <option value="image">📷 Foto</option>
                       <option value="video">🎬 Vídeo</option>
                       <option value="audio">🎧 Áudio</option>
+                      <option value="vip">♛ Grupo VIP (bônus)</option>
                     </select>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => movePreview(i, -1)} disabled={i === 0} aria-label="Subir">
                       ↑
@@ -212,18 +223,44 @@ export function FunnelSettingsModal({
                     </button>
                   </div>
                 </div>
-                <UploadInput
-                  value={p.url}
-                  onChange={(url) => setPreview(i, { url, ...(/\.(mp4|webm|mov)(\?|$)/i.test(url) ? { kind: "video" } : /\.(mp3|m4a|ogg|wav|aac|opus)(\?|$)/i.test(url) ? { kind: "audio" } : {}) })}
-                  accept={p.kind === "video" ? "video/*" : p.kind === "audio" ? "audio/*" : "image/*"}
-                />
-                <input
-                  className="input"
-                  style={{ marginTop: 6 }}
-                  placeholder="Legenda (ex.: olha como eu sou safadinha... quer ver mais? vem pro VIP 💋)"
-                  value={p.caption ?? ""}
-                  onChange={(e) => setPreview(i, { caption: e.target.value })}
-                />
+                {p.kind === "vip" ? (
+                  <>
+                    <select className="select" value={p.groupId ?? ""} onChange={(e) => setPreview(i, { groupId: e.target.value || undefined })} aria-label="Grupo VIP da prévia">
+                      <option value="">— escolha o grupo —</option>
+                      {vipGroups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name} {g.published ? "" : "(rascunho — não aparece para o lead)"}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="input"
+                      style={{ marginTop: 6 }}
+                      placeholder="Frase do bônus (ex.: Vem de bônus na chamada de vídeo)"
+                      value={p.caption ?? ""}
+                      onChange={(e) => setPreview(i, { caption: e.target.value })}
+                    />
+                    <span className="hint">
+                      Card com a capa do grupo, quantas fotos e vídeos tem e as prévias borradas — como bônus, sem preço e sem botão.
+                      {vipGroups.length === 0 ? " Crie um grupo em Grupo VIP primeiro." : ""}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <UploadInput
+                      value={p.url}
+                      onChange={(url) => setPreview(i, { url, ...(/\.(mp4|webm|mov)(\?|$)/i.test(url) ? { kind: "video" } : /\.(mp3|m4a|ogg|wav|aac|opus)(\?|$)/i.test(url) ? { kind: "audio" } : {}) })}
+                      accept={p.kind === "video" ? "video/*" : p.kind === "audio" ? "audio/*" : "image/*"}
+                    />
+                    <input
+                      className="input"
+                      style={{ marginTop: 6 }}
+                      placeholder="Legenda (ex.: olha como eu sou safadinha... quer ver mais? vem pro VIP 💋)"
+                      value={p.caption ?? ""}
+                      onChange={(e) => setPreview(i, { caption: e.target.value })}
+                    />
+                  </>
+                )}
               </div>
             ))}
             <button

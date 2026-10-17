@@ -248,10 +248,15 @@ export interface ChatAppearance {
 /** prévia do Canal VIP AO VIVO: liberada uma por uma no botão "Ver prévia" */
 export interface LivePreview {
   id: string;
-  kind: "image" | "video" | "audio";
+  /** vip: card do Grupo VIP como bônus (groupId; a legenda vira a frase do bônus) */
+  kind: "image" | "video" | "audio" | "vip";
   url: string;
   caption?: string;
+  groupId?: string;
 }
+
+/** prévia com conteúdo: arquivo enviado ou (card do VIP) grupo escolhido */
+export const livePreviewReady = (p: LivePreview) => (p.kind === "vip" ? !!p.groupId : !!p.url);
 /** Modo "Canal VIP AO VIVO" do fluxo: ligação ao entrar, chat com cara de live e prévias uma a uma. */
 export interface LiveSettings {
   enabled?: boolean;

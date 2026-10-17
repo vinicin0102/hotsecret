@@ -14,7 +14,7 @@ import { createLiveTransport, createPreviewTransport, type ChatTransport } from 
 import type { ResumeState } from "@/features/chat-engine/useChatEngine";
 import { initPixels } from "@/features/chat-engine/pixels";
 import { asChatLocale } from "@/features/i18n/chat";
-import type { LivePreview, OfferContent, PublicFunnel } from "@/types/flow";
+import { livePreviewReady, type LivePreview, type OfferContent, type PublicFunnel } from "@/types/flow";
 
 interface Props {
   funnel: PublicFunnel | null;
@@ -108,7 +108,7 @@ export default function FunnelPage({ funnel, sandbox, draftPreview }: Props) {
       async () => {
         const r = await fetch(withBase(`/api/admin/funnels/${funnel.id}`)).catch(() => null);
         const j = r?.ok ? ((await r.json()) as { funnel?: { settings?: { live?: { previews?: LivePreview[] } } } }) : null;
-        return (j?.funnel?.settings?.live?.previews ?? []).filter((p) => p.url);
+        return (j?.funnel?.settings?.live?.previews ?? []).filter(livePreviewReady);
       });
     }
     if (!token) return null;

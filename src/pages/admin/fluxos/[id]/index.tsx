@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/useToast";
 import { api } from "@/lib/client";
 import { withBase } from "@/lib/paths";
 import { lockedNodeIds, shortId, validateGraph, type GraphIssue } from "@/features/chat-engine/engine";
-import type { FlowEdge, FlowGraph, FlowNode } from "@/types/flow";
+import { livePreviewReady, type FlowEdge, type FlowGraph, type FlowNode } from "@/types/flow";
 
 interface CharacterRow {
   id: string;
@@ -442,7 +442,7 @@ function Builder() {
       {showPreview && meta && (
         <PreviewModal
           onClose={() => setShowPreview(false)}
-          livePreviews={meta.settings?.live?.enabled ? (meta.settings.live.previews ?? []).filter((p) => p.url) : []}
+          livePreviews={meta.settings?.live?.enabled ? (meta.settings.live.previews ?? []).filter(livePreviewReady) : []}
           funnel={{
             id: meta.id,
             name: meta.name,
@@ -466,7 +466,7 @@ function Builder() {
                     // no preview do painel não há cidade do lead: mostra a fixa (ou nenhuma)
                     city: meta.settings.live.city || undefined,
                     ringText: meta.settings.live.ringText,
-                    previewCount: (meta.settings.live.previews ?? []).filter((p) => p.url).length,
+                    previewCount: (meta.settings.live.previews ?? []).filter(livePreviewReady).length,
                     previewFooter: meta.settings.live.previewFooter,
                     previewButton: meta.settings.live.previewButton,
                   },

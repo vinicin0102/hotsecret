@@ -10,7 +10,7 @@ import type {
   PublicFunnel,
   PublicProduct,
 } from "@/types/flow";
-import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY } from "@/types/flow";
+import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, livePreviewReady } from "@/types/flow";
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
 import { brainOffers, brainVoiceCalls } from "./ai/brain";
@@ -117,7 +117,7 @@ export function publicLive(live: LiveSettings | undefined): PublicLive | undefin
     ...(live.age ? { age: live.age } : {}),
     ...(live.city?.trim() ? { city: live.city.trim() } : {}),
     ...(live.ringText?.trim() ? { ringText: live.ringText.trim() } : {}),
-    previewCount: (live.previews ?? []).filter((p) => p.url).length,
+    previewCount: (live.previews ?? []).filter(livePreviewReady).length,
     ...(live.previewFooter?.trim() ? { previewFooter: live.previewFooter.trim() } : {}),
     ...(live.previewButton?.trim() ? { previewButton: live.previewButton.trim() } : {}),
   };

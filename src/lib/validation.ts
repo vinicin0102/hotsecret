@@ -179,7 +179,11 @@ export const funnelMetaSchema = z.object({
           city: optTxt(60),
           ringText: optTxt(120),
           previews: z
-            .array(z.object({ id, kind: z.enum(["image", "video", "audio"]), url: url.pipe(z.string().min(1, "Prévia sem arquivo")), caption: optTxt(300) }))
+            .array(
+              z
+                .object({ id, kind: z.enum(["image", "video", "audio", "vip"]), url: url.optional().default(""), caption: optTxt(300), groupId: z.string().max(64).optional() })
+                .refine((p) => (p.kind === "vip" ? !!p.groupId : !!p.url), "Prévia sem arquivo (ou prévia do Grupo VIP sem o grupo escolhido)"),
+            )
             .max(20)
             .optional(),
           previewFooter: optTxt(120),
