@@ -265,19 +265,17 @@ export async function vipCheckout(group: GroupWithPosts, session: VipSession, pr
 
 /**
  * Card "como é o meu VIP" que o Cérebro manda no chat: capa, foto, quantas fotos/vídeos, mosaico (grátis à vista,
- * o resto só com a prévia borrada), benefícios e o preço. O botão abre a página do grupo já como este lead
- * (compras feitas no chat valem lá). Grupo em rascunho só aparece no teste do painel (allowDraft).
+ * o resto só com a prévia borrada) e os benefícios. É apresentado como BÔNUS (ex.: da chamada de vídeo): sem preço,
+ * sem botão e sem link — a percepção de valor sobe sem virar mais uma coisa para comprar.
+ * Grupo em rascunho só aparece no teste do painel (allowDraft).
  */
-export async function vipPreviewCard(groupId: string, opts: { leadId?: string; allowDraft?: boolean } = {}) {
+export async function vipPreviewCard(groupId: string, opts: { allowDraft?: boolean; bonusText?: string } = {}) {
   const group = await prisma.vipGroup.findUnique({
     where: { id: groupId },
     include: { posts: { orderBy: [{ pinned: "desc" }, { publishedAt: "desc" }] } },
   });
   if (!group || (!group.published && !opts.allowDraft)) return null;
-  const [products, character] = await Promise.all([
-    sellableProducts(group),
-    group.characterId ? prisma.character.findUnique({ where: { id: group.characterId } }) : null,
-  ]);
+  const character = group.characterId ? await prisma.character.findUnique({ where: { id: group.characterId } }) : null;
   const tiles: { kind: "image" | "video"; url: string | null; preview: string | null }[] = [];
   for (const p of group.posts) {
     const free = postAccess(p) === "free";
@@ -288,8 +286,6 @@ export async function vipPreviewCard(groupId: string, opts: { leadId?: string; a
   }
   const all = group.posts.flatMap((p) => vipMedia(p.media));
   const settings = vipSettings(group.settings);
-  const sub = group.productId ? products.get(group.productId) : undefined;
-  const access = opts.leadId ? await signVipToken({ leadId: opts.leadId, groupId: group.id }) : null;
   return {
     groupId: group.id,
     name: group.name || character?.name || "VIP",
@@ -299,8 +295,8 @@ export async function vipPreviewCard(groupId: string, opts: { leadId?: string; a
     tiles,
     headline: settings.headline ?? null,
     perks: (settings.perks ?? []).slice(0, 3),
-    price: sub ? { price: sub.price, originalPrice: sub.originalPrice, currency: sub.currency } : null,
-    url: `/g/${group.slug}${access ? `?acesso=${encodeURIComponent(access)}` : ""}`,
+    /** frase do bônus (vazio = texto padrão do país) */
+    bonus: opts.bonusText?.trim() || null,
   };
 }
 export type VipPreviewCard = NonNullable<Awaited<ReturnType<typeof vipPreviewCard>>>;

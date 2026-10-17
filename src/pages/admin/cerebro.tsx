@@ -70,7 +70,7 @@ interface Brain {
   offers: Offer[];
   audios: Audio[];
   /** kind "vip": card do Grupo VIP (groupId) em vez de um arquivo */
-  images: (Audio & { kind?: "image" | "video" | "vip"; groupId?: string })[];
+  images: (Audio & { kind?: "image" | "video" | "vip"; groupId?: string; bonusText?: string })[];
   voiceCalls?: VoiceCallItem[];
   maxReplies: number;
   fallbackMessage: string;
@@ -606,7 +606,14 @@ export default function CerebroPage() {
             ...d,
             images: [
               ...(d.images ?? []),
-              { id: shortId("vg"), url: "", kind: "vip", groupId: vipGroups?.groups[0]?.id ?? "", when: "Quando explicar o que ele ganha no VIP ou ele perguntar o que tem / como é o grupo" },
+              {
+                id: shortId("vg"),
+                url: "",
+                kind: "vip",
+                groupId: vipGroups?.groups[0]?.id ?? "",
+                bonusText: "Vem de bônus na chamada de vídeo",
+                when: "Quando explicar o que ele ganha na chamada de vídeo ou ele perguntar o que tem no VIP / como é o grupo",
+              },
             ],
           }
         : d,
@@ -1185,7 +1192,7 @@ export default function CerebroPage() {
                 Fotos e vídeos curtos que a IA pode mandar quando o lead pedir uma prévia, uma provinha, uma foto ou um vídeo. Descreva cada um (o que
                 mostra e quando usar): a IA escolhe o certo, manda no máximo um por resposta, não repete e depois puxa para a oferta. Dá para selecionar
                 vários de uma vez. Vídeos: MP4, de preferência curtos e leves. <b>♛ Prévia do Grupo VIP</b>: a IA manda um card com a capa do seu VIP,
-                quantas fotos e vídeos tem e as prévias borradas, na hora em que explica o que ele ganha (o botão do card abre o grupo).
+                quantas fotos e vídeos tem e as prévias borradas, na hora em que explica o que ele ganha — como bônus (sem preço e sem botão).
               </p>
               {imgBusy && <p className={imgBusy.startsWith("Enviando") ? "hint" : "error-text"}>{imgBusy}</p>}
               <div className="brain-images">
@@ -1202,6 +1209,14 @@ export default function CerebroPage() {
                             </option>
                           ))}
                         </select>
+                        <input
+                          className="input"
+                          placeholder="Vem de bônus na chamada de vídeo"
+                          value={a.bonusText ?? ""}
+                          onChange={(e) => setImage(i, { bonusText: e.target.value } as Partial<Audio>)}
+                          aria-label="Frase do bônus"
+                        />
+                        <span className="hint">Sem preço e sem botão: o card mostra o VIP como bônus (a frase acima aparece no rodapé).</span>
                         {vipGroups && vipGroups.groups.length === 0 && (
                           <span className="hint">
                             Crie um grupo em <Link href="/admin/vip">Grupo VIP</Link> primeiro.

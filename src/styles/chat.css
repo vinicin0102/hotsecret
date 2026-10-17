@@ -4684,7 +4684,7 @@ img.call-avatar {
   }
 }
 
-/* ---------- Prévia do Grupo VIP no chat (o Cérebro manda quando explica o que tem no VIP) ---------- */
+/* ---------- Prévia do Grupo VIP no chat: bônus (sem preço/botão) que o Cérebro manda quando explica o que ele ganha ---------- */
 .vipc {
   width: 86%;
   max-width: 340px;
@@ -4865,37 +4865,15 @@ img.call-avatar {
   color: #2a1406;
   background: var(--hs-champagne);
 }
-.vipc-price {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.vipc-price s {
-  font-size: 13px;
-  color: #9c8a94;
-}
-.vipc-price b {
-  font-family: var(--font-serif);
-  font-size: 24px;
-  font-weight: 400;
-  color: var(--hs-champagne);
-}
-.vipc-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 46px;
-  padding: 12px 16px;
-  border-radius: 999px;
-  font-size: 14px;
+.vipc-bonus {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #fff;
-  text-decoration: none;
-  background: linear-gradient(120deg, #ff6a9c, var(--hs-rose) 45%, var(--hs-rose-deep));
-  box-shadow: 0 10px 24px rgba(255, 79, 139, 0.38);
+  text-align: center;
+  color: var(--hs-champagne);
+  border: 1px dashed rgba(236, 199, 127, 0.45);
+  background: rgba(236, 199, 127, 0.07);
 }
 @media (prefers-reduced-motion: reduce) {
   .vipc {

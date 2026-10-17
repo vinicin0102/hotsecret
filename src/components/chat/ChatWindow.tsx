@@ -167,7 +167,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           );
         }
         if (item.type === "vip_preview") {
-          return <VipPreviewCard key={item.id} card={c as unknown as VipCard} onOpen={() => engine.track("link_clicked", item.nodeId, { vipGroup: String(c.groupId ?? "") })} />;
+          return <VipPreviewCard key={item.id} card={c as unknown as VipCard} />;
         }
         if (item.type === "audio") {
           const m = c as unknown as AudioContent;

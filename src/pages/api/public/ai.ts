@@ -191,7 +191,7 @@ export default apiHandler({
 
     for (const m of reply.messages) await addConversationMessage(session.conversationId, "bot", "text", { text: m }, node.id);
     // card do Grupo VIP (grupo excluído/despublicado: não manda nada)
-    const vipCard = reply.image?.kind === "vip" && reply.image.groupId ? await vipPreviewCard(reply.image.groupId, { leadId: session.leadId }) : null;
+    const vipCard = reply.image?.kind === "vip" && reply.image.groupId ? await vipPreviewCard(reply.image.groupId, { bonusText: reply.image.bonusText }) : null;
     if (reply.image?.kind === "vip") {
       if (vipCard) await addConversationMessage(session.conversationId, "bot", "vip_preview", { ...vipCard, aiImageId: reply.image.id } as Prisma.InputJsonValue, node.id);
     } else if (reply.image) {

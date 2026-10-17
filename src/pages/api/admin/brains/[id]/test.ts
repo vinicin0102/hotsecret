@@ -69,6 +69,6 @@ export default apiHandler({
 });
 
 async function vipCardOrNull(image: BrainMedia) {
-  const card = image.groupId ? await vipPreviewCard(image.groupId, { allowDraft: true }) : null;
+  const card = image.groupId ? await vipPreviewCard(image.groupId, { allowDraft: true, bonusText: image.bonusText }) : null;
   return card ? { ...image, card } : null;
 }

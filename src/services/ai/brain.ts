@@ -68,14 +68,18 @@ export interface BrainMedia {
   kind?: "image" | "video" | "vip";
   /** kind "vip": o Grupo VIP mostrado no card */
   groupId?: string;
+  /** kind "vip": de que é bônus (ex.: "Vem de bônus na chamada de vídeo 🎁") */
+  bonusText?: string;
 }
 export function mediaKind(m: { url: string; kind?: string }): "image" | "video" | "vip" {
   if (m.kind === "vip") return "vip";
   return m.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(m.url) ? "video" : "image";
 }
 /** como a prévia aparece para a IA */
-export function mediaLabel(m: Pick<BrainMedia, "kind">): string {
-  return m.kind === "vip" ? "prévia do Grupo VIP: card com a capa do seu VIP, quantas fotos e vídeos tem e as prévias borradas" : m.kind === "video" ? "vídeo" : "foto";
+export function mediaLabel(m: Pick<BrainMedia, "kind" | "bonusText">): string {
+  if (m.kind === "vip")
+    return `prévia do Grupo VIP que ele ganha de BÔNUS (${m.bonusText?.trim() || "vem de bônus na chamada de vídeo"}): card com a capa do seu VIP, quantas fotos e vídeos tem e as prévias borradas — não é vendido à parte`;
+  return m.kind === "video" ? "vídeo" : "foto";
 }
 export interface BrainAudio {
   id: string;
@@ -417,7 +421,7 @@ ORDEM DO DONO: quando a situação descrita num áudio acontecer (ex.: o lead pe
 # Prévias (fotos e vídeos)
 ${images || "(nenhuma imagem cadastrada)"}
 Para mandar uma prévia (ex.: quando pedirem uma prévia, provinha, foto ou vídeo), coloque o image_id em "image_id" (no máximo uma por resposta, e não repita uma prévia já enviada; se pedirem vídeo, prefira um vídeo). Use "" quando não enviar. Prévias servem para despertar o desejo: depois de mandar, conduza para a oferta.
-A prévia do Grupo VIP (se houver) mostra como é o seu VIP por dentro: mande ela na mesma resposta em que você explicar o que ele ganha / o que tem no VIP (ou quando ele perguntar como é), e fale do que aparece no card.
+A prévia do Grupo VIP (se houver) mostra como é o seu VIP por dentro e é um BÔNUS: mande ela na mesma resposta em que você explicar o que ele ganha (ou quando ele perguntar o que tem / como é), apresente o VIP como presente que vem junto com a oferta indicada no bônus (ex.: a chamada de vídeo) para aumentar o valor dela — nunca ofereça o VIP para comprar separado nem fale preço dele.
 
 # Encerrar
 Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.${mustRulesSection(brain.mustRules)}${offerOrdersSection(brain, products)}`;

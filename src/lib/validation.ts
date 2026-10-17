@@ -251,7 +251,7 @@ export const brainSchema = z.object({
   images: z
     .array(
       z
-        .object({ id, url: url.optional().default(""), when: optTxt(500), kind: z.enum(["image", "video", "vip"]).optional(), groupId: z.string().max(64).optional() })
+        .object({ id, url: url.optional().default(""), when: optTxt(500), kind: z.enum(["image", "video", "vip"]).optional(), groupId: z.string().max(64).optional(), bonusText: optTxt(120) })
         // card do Grupo VIP: precisa do grupo; foto/vídeo: precisa do arquivo
         .refine((i) => (i.kind === "vip" ? !!i.groupId : !!i.url), "Prévia sem arquivo (ou prévia do Grupo VIP sem o grupo escolhido)"),
     )
