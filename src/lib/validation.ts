@@ -249,7 +249,12 @@ export const brainSchema = z.object({
   offers: z.array(brainOfferSchema).max(20).default([]),
   audios: z.array(brainAudioSchema).max(40).default([]),
   images: z
-    .array(z.object({ id, url: url.pipe(z.string().min(1, "Prévia sem arquivo")), when: optTxt(500), kind: z.enum(["image", "video"]).optional() }))
+    .array(
+      z
+        .object({ id, url: url.optional().default(""), when: optTxt(500), kind: z.enum(["image", "video", "vip"]).optional(), groupId: z.string().max(64).optional() })
+        // card do Grupo VIP: precisa do grupo; foto/vídeo: precisa do arquivo
+        .refine((i) => (i.kind === "vip" ? !!i.groupId : !!i.url), "Prévia sem arquivo (ou prévia do Grupo VIP sem o grupo escolhido)"),
+    )
     .max(60)
     .default([]),
   voiceCalls: z

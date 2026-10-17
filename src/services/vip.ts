@@ -262,3 +262,45 @@ export async function vipCheckout(group: GroupWithPosts, session: VipSession, pr
   });
   return publicPayment(payment);
 }
+
+/**
+ * Card "como é o meu VIP" que o Cérebro manda no chat: capa, foto, quantas fotos/vídeos, mosaico (grátis à vista,
+ * o resto só com a prévia borrada), benefícios e o preço. O botão abre a página do grupo já como este lead
+ * (compras feitas no chat valem lá). Grupo em rascunho só aparece no teste do painel (allowDraft).
+ */
+export async function vipPreviewCard(groupId: string, opts: { leadId?: string; allowDraft?: boolean } = {}) {
+  const group = await prisma.vipGroup.findUnique({
+    where: { id: groupId },
+    include: { posts: { orderBy: [{ pinned: "desc" }, { publishedAt: "desc" }] } },
+  });
+  if (!group || (!group.published && !opts.allowDraft)) return null;
+  const [products, character] = await Promise.all([
+    sellableProducts(group),
+    group.characterId ? prisma.character.findUnique({ where: { id: group.characterId } }) : null,
+  ]);
+  const tiles: { kind: "image" | "video"; url: string | null; preview: string | null }[] = [];
+  for (const p of group.posts) {
+    const free = postAccess(p) === "free";
+    for (const m of vipMedia(p.media)) {
+      if (tiles.length >= 6) break;
+      tiles.push({ kind: m.kind, url: free ? m.url : null, preview: m.preview ?? null });
+    }
+  }
+  const all = group.posts.flatMap((p) => vipMedia(p.media));
+  const settings = vipSettings(group.settings);
+  const sub = group.productId ? products.get(group.productId) : undefined;
+  const access = opts.leadId ? await signVipToken({ leadId: opts.leadId, groupId: group.id }) : null;
+  return {
+    groupId: group.id,
+    name: group.name || character?.name || "VIP",
+    avatarUrl: group.avatarUrl || character?.avatarUrl || null,
+    coverUrl: group.coverUrl,
+    counts: { posts: group.posts.length, images: all.filter((m) => m.kind === "image").length, videos: all.filter((m) => m.kind === "video").length },
+    tiles,
+    headline: settings.headline ?? null,
+    perks: (settings.perks ?? []).slice(0, 3),
+    price: sub ? { price: sub.price, originalPrice: sub.originalPrice, currency: sub.currency } : null,
+    url: `/g/${group.slug}${access ? `?acesso=${encodeURIComponent(access)}` : ""}`,
+  };
+}
+export type VipPreviewCard = NonNullable<Awaited<ReturnType<typeof vipPreviewCard>>>;

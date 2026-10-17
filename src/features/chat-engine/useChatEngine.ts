@@ -9,7 +9,7 @@ import { compressPhoto } from "./photo";
 import { asChatLocale, chatTexts } from "@/features/i18n/chat";
 
 export type ChatItem =
-  | { kind: "message"; id: string; sender: "bot" | "user" | "system"; type: "text" | "image" | "video" | "audio"; content: Record<string, unknown>; nodeId?: string | null; at: string }
+  | { kind: "message"; id: string; sender: "bot" | "user" | "system"; type: "text" | "image" | "video" | "audio" | "vip_preview"; content: Record<string, unknown>; nodeId?: string | null; at: string }
   // productId/offer: ofertas mostradas pelo Cérebro (IA)
   | { kind: "offer"; id: string; nodeId: string; at: string; productId?: string; offer?: OfferContent }
   | { kind: "checkout"; id: string; nodeId: string; at: string; productId?: string }
@@ -357,7 +357,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         await sleep(1000);
         if (runId.current !== token) return;
         setTyping(false);
-        push({ kind: "message", id: lid(), sender: "bot", type: r.image.kind === "video" ? "video" : "image", content: { url: r.image.url }, nodeId, at: now() });
+        if (r.image.kind === "vip" && r.image.card) push({ kind: "message", id: lid(), sender: "bot", type: "vip_preview", content: r.image.card as unknown as Record<string, unknown>, nodeId, at: now() });
+        else if (r.image.kind !== "vip") push({ kind: "message", id: lid(), sender: "bot", type: r.image.kind === "video" ? "video" : "image", content: { url: r.image.url }, nodeId, at: now() });
       }
       if (r.audio) {
         setTyping(true);
@@ -768,7 +769,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         restored.push({ kind: "recovery", id: m.id, text: String(c.text ?? ""), buttonLabel: String(c.buttonLabel ?? "CONTINUAR"), offerNodeId: (c.offerNodeId as string) ?? m.nodeId, at: m.createdAt });
       else if (m.type === "buttons") {
         if (c.text) restored.push({ kind: "message", id: m.id, sender: "bot", type: "text", content: { text: c.text }, nodeId: m.nodeId, at: m.createdAt });
-      } else if (m.type === "image" || m.type === "video" || m.type === "audio" || m.type === "text")
+      } else if (m.type === "image" || m.type === "video" || m.type === "audio" || m.type === "text" || m.type === "vip_preview")
         restored.push({ kind: "message", id: m.id, sender: m.sender, type: m.type, content: c, nodeId: m.nodeId, at: m.createdAt });
       else if ((m.type === "delivery" || m.type === "link") && m.nodeId) {
         if (c.text) restored.push({ kind: "message", id: `${m.id}_t`, sender: "bot", type: "text", content: { text: c.text }, nodeId: m.nodeId, at: m.createdAt });

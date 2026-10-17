@@ -17,6 +17,8 @@ import { DeliveryCard } from "./DeliveryCard";
 import { CallScreen, DownsellOffer, IncomingCall, PixPopup, VoiceCall } from "./VideoCall";
 import { Particles } from "./Particles";
 import { BgVideo } from "./BgVideo";
+import { VipPreviewCard } from "./VipPreviewCard";
+import type { VipPreviewCard as VipCard } from "@/services/vip";
 import { LiveHeader, LiveIncomingCall, LivePreviewButton, LivePreviewCard, VipExitModal, VipOfferCard, VipOfferModal, VipPaySheet } from "./LiveChannel";
 
 /** o lead pediu prévia/provinha (pt + es): aparece o botão "Ver prévia" */
@@ -163,6 +165,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
               />
             </MessageBubble>
           );
+        }
+        if (item.type === "vip_preview") {
+          return <VipPreviewCard key={item.id} card={c as unknown as VipCard} onOpen={() => engine.track("link_clicked", item.nodeId, { vipGroup: String(c.groupId ?? "") })} />;
         }
         if (item.type === "audio") {
           const m = c as unknown as AudioContent;

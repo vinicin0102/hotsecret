@@ -12,6 +12,7 @@ import { describeAiError, publicOfferFormat, runBrain, type ChatTurn, type FlowO
 import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import { formatBRL, formatMoney } from "@/lib/format";
 import { leadPlaceFromHeaders, nearLeadRule } from "@/lib/geo";
+import { vipPreviewCard } from "@/services/vip";
 
 /** preço do histórico na moeda certa (a IA nunca deve ver R$ numa oferta em pesos) */
 const priceForAi = (cents: number, currency: unknown) =>
@@ -58,6 +59,9 @@ function toTurns(messages: Msg[]): ChatTurn[] {
           role: "bot",
           text: `[enviou ${m.type === "image" ? "uma foto" : "um vídeo"}${c.caption ? `: ${String(c.caption)}` : ""}${c.aiImageId ? ` (image_id "${String(c.aiImageId)}")` : ""}]`,
         });
+        break;
+      case "vip_preview":
+        turns.push({ role: "bot", text: `[mandou a prévia do Grupo VIP "${String(c.name ?? "")}" (${Number((c.counts as { images?: number })?.images) || 0} fotos e ${Number((c.counts as { videos?: number })?.videos) || 0} vídeos)${c.aiImageId ? ` (image_id "${String(c.aiImageId)}")` : ""}]` });
         break;
       case "audio":
         turns.push({ role: "bot", text: `[enviou um áudio${c.aiAudioId ? ` (audio_id "${String(c.aiAudioId)}")` : ""}]` });
@@ -186,7 +190,11 @@ export default apiHandler({
     }
 
     for (const m of reply.messages) await addConversationMessage(session.conversationId, "bot", "text", { text: m }, node.id);
-    if (reply.image) {
+    // card do Grupo VIP (grupo excluído/despublicado: não manda nada)
+    const vipCard = reply.image?.kind === "vip" && reply.image.groupId ? await vipPreviewCard(reply.image.groupId, { leadId: session.leadId }) : null;
+    if (reply.image?.kind === "vip") {
+      if (vipCard) await addConversationMessage(session.conversationId, "bot", "vip_preview", { ...vipCard, aiImageId: reply.image.id } as Prisma.InputJsonValue, node.id);
+    } else if (reply.image) {
       const kind = reply.image.kind === "video" ? "video" : "image";
       await addConversationMessage(session.conversationId, "bot", kind, { url: reply.image.url, caption: "", aiImageId: reply.image.id }, node.id);
     }
@@ -245,7 +253,14 @@ export default apiHandler({
     return {
       messages: reply.messages,
       audio: reply.audio ? { url: reply.audio.url } : null,
-      image: reply.image ? { url: reply.image.url, kind: reply.image.kind === "video" ? "video" : "image" } : null,
+      image:
+        reply.image?.kind === "vip"
+          ? vipCard
+            ? { url: "", kind: "vip", card: vipCard }
+            : null
+          : reply.image
+            ? { url: reply.image.url, kind: reply.image.kind === "video" ? "video" : "image" }
+            : null,
       offer,
       end: reply.end,
       showOffers: !!reply.showOffers,

@@ -2,12 +2,15 @@
 import { useEffect, useRef, useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { UploadInput } from "@/components/admin/UploadInput";
+import Link from "next/link";
 import { useFetch } from "@/hooks/useFetch";
 import { api, uploadFile } from "@/lib/client";
 import { formatBRL, formatDateTime, formatMoney, productOption } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { withBase } from "@/lib/paths";
 import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
+import { VipPreviewCard } from "@/components/chat/VipPreviewCard";
+import type { VipPreviewCard as VipCard } from "@/services/vip";
 import type { VipOfferTexts } from "@/types/flow";
 
 type Provider = "anthropic" | "deepseek" | "qwen";
@@ -66,7 +69,8 @@ interface Brain {
   examples?: string;
   offers: Offer[];
   audios: Audio[];
-  images: (Audio & { kind?: "image" | "video" })[];
+  /** kind "vip": card do Grupo VIP (groupId) em vez de um arquivo */
+  images: (Audio & { kind?: "image" | "video" | "vip"; groupId?: string })[];
   voiceCalls?: VoiceCallItem[];
   maxReplies: number;
   fallbackMessage: string;
@@ -307,7 +311,7 @@ function ConnectionCard() {
 }
 
 function TestChat({ brain }: { brain: Brain }) {
-  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; video?: string; offer?: string; voice?: boolean }[]>([]);
+  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; video?: string; offer?: string; voice?: boolean; vip?: VipCard }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -327,7 +331,7 @@ function TestChat({ brain }: { brain: Brain }) {
       const r = await api<{
         messages: string[];
         audio: { url: string; when?: string } | null;
-        image: { url: string; when?: string; kind?: string } | null;
+        image: { url: string; when?: string; kind?: string; card?: VipCard } | null;
         offer: { name: string; price: number; headline: string; style?: string } | null;
         end: boolean;
         failure?: string;
@@ -336,7 +340,7 @@ function TestChat({ brain }: { brain: Brain }) {
         body: {
           history: next.map((h) => ({
             role: h.role,
-            text: h.voice ? "[ligou para o lead (ligação de voz)]" : h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
+            text: h.voice ? "[ligou para o lead (ligação de voz)]" : h.vip ? "[mandou a prévia do Grupo VIP]" : h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
           })),
           language,
         },
@@ -344,7 +348,13 @@ function TestChat({ brain }: { brain: Brain }) {
       const bot = [
         ...r.messages.map((m) => ({ role: "bot" as const, text: m })),
         ...(r.image
-          ? [{ role: "bot" as const, text: r.image.when ?? "", ...(r.image.kind === "video" ? { video: r.image.url } : { image: r.image.url }) }]
+          ? [
+              {
+                role: "bot" as const,
+                text: r.image.when ?? "",
+                ...(r.image.kind === "vip" && r.image.card ? { vip: r.image.card } : r.image.kind === "video" ? { video: r.image.url } : { image: r.image.url }),
+              },
+            ]
           : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
         ...(r.offer
@@ -390,7 +400,11 @@ function TestChat({ brain }: { brain: Brain }) {
         )}
         {history.map((h, i) => (
           <div key={i} className={`bt-msg ${h.role}`}>
-            {h.video ? (
+            {h.vip ? (
+              <div className="brain-test-vip">
+                <VipPreviewCard card={h.vip} />
+              </div>
+            ) : h.video ? (
               <video src={h.video} controls playsInline style={{ maxWidth: 200, borderRadius: 10, display: "block" }} />
             ) : h.image ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -584,6 +598,19 @@ export default function CerebroPage() {
     setDraft((d) => (d ? { ...d, images: (d.images ?? []).map((a, j) => (j === i ? { ...a, ...patch } : a)) } : d));
   const imagesRef = useRef<HTMLInputElement>(null);
   const [imgBusy, setImgBusy] = useState<string | null>(null);
+  const { data: vipGroups } = useFetch<{ groups: { id: string; name: string; published: boolean }[] }>("/api/admin/vip");
+  const addVipPreview = () =>
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            images: [
+              ...(d.images ?? []),
+              { id: shortId("vg"), url: "", kind: "vip", groupId: vipGroups?.groups[0]?.id ?? "", when: "Quando explicar o que ele ganha no VIP ou ele perguntar o que tem / como é o grupo" },
+            ],
+          }
+        : d,
+    );
   const addImages = async (files: FileList | null) => {
     if (!files?.length) return;
     const list = [...files];
@@ -1145,6 +1172,9 @@ export default function CerebroPage() {
               <div className="card-head">
                 <h3>Prévias (fotos e vídeos)</h3>
                 <div className="row">
+                  <button className="btn btn-sm" onClick={addVipPreview} title="Card com a prévia do Grupo VIP (capa, quantas fotos/vídeos e as prévias borradas)">
+                    ♛ + Prévia do Grupo VIP
+                  </button>
                   <button className="btn btn-sm" disabled={!!imgBusy && imgBusy.startsWith("Enviando")} onClick={() => imagesRef.current?.click()}>
                     + Enviar fotos ou vídeos
                   </button>
@@ -1154,13 +1184,31 @@ export default function CerebroPage() {
               <p className="hint" style={{ marginTop: -6 }}>
                 Fotos e vídeos curtos que a IA pode mandar quando o lead pedir uma prévia, uma provinha, uma foto ou um vídeo. Descreva cada um (o que
                 mostra e quando usar): a IA escolhe o certo, manda no máximo um por resposta, não repete e depois puxa para a oferta. Dá para selecionar
-                vários de uma vez. Vídeos: MP4, de preferência curtos e leves.
+                vários de uma vez. Vídeos: MP4, de preferência curtos e leves. <b>♛ Prévia do Grupo VIP</b>: a IA manda um card com a capa do seu VIP,
+                quantas fotos e vídeos tem e as prévias borradas, na hora em que explica o que ele ganha (o botão do card abre o grupo).
               </p>
               {imgBusy && <p className={imgBusy.startsWith("Enviando") ? "hint" : "error-text"}>{imgBusy}</p>}
               <div className="brain-images">
                 {(draft.images ?? []).map((a, i) => (
-                  <div key={a.id} className="brain-image">
-                    {!a.url ? (
+                  <div key={a.id} className={`brain-image ${a.kind === "vip" ? "brain-image-vip" : ""}`}>
+                    {a.kind === "vip" ? (
+                      <div className="brain-vip">
+                        <span className="pill">♛ Prévia do Grupo VIP</span>
+                        <select className="select" value={a.groupId ?? ""} onChange={(e) => setImage(i, { groupId: e.target.value } as Partial<Audio>)} aria-label="Grupo VIP da prévia">
+                          <option value="">— escolha o grupo —</option>
+                          {vipGroups?.groups.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name} {g.published ? "" : "(rascunho — não aparece para o lead)"}
+                            </option>
+                          ))}
+                        </select>
+                        {vipGroups && vipGroups.groups.length === 0 && (
+                          <span className="hint">
+                            Crie um grupo em <Link href="/admin/vip">Grupo VIP</Link> primeiro.
+                          </span>
+                        )}
+                      </div>
+                    ) : !a.url ? (
                       <div className="ph">sem arquivo</div>
                     ) : a.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(a.url) ? (
                       <div className="brain-video">

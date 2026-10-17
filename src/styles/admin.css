@@ -1592,3 +1592,25 @@ code.inline {
 .pill.vip-access-paid {
   color: var(--gold);
 }
+
+/* Cérebro: prévia do Grupo VIP (no lugar do arquivo) e o card no chat de teste */
+.brain-vip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(236, 199, 127, 0.45);
+  background: rgba(236, 199, 127, 0.05);
+}
+.brain-vip .pill {
+  align-self: flex-start;
+  color: var(--gold);
+}
+.brain-test-vip .msg-row {
+  display: block;
+}
+.brain-test-vip .vipc {
+  width: 100%;
+  max-width: 300px;
+}

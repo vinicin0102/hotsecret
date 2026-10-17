@@ -6,6 +6,7 @@ import type { FlowNode, LivePreview, TarotCard, VipOfferTexts } from "@/types/fl
 import { metaCookies } from "./pixels";
 import type { ChatCue, TimeRange, UpsellMarker, VideoFrame, VideoTimeline } from "@/types/video";
 import { normalizeTimeline } from "@/types/video";
+import type { VipPreviewCard } from "@/services/vip";
 
 export interface ClientEvent {
   type: string;
@@ -110,7 +111,8 @@ export interface CallVideo {
 export interface AiReply {
   messages: string[];
   audio: { url: string } | null;
-  image?: { url: string; kind?: "image" | "video" } | null;
+  /** kind "vip": card do Grupo VIP (card vem pronto do servidor) */
+  image?: { url: string; kind?: "image" | "video" | "vip"; card?: VipPreviewCard } | null;
   offer: {
     productId: string;
     headline?: string;
@@ -476,7 +478,7 @@ export function createPreviewTransport(
         const r = await post<{
           messages: string[];
           audio: { url: string } | null;
-          image: { url: string; kind?: "image" | "video" } | null;
+          image: { url: string; kind?: "image" | "video" | "vip"; card?: VipPreviewCard } | null;
           offer: AiReply["offer"];
           end: boolean;
           showOffers?: boolean;
@@ -486,7 +488,7 @@ export function createPreviewTransport(
           { history, goal: cfg.goal, flowOffers: aiFlowOffers(nodeId), language },
         );
         for (const m of r.messages) history.push({ role: "bot", text: m });
-        if (r.image) history.push({ role: "bot", text: r.image.kind === "video" ? "[enviou um vídeo]" : "[enviou uma foto]" });
+        if (r.image) history.push({ role: "bot", text: r.image.kind === "vip" ? "[mandou a prévia do Grupo VIP]" : r.image.kind === "video" ? "[enviou um vídeo]" : "[enviou uma foto]" });
         if (r.audio) history.push({ role: "bot", text: "[enviou um áudio]" });
         if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : r.offer.style === "tarot" ? "mostrou as cartas de tarot da oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
         if (r.showOffers) history.push({ role: "bot", text: "[mostrou os botões de oferta]" });
@@ -494,7 +496,7 @@ export function createPreviewTransport(
         return {
           messages: r.messages,
           audio: r.audio ? { url: r.audio.url } : null,
-          image: r.image ? { url: r.image.url, kind: r.image.kind } : null,
+          image: r.image ? { url: r.image.url, kind: r.image.kind, ...(r.image.card ? { card: r.image.card } : {}) } : null,
           offer: r.offer,
           end: r.end,
           showOffers: r.showOffers,

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { apiHandler, HttpError, rateLimit, requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { leadPlaceFromHeaders, nearLeadRule } from "@/lib/geo";
-import { describeAiError, publicOfferFormat, runBrain, type FlowOfferInfo } from "@/services/ai/brain";
+import { vipPreviewCard } from "@/services/vip";
+import { describeAiError, publicOfferFormat, runBrain, type BrainMedia, type FlowOfferInfo } from "@/services/ai/brain";
 
 export const config = { maxDuration: 60 };
 
@@ -42,7 +43,8 @@ export default apiHandler({
       return {
         messages: r.messages,
         audio: r.audio,
-        image: r.image,
+        // card do Grupo VIP: o teste mostra mesmo em rascunho
+        image: r.image?.kind === "vip" ? await vipCardOrNull(r.image) : r.image,
         end: r.end,
         showOffers: !!r.showOffers,
         voiceCall: r.voiceCall ? { id: r.voiceCall.id, url: r.voiceCall.url, when: r.voiceCall.when, offerId: r.voiceCall.offerId, endText: r.voiceCall.endText } : null,
@@ -65,3 +67,8 @@ export default apiHandler({
     }
   },
 });
+
+async function vipCardOrNull(image: BrainMedia) {
+  const card = image.groupId ? await vipPreviewCard(image.groupId, { allowDraft: true }) : null;
+  return card ? { ...image, card } : null;
+}

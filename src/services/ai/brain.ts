@@ -60,15 +60,22 @@ export interface BrainOffer {
   downsellProductId?: string;
   downsellText?: string;
 }
-/** prévia (foto ou vídeo) */
+/** prévia (foto, vídeo ou o card de um Grupo VIP) */
 export interface BrainMedia {
   id: string;
   url: string;
   when?: string;
-  kind?: "image" | "video";
+  kind?: "image" | "video" | "vip";
+  /** kind "vip": o Grupo VIP mostrado no card */
+  groupId?: string;
 }
-export function mediaKind(m: { url: string; kind?: string }): "image" | "video" {
+export function mediaKind(m: { url: string; kind?: string }): "image" | "video" | "vip" {
+  if (m.kind === "vip") return "vip";
   return m.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(m.url) ? "video" : "image";
+}
+/** como a prévia aparece para a IA */
+export function mediaLabel(m: Pick<BrainMedia, "kind">): string {
+  return m.kind === "vip" ? "prévia do Grupo VIP: card com a capa do seu VIP, quantas fotos e vídeos tem e as prévias borradas" : m.kind === "video" ? "vídeo" : "foto";
 }
 export interface BrainAudio {
   id: string;
@@ -216,7 +223,9 @@ export function brainOffers(brain: Pick<Brain, "offers">): BrainOffer[] {
 }
 export function brainImages(brain: Pick<Brain, "images">): BrainMedia[] {
   return Array.isArray(brain.images)
-    ? (brain.images as unknown as BrainMedia[]).filter((a) => a?.id && a?.url).map((a) => ({ ...a, kind: mediaKind(a) }))
+    ? (brain.images as unknown as BrainMedia[])
+        .filter((a) => a?.id && (a.kind === "vip" ? !!a.groupId : !!a.url))
+        .map((a) => ({ ...a, url: a.url ?? "", kind: mediaKind({ url: a.url ?? "", kind: a.kind }) }))
     : [];
 }
 /** cartas da oferta de tarot com conteúdo (as vazias são ignoradas) */
@@ -336,7 +345,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
     .map((a) => `- audio_id "${a.id}": ${a.when || "(sem descrição)"}`)
     .join("\n");
   const images = brainImages(brain)
-    .map((a) => `- image_id "${a.id}" (${a.kind === "video" ? "vídeo" : "foto"}): ${a.when || "(sem descrição)"}`)
+    .map((a) => `- image_id "${a.id}" (${mediaLabel(a)}): ${a.when || (a.kind === "vip" ? "quando explicar o que ele ganha no VIP" : "(sem descrição)")}`)
     .join("\n");
 
   return `Você conversa com um lead em um chat de vendas, como uma pessoa real conversando pelo celular.
@@ -408,6 +417,7 @@ ORDEM DO DONO: quando a situação descrita num áudio acontecer (ex.: o lead pe
 # Prévias (fotos e vídeos)
 ${images || "(nenhuma imagem cadastrada)"}
 Para mandar uma prévia (ex.: quando pedirem uma prévia, provinha, foto ou vídeo), coloque o image_id em "image_id" (no máximo uma por resposta, e não repita uma prévia já enviada; se pedirem vídeo, prefira um vídeo). Use "" quando não enviar. Prévias servem para despertar o desejo: depois de mandar, conduza para a oferta.
+A prévia do Grupo VIP (se houver) mostra como é o seu VIP por dentro: mande ela na mesma resposta em que você explicar o que ele ganha / o que tem no VIP (ou quando ele perguntar como é), e fale do que aparece no card.
 
 # Encerrar
 Use "end": true só quando a conversa terminou de vez (o lead se despediu ou disse claramente que não quer). Caso contrário, false.${mustRulesSection(brain.mustRules)}${offerOrdersSection(brain, products)}`;
@@ -637,7 +647,7 @@ async function runBrainWith(input: {
       ]),
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
-    ...Object.fromEntries(images.map((a) => [a.id, `${a.kind === "video" ? "vídeo" : "foto"}; quando: ${(a.when || "quando pedirem prévia").slice(0, 140)}`])),
+    ...Object.fromEntries(images.map((a) => [a.id, `${mediaLabel(a)}; quando: ${(a.when || (a.kind === "vip" ? "quando explicar o que ele ganha no VIP" : "quando pedirem prévia")).slice(0, 140)}`])),
     ...Object.fromEntries(voiceCalls.map((v) => [v.id, `ligação de voz; quando: ${(v.when || "quando o lead demonstrar interesse ou pedir para ligar").slice(0, 500)}`])),
   };
   // modo seguro: usado quando o filtro de conteúdo da IA bloqueia — vai só o essencial para vender (sem os textos do cérebro)
@@ -657,7 +667,7 @@ ${
         .join("\n") || "(nenhuma)"
     }
 ${audios.length ? `\n# Áudios\n${audios.map((a) => `- audio_id "${a.id}": ${a.when || ""}`).join("\n")}` : ""}
-${images.length ? `\n# Prévias\n${images.map((a) => `- image_id "${a.id}" (${a.kind === "video" ? "vídeo" : "foto"}): ${a.when || ""}`).join("\n")}` : ""}
+${images.length ? `\n# Prévias\n${images.map((a) => `- image_id "${a.id}" (${mediaLabel(a)}): ${a.when || ""}`).join("\n")}` : ""}
 ${voiceCalls.length ? `\n# Ligação de voz (uma por conversa: ligue com voice_call_id quando o lead demonstrar interesse, pedir para ligar ou aceitar o convite)\n${voiceCalls.map((v) => `- voice_call_id "${v.id}": ${v.when || ""}`).join("\n")}` : ""}
 ${flowOffersSection(input.flowOffers)}`;
   const safeHistory = (): ChatTurn[] => input.history.slice(-6).map((t) => ({ role: t.role, text: t.imageUrl ? "[enviou uma foto]" : t.text.slice(0, 300) }));
@@ -883,6 +893,9 @@ const keyWords = (v: string) =>
 const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((w) => b.has(w)).length;
 const PREVIEW_INTENT =
   /(previa|previazinha|provinha|amostra|\bfot(o|inha|os|ito|itos)\b|\bvideo\b|videozinho|videito|deixa eu ver|mostra (algo|um pouco|um pouquinho|uma|um)|mostra ai|adelanto|avance|probadita|muestrame|ensename|dejame ver|quiero ver)/i;
+/** "o que tem no vip?", "o que eu ganho?", "como é o grupo?" */
+const VIP_INTENT =
+  /(\bvip\b.*\b(tem|vem|ganho|inclui|como e|funciona)\b|\b(o que|oque|q)\s*(tem|vem|eu ganho|ganho|inclui)\b|como (e|funciona) (o|esse|teu|seu)?\s*(grupo|vip|conteudo|privado)|\bque (hay|tiene|incluye|gano)\b|como es (el|tu) (grupo|vip))/i;
 const ASK_INTENT = /\b(faz|faca|fazer|joga|jogar|tira|tirar|como funciona|como e|me fala|saber|ver|haz|hazme|hacer|tirame|leer|lectura|dime)\b/i;
 const plain = (v: string) =>
   v
@@ -1016,8 +1029,12 @@ export function assistReply(
   }
 
   // pedido de prévia (pedir "chamada de vídeo" é ligação, não prévia)
+  // perguntou o que tem / o que ganha no VIP: manda o card do Grupo VIP (uma vez)
+  const vipCard = images.find((m) => m.kind === "vip" && !past.includes(`image_id "${m.id}"`));
+  if (!out.image && vipCard && has(VIP_INTENT, lastLead)) out.image = vipCard;
   if (!out.image && images.length && has(PREVIEW_INTENT, lastLead) && !has(CALL_INTENT, lastLead)) {
-    const unsent = images.filter((m) => !past.includes(`image_id "${m.id}"`));
+    // pedido de prévia é foto/vídeo; o card do VIP só se não houver outra
+    const unsent = images.filter((m) => !past.includes(`image_id "${m.id}"`)).sort((a, b) => Number(a.kind === "vip") - Number(b.kind === "vip"));
     const wantsVideo = /v[ií]deo/i.test(lastLead);
     const pool = unsent.filter((m) => (wantsVideo ? m.kind === "video" : true));
     const ranked = (pool.length ? pool : unsent).sort((a, b) => overlap(said, keyWords(b.when ?? "")) - overlap(said, keyWords(a.when ?? "")));
