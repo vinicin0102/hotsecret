@@ -44,6 +44,8 @@ export default function VideoEditorPage() {
   const id = String(router.query.id ?? "");
   const { data } = useFetch<{ video: VideoData }>(id ? `/api/admin/videos/${id}` : null);
   const { data: prod } = useFetch<{ products: Product[] }>("/api/admin/products");
+  const { data: vipData } = useFetch<{ groups: { id: string; name: string; published: boolean; productId: string | null }[] }>("/api/admin/vip");
+  const vipGroups = vipData?.groups ?? [];
   const products = prod?.products ?? [];
 
   const [video, setVideo] = useState<VideoData | null>(null);
@@ -609,15 +611,60 @@ export default function VideoEditorPage() {
                   [
                     ["card", "Card embaixo"],
                     ["screen", "Tela cheia (aviso → bloqueado → PIX)"],
+                    ["vip", "♛ Grupo VIP (prévia do grupo + PIX)"],
                   ] as const
                 ).map(([v, label]) => (
-                  <button key={v} type="button" className={(selMarker.style ?? "card") === v ? "active" : ""} onClick={() => setMarker({ style: v })}>
+                  <button
+                    key={v}
+                    type="button"
+                    className={(selMarker.style ?? "card") === v ? "active" : ""}
+                    onClick={() => {
+                      // Grupo VIP: já escolhe o primeiro grupo (e o produto da assinatura dele, se o upsell ainda não tem produto)
+                      if (v === "vip" && !selMarker.vipGroupId && vipGroups[0]) {
+                        const g = vipGroups[0];
+                        setMarker({ style: v, vipGroupId: g.id, ...(!selMarker.productId && g.productId ? { productId: g.productId } : {}) });
+                      } else setMarker({ style: v });
+                    }}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
             </div>
-            {selMarker.style === "screen" ? (
+            {selMarker.style === "vip" ? (
+              <>
+                <div className="field">
+                  <label htmlFor="ve-m-vip">Grupo VIP</label>
+                  <select
+                    id="ve-m-vip"
+                    className="select"
+                    value={selMarker.vipGroupId ?? ""}
+                    onChange={(e) => {
+                      const g = vipGroups.find((x) => x.id === e.target.value);
+                      setMarker({ vipGroupId: e.target.value || undefined, ...(!selMarker.productId && g?.productId ? { productId: g.productId } : {}) });
+                    }}
+                  >
+                    <option value="">— escolha o grupo —</option>
+                    {vipGroups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} {g.published ? "" : "(rascunho — não aparece para o lead)"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="hint" style={{ marginTop: -4 }}>
+                  O vídeo para e aparece a prévia do grupo (capa, quantas fotos e vídeos, mosaico borrado e benefícios) com o preço do{" "}
+                  <b>produto</b> acima e o botão. Pagou: o lead ganha o acesso ao Grupo VIP (botão &quot;Abrir meu VIP&quot;, já liberado) e volta para a
+                  chamada quando quiser. Pode usar um preço diferente da assinatura do grupo — esse produto também libera o VIP.
+                </p>
+                {vipGroups.length === 0 && (
+                  <p className="error-text">
+                    Nenhum Grupo VIP criado ainda. Crie em <Link href="/admin/vip">Grupo VIP</Link>.
+                  </p>
+                )}
+                {!selMarker.vipGroupId && vipGroups.length > 0 && <p className="error-text">Escolha o grupo — sem ele o upsell não aparece.</p>}
+              </>
+            ) : selMarker.style === "screen" ? (
               <>
                 <p className="hint" style={{ marginTop: -4 }}>
                   O vídeo para e fica borrado atrás de um aviso. O botão abre o card bloqueado com o preço; pagar abre a folha com o PIX (CLABE no

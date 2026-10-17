@@ -131,7 +131,21 @@ export async function findGroup(slug: string, allowDraft = false): Promise<Group
   return group;
 }
 
-/** compras aprovadas do lead: produtos e se alguma dá acesso ao VIP pelo link de entrega */
+/** produtos dos upsells "Grupo VIP" das chamadas de vídeo que liberam este grupo */
+export async function upsellGrantProducts(groupId: string): Promise<Set<string>> {
+  const videos = await prisma.video.findMany({ select: { timeline: true } });
+  const ids = new Set<string>();
+  for (const v of videos) {
+    const markers = (v.timeline as { markers?: { style?: string; vipGroupId?: string; productId?: string }[] } | null)?.markers ?? [];
+    for (const m of markers) if (m.style === "vip" && m.vipGroupId === groupId && m.productId) ids.add(m.productId);
+  }
+  return ids;
+}
+
+/**
+ * compras aprovadas do lead: produtos e se alguma libera o VIP — a assinatura do grupo, um upsell "Grupo VIP"
+ * da chamada de vídeo ou um produto do chat com o link do grupo como entrega
+ */
 async function entitlements(group: VipGroup, leadId: string | null) {
   if (!leadId) return { owned: new Set<string>(), subscribed: false };
   const approved = await prisma.payment.findMany({
@@ -139,7 +153,10 @@ async function entitlements(group: VipGroup, leadId: string | null) {
     select: { productId: true, product: { select: { deliveryUrl: true } } },
   });
   const owned = new Set(approved.map((p) => p.productId));
-  const subscribed = (!!group.productId && owned.has(group.productId)) || approved.some((p) => deliveryPointsToGroup(p.product.deliveryUrl, group.slug));
+  const grants = approved.length ? await upsellGrantProducts(group.id) : new Set<string>();
+  const subscribed =
+    (!!group.productId && owned.has(group.productId)) ||
+    approved.some((p) => grants.has(p.productId) || deliveryPointsToGroup(p.product.deliveryUrl, group.slug));
   return { owned, subscribed };
 }
 
@@ -288,6 +305,7 @@ export async function vipPreviewCard(groupId: string, opts: { allowDraft?: boole
   const settings = vipSettings(group.settings);
   return {
     groupId: group.id,
+    slug: group.slug,
     name: group.name || character?.name || "VIP",
     avatarUrl: group.avatarUrl || character?.avatarUrl || null,
     coverUrl: group.coverUrl,
@@ -300,3 +318,8 @@ export async function vipPreviewCard(groupId: string, opts: { allowDraft?: boole
   };
 }
 export type VipPreviewCard = NonNullable<Awaited<ReturnType<typeof vipPreviewCard>>>;
+
+/** link do grupo já como este lead (o que ele comprou no chat/na chamada vale lá) */
+export async function vipAccessUrl(group: { id: string; slug: string }, leadId: string): Promise<string> {
+  return `/g/${group.slug}?acesso=${encodeURIComponent(await signVipToken({ leadId, groupId: group.id }))}`;
+}

@@ -4880,3 +4880,96 @@ img.call-avatar {
     animation: msgIn 0.35s ease;
   }
 }
+
+/* ---------- Upsell "Grupo VIP" na chamada: prévia do grupo com preço e botão ---------- */
+.vipc-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.vipc-price s {
+  font-size: 13px;
+  color: #9c8a94;
+}
+.vipc-price b {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--hs-champagne);
+}
+.vipc-cta {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-decoration: none;
+  background: linear-gradient(120deg, #ff6a9c, var(--hs-rose) 45%, var(--hs-rose-deep));
+  box-shadow: 0 10px 24px rgba(255, 79, 139, 0.38);
+  cursor: pointer;
+}
+.vipu {
+  overflow-y: auto;
+  align-items: flex-start;
+}
+.vipu-inner {
+  width: 100%;
+  max-width: 360px;
+  margin: auto;
+  padding: 48px 0 16px;
+  text-align: left;
+}
+.vipu-say {
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 18px;
+  font-size: 15.5px;
+  line-height: 1.4;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.vipu .msg-row {
+  display: block;
+  animation: none;
+}
+.vipu .vipc {
+  width: 100%;
+  max-width: none;
+}
+.vipu-pay {
+  text-align: center;
+}
+.vipu-done {
+  display: grid;
+  gap: 10px;
+  text-align: center;
+}
+.vipu-back {
+  padding: 10px;
+  border: none;
+  font: inherit;
+  font-size: 14px;
+  color: #cdbcc6;
+  background: none;
+  text-decoration: underline;
+}
+/* na chamada a prévia fica mais baixa: o preço e o botão cabem na tela do celular */
+.vipu .vipc-cover {
+  height: 70px;
+}
+.vipu .vipc-tile {
+  aspect-ratio: 4 / 3;
+}

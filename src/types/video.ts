@@ -49,9 +49,12 @@ export interface UpsellMarker {
   pause?: boolean;
   /**
    * card: caixa de oferta embaixo (padrão) · screen: tela cheia em 3 passos ·
-   * offer: upgrade com 2 ingressos (acesso completo = productId, acesso básico = basicProductId)
+   * offer: upgrade com 2 ingressos (acesso completo = productId, acesso básico = basicProductId) ·
+   * vip: prévia do Grupo VIP (vipGroupId) com preço e botão — pagou, ganha o acesso ao grupo
    */
-  style?: "card" | "screen" | "offer";
+  style?: "card" | "screen" | "offer" | "vip";
+  /** vip: o Grupo VIP mostrado e liberado por este upsell */
+  vipGroupId?: string;
   screen?: UpsellScreen;
   /** oferta: 2º ingresso (acesso básico) */
   basicProductId?: string;

@@ -1,17 +1,19 @@
 // "Como é o meu VIP": card que o Cérebro manda no chat com a prévia do Grupo VIP — capa, foto, quantas
 // fotos/vídeos, mosaico (o grátis à vista, o resto borrado com cadeado) e benefícios.
-// É um BÔNUS (ex.: da chamada de vídeo): sem preço, sem botão e sem link — só aumenta o valor da oferta.
+// No chat é um BÔNUS (ex.: da chamada de vídeo): sem preço, sem botão e sem link — só aumenta o valor da oferta.
+// No upsell "Grupo VIP" da chamada, o rodapé (footer) traz o preço e o botão de compra.
+import type { ReactNode } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { VipPreviewCard as Card } from "@/services/vip";
 
-export function VipPreviewCard({ card }: { card: Card }) {
+export function VipPreviewCard({ card, tag, footer }: { card: Card; tag?: string; footer?: ReactNode }) {
   const { t } = useChatI18n();
   const tiles = card.tiles.slice(0, 6);
   return (
     <div className="msg-row bot">
       <div className="vipc">
         <div className="vipc-cover" style={card.coverUrl ? { backgroundImage: `url(${card.coverUrl})` } : undefined}>
-          <span className="vipc-tag">🎁 {t.vipTag}</span>
+          <span className="vipc-tag">{tag ?? `🎁 ${t.vipTag}`}</span>
         </div>
         <div className="vipc-id">
           {card.avatarUrl ? (
@@ -61,7 +63,7 @@ export function VipPreviewCard({ card }: { card: Card }) {
               ))}
             </ul>
           )}
-          <div className="vipc-bonus">🎁 {card.bonus || t.vipBonus}</div>
+          {footer ?? <div className="vipc-bonus">🎁 {card.bonus || t.vipBonus}</div>}
         </div>
       </div>
     </div>

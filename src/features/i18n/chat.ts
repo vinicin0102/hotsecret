@@ -39,6 +39,12 @@ const pt = {
   vipPhotos: "fotos",
   vipVideos: "vídeos",
   vipBonus: "Vem de bônus na chamada de vídeo",
+  vipUpsellTag: "♛ Grupo VIP",
+  vipUpsellText: "Quer ver tudo que eu posto no meu VIP? 😈",
+  vipUnlockCta: "QUERO MEU VIP 🔥",
+  vipOpen: "ABRIR MEU VIP",
+  vipBackToCall: "Voltar para a chamada",
+  vipDoneStep: "O acesso libera sozinho assim que o PIX for confirmado",
   // checkout
   finishAccess: "Finalizar acesso",
   product: "Produto",
@@ -252,6 +258,12 @@ const es: ChatTexts = {
   vipPhotos: "fotos",
   vipVideos: "videos",
   vipBonus: "Viene de regalo con la videollamada",
+  vipUpsellTag: "♛ Grupo VIP",
+  vipUpsellText: "¿Quieres ver todo lo que subo a mi VIP? 😈",
+  vipUnlockCta: "QUIERO MI VIP 🔥",
+  vipOpen: "ABRIR MI VIP",
+  vipBackToCall: "Volver a la llamada",
+  vipDoneStep: "El acceso se libera solo en cuanto se confirme el pago",
   finishAccess: "Finalizar acceso",
   product: "Producto",
   payVia: "Pago por",
@@ -425,6 +437,7 @@ const es: ChatTexts = {
 /** Argentina: mesmo espanhol, com voseo onde o chat fala com o lead. */
 const esAR: ChatTexts = {
   ...es,
+  vipUpsellText: "¿Querés ver todo lo que subo a mi VIP? 😈",
   typeAnswer: "Escribí tu respuesta...",
   chooseAbove: "Elegí una opción arriba",
   takePhoto: "Sacá o enviá una foto",

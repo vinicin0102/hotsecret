@@ -8,6 +8,7 @@ import { asCurrency, currencyOfLocale } from "@/lib/format";
 import { normalizeTimeline } from "@/types/video";
 import type { AiContent, OfferContent } from "@/types/flow";
 import { brainOffers, brainVoiceCalls, voiceCallProductId } from "@/services/ai/brain";
+import { vipAccessUrl, vipPreviewCard, type VipPreviewCard } from "@/services/vip";
 
 const schema = z.object({
   token: z.string().min(10).max(2000),
@@ -47,6 +48,12 @@ export default apiHandler({
     const video = videoId ? await prisma.video.findUnique({ where: { id: videoId } }) : null;
     if (!video) return { video: null };
     const timeline = normalizeTimeline(video.timeline, video.durationMs);
+    // upsell "Grupo VIP": a prévia do grupo (só publicado) e o link do grupo já como este lead
+    const vipIds = [...new Set(timeline.markers.flatMap((m) => (m.style === "vip" && m.vipGroupId ? [m.vipGroupId] : [])))];
+    const vipCards = new Map(
+      (await Promise.all(vipIds.map(async (gid) => [gid, await vipPreviewCard(gid)] as const))).filter((e): e is [string, VipPreviewCard] => !!e[1]),
+    );
+    const vipUrls = new Map(await Promise.all([...vipCards.values()].map(async (c) => [c.groupId, await vipAccessUrl({ id: c.groupId, slug: c.slug }, session.leadId)] as const)));
     const ids = [...new Set(timeline.markers.flatMap((m) => [m.productId, m.basicProductId ?? ""]).filter(Boolean))];
     const [products, funnel] = await Promise.all([
       prisma.product.findMany({ where: { id: { in: ids }, active: true } }),
@@ -65,7 +72,7 @@ export default apiHandler({
         chat: timeline.chat,
         frame: timeline.frame ?? null,
         markers: timeline.markers
-          .filter((m) => byId.has(m.productId))
+          .filter((m) => byId.has(m.productId) && (m.style !== "vip" || (!!m.vipGroupId && vipCards.has(m.vipGroupId))))
           .map((m) => {
             const p = byId.get(m.productId)!;
             const b = m.basicProductId ? byId.get(m.basicProductId) : undefined;
@@ -73,6 +80,7 @@ export default apiHandler({
               ...m,
               product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency },
               ...(b ? { basicProduct: { id: b.id, name: b.name, price: b.price, originalPrice: b.originalPrice, currency: b.currency } } : {}),
+              ...(m.style === "vip" && m.vipGroupId ? { vipCard: vipCards.get(m.vipGroupId), vipUrl: vipUrls.get(m.vipGroupId) } : {}),
             };
           }),
       },

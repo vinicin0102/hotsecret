@@ -7,6 +7,8 @@ import { PaymentStatus } from "./PaymentStatus";
 import { PayerForm } from "./PayerForm";
 import { NextActionView } from "./NextAction";
 import { UpsellScreen } from "./UpsellScreen";
+import { VipPreviewCard } from "./VipPreviewCard";
+import { withBase } from "@/lib/paths";
 import { OfferCard } from "./OfferCard";
 import { VipOfferModal, VipPaySheet } from "./LiveChannel";
 import type { OfferContent } from "@/types/flow";
@@ -529,7 +531,7 @@ export function CallScreen({
             setUpsell(m);
             setUpsellBuying(false);
             // tela cheia e oferta: o vídeo para por baixo
-            if (m.pause || m.style === "screen" || m.style === "offer") v.pause();
+            if (m.pause || m.style === "screen" || m.style === "offer" || m.style === "vip") v.pause();
           }
         }
       }
@@ -541,7 +543,8 @@ export function CallScreen({
 
   // upsell pago: mostra "Desbloqueado ✓", fecha e continua o vídeo
   useEffect(() => {
-    if (!upsellDone) return;
+    // upsell "Grupo VIP": fica aberto com o botão "Abrir meu VIP" (ele volta para a chamada quando quiser)
+    if (!upsellDone || upsell?.style === "vip") return;
     const id = setTimeout(() => {
       setUpsell(null);
       void vRef.current?.play().catch(() => undefined);
@@ -695,7 +698,23 @@ export function CallScreen({
           onSimulate={onSimulate}
         />
       )}
-      {upsell && upsell.style !== "screen" && upsell.style !== "offer" && (
+      {upsell && upsell.style === "vip" && upsell.vipCard && (
+        <VipUpsell
+          key={upsell.id}
+          marker={upsell}
+          character={character}
+          payment={upsellPayment}
+          bought={boughtUpsell(upsell.productId)}
+          error={error}
+          onBuy={() => {
+            setUpsellBuying(true);
+            onBuyUpsell(upsell.productId);
+          }}
+          onSimulate={onSimulate}
+          onContinue={closeUpsell}
+        />
+      )}
+      {upsell && upsell.style !== "screen" && upsell.style !== "offer" && upsell.style !== "vip" && (
         <div className="call-upsell">
           <div className="call-upsell-text">{upsell.text || upsell.product.name}</div>
           <div className="call-upsell-price">
@@ -925,6 +944,76 @@ export function VoiceCall({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Upsell "Grupo VIP" na chamada: o vídeo para e aparece a prévia do grupo (capa, quantas fotos/vídeos, mosaico
+ * borrado, benefícios) com o preço e o botão. Pagou: "Desbloqueado ✓", botão para abrir o VIP (já liberado,
+ * numa aba nova) e para voltar à chamada. Sem "agora não" — como nos outros upsells, ele paga ou desliga.
+ */
+function VipUpsell({
+  marker,
+  character,
+  payment,
+  bought,
+  error,
+  onBuy,
+  onSimulate,
+  onContinue,
+}: {
+  marker: CallVideo["markers"][number];
+  character: PublicCharacter;
+  payment: PublicPaymentInfo | undefined;
+  bought: boolean;
+  error: string | null;
+  onBuy: () => void;
+  onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
+  onContinue: () => void;
+}) {
+  const { t, money } = useChatI18n();
+  const [paying, setPaying] = useState(false);
+  const p = marker.product;
+  const footer = bought ? (
+    <div className="vipu-done">
+      <div className="call-upsell-ok">{t.unlocked}</div>
+      {marker.vipUrl && (
+        <a className="vipc-cta" href={withBase(marker.vipUrl)} target="_blank" rel="noopener">
+          {t.vipOpen} <span aria-hidden="true">→</span>
+        </a>
+      )}
+      <button className="vipu-back" onClick={onContinue}>
+        {t.vipBackToCall}
+      </button>
+    </div>
+  ) : paying ? (
+    <div className="vipu-pay">
+      <PixPayBody character={character} payment={payment} error={error} onSimulate={onSimulate} doneStep={t.vipDoneStep} />
+    </div>
+  ) : (
+    <>
+      <div className="vipc-price">
+        {p.originalPrice && p.originalPrice > p.price ? <s>{money(p.originalPrice, p.currency)}</s> : null}
+        <b>{money(p.price, p.currency)}</b>
+      </div>
+      <button
+        className="vipc-cta"
+        onClick={() => {
+          setPaying(true);
+          onBuy();
+        }}
+      >
+        {marker.ctaLabel || t.vipUnlockCta} <span aria-hidden="true">→</span>
+      </button>
+    </>
+  );
+  return (
+    <div className="up-screen vipu" role="dialog" aria-label={marker.vipCard!.name}>
+      <div className="vipu-inner">
+        <div className="vipu-say">{marker.text || t.vipUpsellText}</div>
+        <VipPreviewCard card={marker.vipCard!} tag={t.vipUpsellTag} footer={footer} />
+      </div>
     </div>
   );
 }

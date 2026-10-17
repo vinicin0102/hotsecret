@@ -104,6 +104,9 @@ export interface CallVideo {
     product: { id: string; name: string; price: number; originalPrice: number | null; currency?: string };
     /** oferta com 2 ingressos: o acesso básico */
     basicProduct?: { id: string; name: string; price: number; originalPrice: number | null; currency?: string };
+    /** upsell "Grupo VIP": a prévia do grupo e o link já como este lead */
+    vipCard?: VipPreviewCard;
+    vipUrl?: string;
   })[];
 }
 
@@ -440,6 +443,12 @@ export function createPreviewTransport(
         get<{ products: { id: string; name: string; price: number; originalPrice: number | null; currency?: string; active: boolean }[] }>("/api/admin/products"),
       ]);
       const tl = normalizeTimeline(video.timeline, video.durationMs);
+      // upsell "Grupo VIP": a prévia do grupo (no painel, mesmo em rascunho)
+      const vipCards = new Map<string, VipPreviewCard>();
+      for (const gid of new Set(tl.markers.flatMap((m) => (m.style === "vip" && m.vipGroupId ? [m.vipGroupId] : [])))) {
+        const r = await get<{ card: VipPreviewCard }>(`/api/admin/vip/${gid}/card`).catch(() => null);
+        if (r?.card) vipCards.set(gid, r.card);
+      }
       // igual ao fluxo publicado: só produtos na moeda do país do fluxo
       const byId = new Map(list.filter((p) => p.active && asCurrency(p.currency) === currencyOfLocale(language)).map((p) => [p.id, p]));
       for (const p of byId.values()) priced[p.id] = { price: p.price, currency: p.currency };
@@ -452,14 +461,16 @@ export function createPreviewTransport(
         chat: tl.chat,
         frame: tl.frame ?? null,
         markers: tl.markers
-          .filter((m) => byId.has(m.productId))
+          .filter((m) => byId.has(m.productId) && (m.style !== "vip" || (!!m.vipGroupId && vipCards.has(m.vipGroupId))))
           .map((m) => {
             const p = byId.get(m.productId)!;
             const b = m.basicProductId ? byId.get(m.basicProductId) : undefined;
+            const card = m.style === "vip" && m.vipGroupId ? vipCards.get(m.vipGroupId) : undefined;
             return {
               ...m,
               product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency },
               ...(b ? { basicProduct: { id: b.id, name: b.name, price: b.price, originalPrice: b.originalPrice, currency: b.currency } } : {}),
+              ...(card ? { vipCard: card, vipUrl: `/g/${card.slug}` } : {}),
             };
           }),
       };
