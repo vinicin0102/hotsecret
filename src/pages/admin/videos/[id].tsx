@@ -663,6 +663,31 @@ export default function VideoEditorPage() {
                   </p>
                 )}
                 {!selMarker.vipGroupId && vipGroups.length > 0 && <p className="error-text">Escolha o grupo — sem ele o upsell não aparece.</p>}
+                <div className="field">
+                  <label htmlFor="ve-m-intro">Frase acima dos benefícios</label>
+                  <input
+                    id="ve-m-intro"
+                    className="input"
+                    placeholder="Entrando no meu VIP você ganha:"
+                    value={selMarker.vip?.intro ?? ""}
+                    onChange={(e) => setMarker({ vip: { ...(selMarker.vip ?? {}), intro: e.target.value } })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="ve-m-benefits">Benefícios (um por linha)</label>
+                  <textarea
+                    id="ve-m-benefits"
+                    className="textarea"
+                    rows={4}
+                    placeholder={"Vazio = a quantidade de fotos/vídeos + os benefícios do grupo\nEx.: Vídeos sem censura toda semana"}
+                    value={(selMarker.vip?.benefits ?? []).join("\n")}
+                    onChange={(e) => setMarker({ vip: { ...(selMarker.vip ?? {}), benefits: e.target.value.split("\n") } })}
+                  />
+                  <span className="hint">
+                    Cada linha vira um ⭐ no card. Vazio: usa &quot;X fotos e Y vídeos exclusivos&quot; (contado sozinho) e o que está em{" "}
+                    <b>Grupo VIP → O que a assinatura inclui</b>.
+                  </span>
+                </div>
               </>
             ) : selMarker.style === "screen" ? (
               <>

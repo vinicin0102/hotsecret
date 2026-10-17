@@ -984,8 +984,11 @@ function VipUpsell({
       badge: t.vipUpsellTag,
       title: marker.text || card.headline || t.vipUpsellText,
       highlight: card.name,
-      intro: t.vipGroupIntro,
-      benefits: [t.vipGroupCount.replace("{f}", String(card.counts.images)).replace("{v}", String(card.counts.videos)), ...card.perks],
+      // escritos no upsell (editor de vídeo); vazio: quantas fotos/vídeos + os benefícios do grupo
+      intro: marker.vip?.intro?.trim() || t.vipGroupIntro,
+      benefits: (marker.vip?.benefits ?? []).map((b) => b.trim()).filter(Boolean).length
+        ? (marker.vip?.benefits ?? []).map((b) => b.trim()).filter(Boolean)
+        : [t.vipGroupCount.replace("{f}", String(card.counts.images)).replace("{v}", String(card.counts.videos)), ...card.perks],
       completeLabel: marker.ctaLabel || t.vipUnlockCta,
       payTitle: t.vipPixTitle,
       paySubtitle: card.name,
