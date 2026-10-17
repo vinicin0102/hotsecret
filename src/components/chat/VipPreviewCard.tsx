@@ -10,53 +10,42 @@ import type { VipPreviewCard as Card } from "@/services/vip";
 export function VipPreviewCard({ card, tag, footer }: { card: Card; tag?: string; footer?: ReactNode }) {
   const { t } = useChatI18n();
   const tiles = card.tiles.slice(0, 6);
+  // mesmo card das ofertas do chat (moldura girando, selo, título, caixa de preço, botão com seta);
+  // no lugar da foto do produto, o mosaico do grupo (o grátis à vista, o resto borrado com cadeado)
   return (
     <div className="msg-row bot">
-      <div className="vipc">
-        <div className="vipc-cover" style={card.coverUrl ? { backgroundImage: `url(${card.coverUrl})` } : undefined}>
-          <span className="vipc-tag">{tag ?? `🎁 ${t.vipTag}`}</span>
-        </div>
-        <div className="vipc-id">
-          {card.avatarUrl ? (
+      <div className="card-msg offer-card vipc">
+        <div className="offer-media vipc-media">
+          {tiles.length > 0 ? (
+            <VipMosaic card={card} />
+          ) : card.coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img className="vipc-avatar" src={card.avatarUrl} alt="" />
+            <img className="card-img" src={card.coverUrl} alt="" />
           ) : (
-            <span className="vipc-avatar">{card.name.slice(0, 1)}</span>
+            <div className="card-img offer-placeholder" aria-hidden="true">
+              <span>♛</span>
+            </div>
           )}
-          <div>
-            <b>
-              {card.name} <span className="vipc-ok">✓</span>
-            </b>
-            <small>
-              📷 {card.counts.images} {t.vipPhotos} · 🎬 {card.counts.videos} {t.vipVideos}
-            </small>
-          </div>
+          <span className="offer-seal">{tag ?? `🎁 ${t.vipTag}`}</span>
         </div>
-        {tiles.length > 0 && (
-          <div className={`vipc-grid n${Math.min(tiles.length, 6)}`}>
-            {tiles.map((m, i) => (
-              <span key={i} className={`vipc-tile ${m.url ? "" : "locked"}`}>
-                {m.url ? (
-                  m.kind === "video" ? (
-                    <video src={`${m.url}#t=0.5`} muted playsInline preload="metadata" />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.url} alt="" loading="lazy" />
-                  )
-                ) : m.preview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img className="vipc-blur" src={m.preview} alt="" loading="lazy" />
-                ) : (
-                  <span className="vipc-blur vipc-blur-empty" />
-                )}
-                {!m.url && <span className="vipc-lock">🔒</span>}
-                {m.kind === "video" && <span className="vipc-kind">▶</span>}
-              </span>
-            ))}
+        <div className="card-body offer-body">
+          <div className="vipc-id">
+            {card.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="vipc-avatar" src={card.avatarUrl} alt="" />
+            ) : (
+              <span className="vipc-avatar">{card.name.slice(0, 1)}</span>
+            )}
+            <div>
+              <h3 className="offer-title">
+                {card.name} <span className="vipc-ok">✓</span>
+              </h3>
+              <small>
+                📷 {card.counts.images} {t.vipPhotos} · 🎬 {card.counts.videos} {t.vipVideos}
+              </small>
+            </div>
           </div>
-        )}
-        <div className="vipc-body">
-          {card.headline && <p className="vipc-head">{card.headline}</p>}
+          {card.headline && <p>{card.headline}</p>}
           {card.perks.length > 0 && (
             <ul className="vipc-perks">
               {card.perks.map((p, i) => (
@@ -95,6 +84,35 @@ export function VipAccessCard({ name, avatarUrl, url }: { name: string; avatarUr
           {t.vipOpen} <span aria-hidden="true">→</span>
         </a>
       </div>
+    </div>
+  );
+}
+
+/** mosaico do grupo: o que é grátis aparece, o resto só com a prévia borrada e o cadeado */
+export function VipMosaic({ card }: { card: Card }) {
+  const tiles = card.tiles.slice(0, 6);
+  if (!tiles.length) return null;
+  return (
+    <div className={`vipc-grid n${Math.min(tiles.length, 6)}`}>
+      {tiles.map((m, i) => (
+        <span key={i} className={`vipc-tile ${m.url ? "" : "locked"}`}>
+          {m.url ? (
+            m.kind === "video" ? (
+              <video src={`${m.url}#t=0.5`} muted playsInline preload="metadata" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={m.url} alt="" loading="lazy" />
+            )
+          ) : m.preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="vipc-blur" src={m.preview} alt="" loading="lazy" />
+          ) : (
+            <span className="vipc-blur vipc-blur-empty" />
+          )}
+          {!m.url && <span className="vipc-lock">🔒</span>}
+          {m.kind === "video" && <span className="vipc-kind">▶</span>}
+        </span>
+      ))}
     </div>
   );
 }

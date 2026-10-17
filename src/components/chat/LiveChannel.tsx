@@ -1,6 +1,6 @@
 // Canal VIP AO VIVO: ligação ao entrar, topo de live, cards de prévia, upgrade com 2 ingressos,
 // pagamento com o chat acima e o pop-up "vai desistir agora?".
-import { useRef, useState, type TouchEvent } from "react";
+import { useRef, useState, type TouchEvent, type ReactNode } from "react";
 import { useChatI18n } from "@/features/i18n/chat";
 import type { OfferContent, PublicCharacter, PublicProduct, VipOfferTexts } from "@/types/flow";
 import type { PayMethods, PayerData, PublicPaymentInfo } from "@/features/chat-engine/transport";
@@ -177,12 +177,15 @@ export function VipOfferModal({
   offer,
   product,
   basic,
+  media,
   onPick,
   onClose,
 }: {
   offer: OfferContent;
   product: PublicProduct | undefined;
   basic: PublicProduct | undefined;
+  /** conteúdo extra abaixo do título (ex.: o mosaico do Grupo VIP) */
+  media?: ReactNode;
   onPick: (productId: string) => void;
   onClose: () => void;
 }) {
@@ -248,6 +251,7 @@ export function VipOfferModal({
           <br />
           <span>{v.highlight || t.vipHighlight}</span>
         </h2>
+        {media && <div className="vip-media-extra">{media}</div>}
         {(benefits.length > 0 || v.intro) && (
           <div className="vip-benefits">
             <div className="vip-intro">{v.intro || t.vipIntro}</div>

@@ -5003,3 +5003,78 @@ img.call-avatar {
   font-size: 12.5px;
   color: #cdbcc6;
 }
+
+/* ---------- Card do Grupo VIP no mesmo visual das ofertas (offer-card) ---------- */
+.card-msg.offer-card.vipc {
+  width: 90%;
+  max-width: 360px;
+  overflow: hidden;
+}
+.vipc-media .vipc-grid {
+  margin: 0;
+  gap: 2px;
+  border-radius: 0;
+}
+.vipc-media::after {
+  height: 28%;
+}
+.vipc-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+.vipc-id .vipc-avatar {
+  width: 46px;
+  height: 46px;
+  border-width: 2px;
+}
+.vipc-id .offer-title {
+  margin: 0;
+  font-size: 21px;
+}
+.vipc-id small {
+  font-size: 12.5px;
+  color: #cdbcc6;
+}
+.offer-card.vipc .vipc-perks {
+  margin-bottom: 12px;
+}
+.offer-card.vipc .secure-note {
+  margin-top: 10px;
+}
+.vipu .card-msg.offer-card.vipc {
+  width: 100%;
+  max-width: none;
+}
+/* PIX do upsell do VIP: o mesmo pop-up das outras ofertas */
+.vipu .vipu-pixbox {
+  margin: 64px auto auto;
+}
+.vipu-pixbox .vipu-done {
+  margin-top: 6px;
+}
+.vipu-pixbox .offer-cta {
+  text-decoration: none;
+}
+
+/* upsell "Grupo VIP" na chamada: o upgrade da Oferta com o mosaico do grupo */
+.vip-media-extra .vipc-grid {
+  margin: 10px 0 12px;
+  gap: 3px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.vip-media-extra .vipc-tile {
+  aspect-ratio: 16 / 10;
+}
+.vipu-done-sheet {
+  text-align: center;
+}
+.vipu-done-sheet .vipu-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 14px;
+  text-decoration: none;
+}
