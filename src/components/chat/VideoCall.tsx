@@ -458,9 +458,12 @@ export function CallScreen({
   freePreview,
   onBuyMain,
   messenger,
+  loadVideo,
 }: {
   /** tema Mensageiro: topo e barra de botões de app de mensagens */
   messenger?: boolean;
+  /** busca o vídeo da chamada (reaproveita o que começou a carregar enquanto tocava) */
+  loadVideo?: (nodeId: string, productId?: string) => Promise<CallVideo | null>;
   /** chamada de vídeo 02: antes de pagar, o trecho FREE toca uma vez e no fim dele aparece a oferta (como upsell) */
   freePreview?: boolean;
   /** chamada de vídeo 02: o lead tocou em pagar a oferta principal (ou um ingresso de uma "Oferta" no FREE) */
@@ -539,16 +542,15 @@ export function CallScreen({
 
   useEffect(() => {
     let alive = true;
-    transport
-      ?.callVideo(nodeId, productId)
-      .then((v) => alive && setVideo(v))
+    (loadVideo ? loadVideo(nodeId, productId) : transport?.callVideo(nodeId, productId))
+      ?.then((v) => alive && setVideo(v))
       .catch(() => alive && setVideo(null));
     const iv = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => {
       alive = false;
       clearInterval(iv);
     };
-  }, [transport, nodeId, productId]);
+  }, [transport, nodeId, productId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // o vídeo só abre depois do pagamento: toca do começo e, no fim do VIP, volta ao início do VIP
   useEffect(() => {

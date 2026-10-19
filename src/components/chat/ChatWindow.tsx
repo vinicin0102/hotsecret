@@ -3,7 +3,7 @@ import { asChatLocale, ChatI18nContext, makeChatI18n } from "@/features/i18n/cha
 import type { AudioContent, DeliveryContent, ImageContent, LinkContent, OfferContent, PublicFunnel, VideoContent } from "@/types/flow";
 import { getNode } from "@/features/chat-engine/engine";
 import { useChatEngine, type ChatItem, type ResumeState } from "@/features/chat-engine/useChatEngine";
-import type { ChatTransport } from "@/features/chat-engine/transport";
+import type { CallVideo, ChatTransport } from "@/features/chat-engine/transport";
 import { ChatHeader, MessengerHeader } from "./ChatHeader";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
@@ -93,6 +93,34 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
       send();
     }
   };
+
+  // chamada de vídeo: o vídeo começa a carregar enquanto o telefone toca — ao atender ele já está pronto
+  const callVideoRef = useRef<{ key: string; promise: Promise<CallVideo | null> } | null>(null);
+  const [warmVideo, setWarmVideo] = useState<string | null>(null);
+  const loadCallVideo = (nodeId: string, productId?: string): Promise<CallVideo | null> => {
+    // a chamada de um bloco de oferta é a mesma para qualquer produto; a do Cérebro depende do produto
+    const key = getNode(engine.graph, nodeId)?.type === "ai" ? `${nodeId}|${productId ?? ""}` : nodeId;
+    if (callVideoRef.current?.key === key) return callVideoRef.current.promise;
+    const promise = transport ? transport.callVideo(nodeId, productId) : Promise.resolve(null);
+    callVideoRef.current = { key, promise };
+    // falhou: a próxima tentativa (ao atender) pede de novo
+    promise.catch(() => {
+      if (callVideoRef.current?.promise === promise) callVideoRef.current = null;
+    });
+    return promise;
+  };
+  const ringNode = engine.call?.phase === "ringing" ? engine.call.nodeId : null;
+  const ringProduct = engine.call?.phase === "ringing" ? engine.call.productId : undefined;
+  useEffect(() => {
+    if (!ringNode || !transport) return;
+    let alive = true;
+    loadCallVideo(ringNode, ringProduct)
+      .then((v) => alive && v && setWarmVideo(`${v.url}#t=${v.free.start / 1000}`))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [ringNode, ringProduct, transport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const productOf = (offerNodeId: string | null | undefined) => {
     const node = getNode(engine.graph, offerNodeId);
@@ -404,6 +432,9 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
           />
         )}
+        {warmVideo && engine.call && engine.call.phase !== "active" && (
+          <video className="call-warm" src={warmVideo} preload="auto" muted playsInline aria-hidden="true" />
+        )}
         {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} messenger={messenger} />}
         {engine.call?.phase === "downsell" && (
           <DownsellOffer
@@ -435,6 +466,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         {engine.call?.phase === "active" && (
           <CallScreen
             nodeId={engine.call.nodeId}
+            loadVideo={loadCallVideo}
             character={funnel.character}
             transport={transport}
             payments={payments}

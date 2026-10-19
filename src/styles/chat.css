@@ -5526,3 +5526,12 @@ button.msc-btn {
     animation: none;
   }
 }
+
+/* vídeo da chamada carregando escondido enquanto o telefone toca */
+.call-warm {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
