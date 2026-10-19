@@ -5221,6 +5221,13 @@ img.call-avatar {
 .theme-messenger .audio-msg {
   color: var(--ms-text);
 }
+.theme-messenger .audio-msg button {
+  color: #54656f;
+  font-size: 20px;
+}
+.theme-messenger .audio-msg .dur {
+  color: var(--ms-muted);
+}
 .theme-messenger .audio-msg .wave i {
   background: #c4cbd0;
 }
