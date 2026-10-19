@@ -50,11 +50,14 @@ export interface UpsellMarker {
   /**
    * card: caixa de oferta embaixo (padrão) · screen: tela cheia em 3 passos ·
    * offer: upgrade com 2 ingressos (acesso completo = productId, acesso básico = basicProductId) ·
-   * vip: prévia do Grupo VIP (vipGroupId) com preço e botão — pagou, ganha o acesso ao grupo
+   * vip: prévia do Grupo VIP (vipGroupId) com preço e botão — pagou, ganha o acesso ao grupo ·
+   * whatsapp: contato pessoal — pagou, ganha o botão que abre a conversa no número (whatsapp.phone)
    */
-  style?: "card" | "screen" | "offer" | "vip";
+  style?: "card" | "screen" | "offer" | "vip" | "whatsapp";
   /** vip: o Grupo VIP mostrado e liberado por este upsell */
   vipGroupId?: string;
+  /** whatsapp: número (com DDI) e a mensagem que já vai escrita — só sai do servidor depois do pagamento aprovado */
+  whatsapp?: { phone: string; message?: string };
   screen?: UpsellScreen;
   /** oferta: 2º ingresso (acesso básico) */
   basicProductId?: string;

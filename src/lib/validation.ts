@@ -306,8 +306,9 @@ export const videoSchema = z.object({
             text: optTxt(300),
             ctaLabel: optTxt(60),
             pause: z.boolean().optional(),
-            style: z.enum(["card", "screen", "offer", "vip"]).optional(),
+            style: z.enum(["card", "screen", "offer", "vip", "whatsapp"]).optional(),
             vipGroupId: z.string().max(64).optional(),
+            whatsapp: z.object({ phone: z.string().trim().max(32), message: optTxt(300) }).optional(),
             basicProductId: z.string().max(64).optional(),
             vip: vipTextsSchema.optional(),
             screen: z

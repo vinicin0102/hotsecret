@@ -4,6 +4,8 @@ import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
 import { withVipAccess } from "@/services/vip";
+import { whatsappLinkForProduct } from "@/lib/whatsapp";
+import type { UpsellMarker } from "@/types/video";
 
 const schema = z.object({ token: z.string().min(10).max(2000), productId: z.string().max(64).optional().nullable() });
 
@@ -18,6 +20,13 @@ export default apiHandler({
       orderBy: { approvedAt: "desc" },
     });
     if (!payment) throw new HttpError(402, "Pagamento ainda não confirmado");
+    // sem link no produto: o número do upsell "WhatsApp pessoal" (editor de vídeo) que vendeu este produto
+    if (!payment.product.deliveryUrl) {
+      const videos = await prisma.video.findMany({ select: { timeline: true } });
+      const markers = videos.flatMap((v) => (v.timeline as { markers?: UpsellMarker[] } | null)?.markers ?? []);
+      const wa = whatsappLinkForProduct(markers, payment.productId);
+      if (wa) return { productName: payment.product.name, url: wa };
+    }
     // link de um Grupo VIP: o comprador entra já liberado (o mesmo lead)
     return { productName: payment.product.name, url: await withVipAccess(payment.product.deliveryUrl, session.leadId) };
   },

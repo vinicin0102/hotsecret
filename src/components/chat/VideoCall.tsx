@@ -614,7 +614,7 @@ export function CallScreen({
             setUpsell(m);
             setUpsellBuying(false);
             // tela cheia e oferta: o vídeo para por baixo
-            if (m.pause || m.style === "screen" || m.style === "offer" || m.style === "vip") v.pause();
+            if (m.pause || m.style === "screen" || m.style === "offer" || m.style === "vip" || m.style === "whatsapp") v.pause();
           }
         }
       }
@@ -626,8 +626,8 @@ export function CallScreen({
 
   // upsell pago: mostra "Desbloqueado ✓", fecha e continua o vídeo
   useEffect(() => {
-    // upsell "Grupo VIP": fica aberto com o botão "Abrir meu VIP" (ele volta para a chamada quando quiser)
-    if (!upsellDone || upsell?.style === "vip") return;
+    // upsell "Grupo VIP" / "WhatsApp pessoal": fica aberto com o botão de abrir (ele volta para a chamada quando quiser)
+    if (!upsellDone || upsell?.style === "vip" || upsell?.style === "whatsapp") return;
     const id = setTimeout(() => {
       setUpsell(null);
       void vRef.current?.play().catch(() => undefined);
@@ -798,7 +798,24 @@ export function CallScreen({
           onContinue={closeUpsell}
         />
       )}
-      {upsell && upsell.style !== "screen" && upsell.style !== "offer" && upsell.style !== "vip" && (
+      {upsell && upsell.style === "whatsapp" && (
+        <WhatsAppUpsell
+          key={upsell.id}
+          marker={upsell}
+          character={character}
+          transport={transport}
+          payment={upsellPayment}
+          bought={boughtUpsell(upsell.productId)}
+          error={error}
+          onBuy={() => {
+            setUpsellBuying(true);
+            onBuyUpsell(upsell.productId);
+          }}
+          onSimulate={onSimulate}
+          onContinue={closeUpsell}
+        />
+      )}
+      {upsell && upsell.style !== "screen" && upsell.style !== "offer" && upsell.style !== "vip" && upsell.style !== "whatsapp" && (
         <div className="call-upsell">
           <div className="call-upsell-text">{upsell.text || upsell.product.name}</div>
           <div className="call-upsell-price">
@@ -1061,6 +1078,155 @@ export function VoiceCall({
  * de/por e o botão) com o mosaico do grupo; tocou em comprar, a mesma folha do PIX da Oferta. Pagou: "Desbloqueado ✓",
  * botão para abrir o VIP (já liberado, numa aba nova) e para voltar à chamada.
  */
+/**
+ * Upsell "WhatsApp pessoal": mesmo visual das ofertas (benefícios, preço, PIX). Pagou: o servidor entrega o link
+ * da conversa no número dela (antes disso o número nunca chega ao navegador).
+ */
+function WhatsAppUpsell({
+  marker,
+  character,
+  transport,
+  payment,
+  bought,
+  error,
+  onBuy,
+  onSimulate,
+  onContinue,
+}: {
+  marker: CallVideo["markers"][number];
+  character: PublicCharacter;
+  transport: ChatTransport | null;
+  payment: PublicPaymentInfo | undefined;
+  bought: boolean;
+  error: string | null;
+  onBuy: () => void;
+  onSimulate?: (paymentId: string, status: "APPROVED" | "FAILED") => void;
+  onContinue: () => void;
+}) {
+  const { t } = useChatI18n();
+  const [paying, setPaying] = useState(false);
+  const [link, setLink] = useState<string | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const p = marker.product;
+  const written = (marker.vip?.benefits ?? []).map((b) => b.trim()).filter(Boolean);
+  const offer: OfferContent = {
+    productId: p.id,
+    style: "live",
+    vip: {
+      badge: t.waUpsellTag,
+      title: marker.text || t.waUpsellText,
+      highlight: character.name,
+      intro: marker.vip?.intro?.trim() || t.waIntro,
+      benefits: written.length ? written : t.waBenefits,
+      completeLabel: marker.ctaLabel || t.waCta,
+      payTitle: t.waPixTitle,
+      paySubtitle: character.name,
+    },
+  };
+
+  // pagou: busca o link (o pagamento pode levar um instante para constar como aprovado no servidor)
+  useEffect(() => {
+    if (!bought || !transport) return;
+    let alive = true;
+    let tries = 0;
+    const load = () =>
+      transport
+        .delivery(p.id)
+        .then((r) => alive && setLink(r.url))
+        .catch(() => {
+          if (!alive) return;
+          if (++tries < 4) setTimeout(load, 1500);
+          else setLink(null);
+        });
+    setLink(undefined);
+    load();
+    return () => {
+      alive = false;
+    };
+  }, [bought, transport, p.id, attempt]);
+
+  if (bought) {
+    return (
+      <div className="vip-sheet vipu-done-sheet wau-done" role="dialog" aria-label={t.waUnlocked}>
+        <div className="wau-avatar">
+          {character.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={character.avatarUrl} alt="" />
+          ) : (
+            <span>{character.name.slice(0, 1)}</span>
+          )}
+        </div>
+        <div className="vip-sheet-title">{t.waUnlocked}</div>
+        <div className="vip-sheet-sub">{character.name}</div>
+        {link ? (
+          <a className="vip-copy vipu-open wau-open" href={link} target="_blank" rel="noopener">
+            <ChatBubbleIcon /> {t.waOpen}
+          </a>
+        ) : link === null ? (
+          <button className="vip-copy vipu-open wau-open" onClick={() => setAttempt((a) => a + 1)}>
+            {t.waRetry}
+          </button>
+        ) : (
+          <div className="vip-sheet-sub wau-loading">{t.waLoading}</div>
+        )}
+        <button className="vipu-back" onClick={onContinue}>
+          {t.vipBackToCall}
+        </button>
+      </div>
+    );
+  }
+  if (paying) {
+    return <VipPaySheet character={character} offer={offer} payment={payment} error={error} onClose={onContinue} onSimulate={onSimulate} />;
+  }
+  return (
+    <VipOfferModal
+      offer={offer}
+      product={p as PublicProduct}
+      basic={undefined}
+      media={
+        <div className="wau-contact">
+          <div className="wau-avatar">
+            {character.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={character.avatarUrl} alt="" />
+            ) : (
+              <span>{character.name.slice(0, 1)}</span>
+            )}
+            <i className="wau-badge">
+              <ChatBubbleIcon />
+            </i>
+          </div>
+          <div className="wau-who">
+            <b>{character.name}</b>
+            <small>
+              <span className="wau-dot" /> {t.waOnline}
+            </small>
+            <span className="wau-number" aria-hidden="true">
+              +•• •• •••••-••••
+            </span>
+          </div>
+        </div>
+      }
+      onPick={() => {
+        setPaying(true);
+        onBuy();
+      }}
+      onClose={onContinue}
+    />
+  );
+}
+
+function ChatBubbleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l2-5.5A8.4 8.4 0 1 1 21 11.5z" />
+      <circle cx="8.5" cy="11.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="12.5" cy="11.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="16.5" cy="11.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function VipUpsell({
   marker,
   character,

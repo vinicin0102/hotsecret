@@ -5,6 +5,7 @@ import { asCurrency, currencyOfLocale } from "@/lib/format";
 import { livePreviewReady, type FlowNode, type LivePreview, type TarotCard, type VipOfferTexts } from "@/types/flow";
 import { metaCookies } from "./pixels";
 import type { ChatCue, TimeRange, UpsellMarker, VideoFrame, VideoTimeline } from "@/types/video";
+import { whatsappDigits } from "@/lib/whatsapp";
 import { normalizeTimeline } from "@/types/video";
 import type { VipPreviewCard } from "@/services/vip";
 
@@ -461,7 +462,12 @@ export function createPreviewTransport(
         chat: tl.chat,
         frame: tl.frame ?? null,
         markers: tl.markers
-          .filter((m) => byId.has(m.productId) && (m.style !== "vip" || (!!m.vipGroupId && vipCards.has(m.vipGroupId))))
+          .filter(
+            (m) =>
+              byId.has(m.productId) &&
+              (m.style !== "vip" || (!!m.vipGroupId && vipCards.has(m.vipGroupId))) &&
+              (m.style !== "whatsapp" || !!whatsappDigits(m.whatsapp?.phone)),
+          )
           .map((m) => {
             const p = byId.get(m.productId)!;
             const b = m.basicProductId ? byId.get(m.basicProductId) : undefined;

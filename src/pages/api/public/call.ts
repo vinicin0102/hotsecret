@@ -9,6 +9,7 @@ import { normalizeTimeline } from "@/types/video";
 import type { AiContent, OfferContent } from "@/types/flow";
 import { brainOffers, brainVoiceCalls, voiceCallProductId } from "@/services/ai/brain";
 import { vipAccessUrl, vipPreviewCard, type VipPreviewCard } from "@/services/vip";
+import { publicMarker, whatsappDigits } from "@/lib/whatsapp";
 
 const schema = z.object({
   token: z.string().min(10).max(2000),
@@ -72,12 +73,19 @@ export default apiHandler({
         chat: timeline.chat,
         frame: timeline.frame ?? null,
         markers: timeline.markers
-          .filter((m) => byId.has(m.productId) && (m.style !== "vip" || (!!m.vipGroupId && vipCards.has(m.vipGroupId))))
+          .filter(
+            (m) =>
+              byId.has(m.productId) &&
+              (m.style !== "vip" || (!!m.vipGroupId && vipCards.has(m.vipGroupId))) &&
+              // WhatsApp pessoal sem número válido não aparece (não teria o que entregar)
+              (m.style !== "whatsapp" || !!whatsappDigits(m.whatsapp?.phone)),
+          )
           .map((m) => {
             const p = byId.get(m.productId)!;
             const b = m.basicProductId ? byId.get(m.basicProductId) : undefined;
             return {
-              ...m,
+              // o número do upsell "WhatsApp pessoal" só sai depois do pagamento (/api/public/delivery)
+              ...publicMarker(m),
               product: { id: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, currency: p.currency },
               ...(b ? { basicProduct: { id: b.id, name: b.name, price: b.price, originalPrice: b.originalPrice, currency: b.currency } } : {}),
               ...(m.style === "vip" && m.vipGroupId ? { vipCard: vipCards.get(m.vipGroupId), vipUrl: vipUrls.get(m.vipGroupId) } : {}),

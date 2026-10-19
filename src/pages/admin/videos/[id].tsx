@@ -9,6 +9,7 @@ import { api } from "@/lib/client";
 import { asCurrency, productOption } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { formatMs, normalizeTimeline, type VideoTimeline } from "@/types/video";
+import { whatsappDigits, whatsappLink } from "@/lib/whatsapp";
 import { UpsellScreenEditor } from "@/components/admin/UpsellScreenEditor";
 import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
 
@@ -612,6 +613,7 @@ export default function VideoEditorPage() {
                     ["card", "Card embaixo"],
                     ["screen", "Tela cheia (aviso → bloqueado → PIX)"],
                     ["vip", "♛ Grupo VIP (prévia do grupo + PIX)"],
+                    ["whatsapp", "💬 WhatsApp pessoal (número liberado após o PIX)"],
                   ] as const
                 ).map(([v, label]) => (
                   <button
@@ -687,6 +689,71 @@ export default function VideoEditorPage() {
                     Cada linha vira um ⭐ no card. Vazio: usa &quot;X fotos e Y vídeos exclusivos&quot; (contado sozinho) e o que está em{" "}
                     <b>Grupo VIP → O que a assinatura inclui</b>.
                   </span>
+                </div>
+              </>
+            ) : selMarker.style === "whatsapp" ? (
+              <>
+                <p className="hint" style={{ marginTop: -4 }}>
+                  O vídeo para e aparece o contato dela (foto, &quot;online agora&quot; e o número borrado) com os benefícios, o preço do{" "}
+                  <b>produto</b> acima e o botão. Pagou: aparece o botão &quot;Chamar no WhatsApp&quot;, que abre a conversa com o número abaixo e a
+                  mensagem já escrita. O número nunca vai para o celular do lead antes do PIX aprovado.
+                </p>
+                <div className="grid-2">
+                  <div className="field">
+                    <label htmlFor="ve-m-wa">Número do WhatsApp (com DDI)</label>
+                    <input
+                      id="ve-m-wa"
+                      className="input"
+                      inputMode="tel"
+                      placeholder="+55 11 98765-4321"
+                      value={selMarker.whatsapp?.phone ?? ""}
+                      onChange={(e) => setMarker({ whatsapp: { ...(selMarker.whatsapp ?? { phone: "" }), phone: e.target.value } })}
+                    />
+                    <span className="hint">Brasil começa com 55, México com 52, Argentina com 54.</span>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="ve-m-wa-msg">Mensagem que já vai escrita</label>
+                    <input
+                      id="ve-m-wa-msg"
+                      className="input"
+                      placeholder="Oi amor, vim da chamada 😘"
+                      value={selMarker.whatsapp?.message ?? ""}
+                      onChange={(e) => setMarker({ whatsapp: { ...(selMarker.whatsapp ?? { phone: "" }), message: e.target.value } })}
+                    />
+                  </div>
+                </div>
+                {!whatsappDigits(selMarker.whatsapp?.phone) && (
+                  <p className="error-text">Informe o número com DDI e DDD — sem ele o upsell não aparece.</p>
+                )}
+                {whatsappLink(selMarker.whatsapp?.phone, selMarker.whatsapp?.message) && (
+                  <p className="hint">
+                    Teste o link:{" "}
+                    <a href={whatsappLink(selMarker.whatsapp?.phone, selMarker.whatsapp?.message)!} target="_blank" rel="noreferrer">
+                      {whatsappLink(selMarker.whatsapp?.phone)} ↗
+                    </a>
+                  </p>
+                )}
+                <div className="field">
+                  <label htmlFor="ve-m-wa-intro">Frase acima dos benefícios</label>
+                  <input
+                    id="ve-m-wa-intro"
+                    className="input"
+                    placeholder="No meu WhatsApp você ganha:"
+                    value={selMarker.vip?.intro ?? ""}
+                    onChange={(e) => setMarker({ vip: { ...(selMarker.vip ?? {}), intro: e.target.value } })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="ve-m-wa-benefits">Benefícios (um por linha)</label>
+                  <textarea
+                    id="ve-m-wa-benefits"
+                    className="textarea"
+                    rows={4}
+                    placeholder={"Meu número pessoal, falando direto comigo\nConversa só nós dois, no privado\nFotos e áudios que não mando em lugar nenhum"}
+                    value={(selMarker.vip?.benefits ?? []).join("\n")}
+                    onChange={(e) => setMarker({ vip: { ...(selMarker.vip ?? {}), benefits: e.target.value.split("\n") } })}
+                  />
+                  <span className="hint">Cada linha vira um ⭐ no card. Vazio: usa os 3 benefícios do exemplo acima.</span>
                 </div>
               </>
             ) : selMarker.style === "screen" ? (
