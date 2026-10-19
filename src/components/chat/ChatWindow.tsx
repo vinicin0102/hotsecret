@@ -376,6 +376,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           <VoiceCall
             key={engine.voice.id + engine.voice.nodeId}
             character={funnel.character}
+            messenger={messenger}
             url={engine.voice.url}
             phase={engine.voice.phase}
             endedSeconds={engine.voice.seconds}
@@ -403,7 +404,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
           />
         )}
-        {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} />}
+        {engine.call?.phase === "ringing" && <IncomingCall character={funnel.character} onAccept={engine.answerCall} onDecline={engine.declineCall} messenger={messenger} />}
         {engine.call?.phase === "downsell" && (
           <DownsellOffer
             character={funnel.character}
@@ -451,6 +452,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             previewMode={transport?.mode === "preview"}
             freePreview={!!engine.call.free}
             onBuyMain={engine.buyFreeCall}
+            messenger={messenger}
           />
         )}
         {live ? (

@@ -5078,3 +5078,444 @@ img.call-avatar {
   margin-top: 14px;
   text-decoration: none;
 }
+
+/* =====================================================================
+   TEMA MENSAGEIRO (claro) — conversa como app de mensagens: fundo bege com desenhos, balões brancos (dela)
+   e verdes (do lead), cabeçalho e campo de mensagem claros. Ligação: tela escura com nome + "Chamando…" no
+   topo e barra de botões embaixo.
+   ===================================================================== */
+.theme-messenger {
+  --ms-bg: #efeae2;
+  --ms-in: #ffffff;
+  --ms-out: #d9fdd3;
+  --ms-text: #111b21;
+  --ms-muted: #667781;
+  --ms-green: #00a884;
+  --ms-teal: #008069;
+  --ms-blue: #53bdeb;
+  --ms-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  color: var(--ms-text);
+  background: var(--ms-bg);
+}
+.theme-messenger .chat-window {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180' fill='none' stroke='%23000000' stroke-opacity='0.075' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M28 30c-4-6-14-4-14 4 0 7 14 14 14 14s14-7 14-14c0-8-10-10-14-4z'/%3E%3Cpath d='M120 20l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z'/%3E%3Cpath d='M70 70v-18l16-4v18'/%3E%3Ccircle cx='66' cy='70' r='4'/%3E%3Ccircle cx='82' cy='66' r='4'/%3E%3Crect x='128' y='78' width='30' height='21' rx='4'/%3E%3Ccircle cx='143' cy='88' r='6'/%3E%3Cpath d='M134 78l3-5h12l3 5'/%3E%3Cpath d='M20 112h28a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H34l-8 7v-7h-6a6 6 0 0 1-6-6v-12a6 6 0 0 1 6-6z'/%3E%3Cpath d='M100 120a14 14 0 1 0 0 28 12 12 0 0 1 0-28z'/%3E%3Ccircle cx='150' cy='150' r='12'/%3E%3Cpath d='M145 147h0M155 147h0M144 154c3 3 9 3 12 0'/%3E%3Cpath d='M76 156l6-6 6 6M82 150v16'/%3E%3Cpath d='M160 30c0 6-6 10-6 10s-6-4-6-10a6 6 0 0 1 12 0z'/%3E%3C/svg%3E") repeat, var(--ms-bg);
+  background-size: 130px 130px, auto;
+  color: var(--ms-text);
+}
+.theme-messenger.has-bg-video .chat-window {
+  background: #000;
+}
+/* cabeçalho claro com a pílula de vídeo e telefone */
+.theme-messenger .ms-header {
+  background: rgba(247, 247, 247, 0.96);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--ms-text);
+}
+.theme-messenger .ms-back {
+  color: var(--ms-text);
+}
+.theme-messenger .ms-who .avatar {
+  background: #dfe5e7;
+  color: #54656f;
+}
+.theme-messenger .ms-who-text .name {
+  font-size: 17px;
+  color: var(--ms-text);
+}
+.theme-messenger .ms-who-text .status {
+  color: var(--ms-muted);
+}
+.theme-messenger .ms-who-text .status.is-typing {
+  color: var(--ms-green);
+}
+.ms-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.ms-act {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--ms-text);
+  cursor: pointer;
+}
+/* dados do contato (claro) */
+.theme-messenger .ms-contact,
+.theme-messenger .ms-contact-top {
+  background: #f0f2f5;
+  color: var(--ms-text);
+}
+.theme-messenger .ms-contact-photo {
+  background: #dfe5e7;
+  color: #54656f;
+}
+.theme-messenger .ms-contact-card {
+  background: #fff;
+  box-shadow: var(--ms-shadow);
+}
+/* mensagens */
+.theme-messenger .day-sep {
+  background: #fff;
+  color: #54656f;
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .secret-note {
+  background: #ffeecd;
+  color: #54656f;
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .bubble {
+  border-radius: 8px;
+  padding: 6px 8px 5px 9px;
+  font-size: 15.5px;
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .bubble.bot {
+  background: var(--ms-in);
+  color: var(--ms-text);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 8px;
+}
+.theme-messenger .bubble.user {
+  background: var(--ms-out);
+  color: var(--ms-text);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 8px;
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .bubble .time,
+.theme-messenger .bubble.user .time {
+  color: var(--ms-muted);
+}
+.theme-messenger .bubble.media {
+  padding: 3px;
+}
+.theme-messenger .bubble.media img,
+.theme-messenger .bubble.media video {
+  border-radius: 6px;
+}
+.theme-messenger .bubble.system {
+  background: #fff;
+  color: #54656f;
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .typing {
+  background: #fff;
+  border-radius: 8px;
+  border-top-left-radius: 0;
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .typing i {
+  background: #8696a0;
+}
+.theme-messenger .audio-msg {
+  color: var(--ms-text);
+}
+.theme-messenger .audio-msg .wave i {
+  background: #c4cbd0;
+}
+.theme-messenger .audio-msg .wave i.on {
+  background: var(--ms-green);
+}
+/* respostas rápidas */
+.theme-messenger .option-btn {
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ms-teal);
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .option-btn:hover {
+  background: #f5f6f6;
+}
+/* cards (oferta, checkout, pagamento, VIP): balão branco */
+.theme-messenger .card-msg,
+.theme-messenger .card-msg.offer-card {
+  border-radius: 8px;
+  border-top-left-radius: 0;
+  background: #fff;
+  color: var(--ms-text);
+  box-shadow: var(--ms-shadow);
+}
+.theme-messenger .card-msg h3,
+.theme-messenger .offer-card .offer-title {
+  color: var(--ms-text);
+}
+.theme-messenger .card-msg p,
+.theme-messenger .offer-card p {
+  color: #3b4a54;
+}
+.theme-messenger .offer-media {
+  border-radius: 6px;
+}
+.theme-messenger .offer-price-row {
+  background: #f0f2f5;
+}
+.theme-messenger .offer-card .price,
+.theme-messenger .price {
+  color: var(--ms-text);
+}
+.theme-messenger .offer-card .price small,
+.theme-messenger .price-old {
+  color: var(--ms-muted);
+}
+.theme-messenger .offer-off {
+  background: #25d366;
+  color: #fff;
+}
+.theme-messenger .chat-window .btn-primary.cta-glow,
+.theme-messenger .offer-cta {
+  border-radius: 8px;
+  background: var(--ms-green);
+  color: #fff;
+}
+.theme-messenger .secure-note,
+.theme-messenger .status-line,
+.theme-messenger .card-msg .hint {
+  color: var(--ms-muted);
+}
+.theme-messenger .pix-code {
+  background: #f0f2f5;
+  border-color: #d1d7db;
+  color: #3b4a54;
+}
+.theme-messenger .checkout-card .summary {
+  background: #f0f2f5;
+  border-color: transparent;
+  color: var(--ms-text);
+}
+.theme-messenger .card-msg .input {
+  background: #fff;
+  color: var(--ms-text);
+  border-color: #d1d7db;
+}
+.theme-messenger .spinner {
+  border-color: rgba(0, 0, 0, 0.12);
+  border-top-color: var(--ms-green);
+}
+.theme-messenger .vipc-perks li,
+.theme-messenger .vipc-id small {
+  color: #3b4a54;
+}
+.theme-messenger .vipc-bonus {
+  color: #8a5a00;
+  background: #fff8e1;
+  border-color: #f0c36d;
+}
+.theme-messenger .vipc.vipc-access {
+  border: 0;
+  border-radius: 8px;
+  border-top-left-radius: 0;
+  background: #fff;
+  color: var(--ms-text);
+  box-shadow: var(--ms-shadow);
+  animation: msgIn 0.32s ease;
+}
+.theme-messenger .vipc-access-top small {
+  color: var(--ms-muted);
+}
+.theme-messenger .vipc-cta {
+  border-radius: 8px;
+  background: var(--ms-green);
+  box-shadow: none;
+}
+/* campo de mensagem claro; vazio, o botão de enviar vira o microfone */
+.theme-messenger .composer {
+  background: #f6f5f3;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+.theme-messenger .composer textarea {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--ms-text);
+}
+.theme-messenger .composer textarea::placeholder {
+  color: #8696a0;
+}
+.theme-messenger .composer textarea:focus {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.theme-messenger .composer .photo-btn {
+  color: #54656f;
+}
+.theme-messenger .composer .send {
+  background: var(--ms-green);
+  color: #fff;
+}
+.theme-messenger .composer .send:disabled {
+  font-size: 0;
+  color: transparent;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2354656f' stroke-width='1.8' stroke-linecap='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21'/%3E%3C/svg%3E") center / 24px no-repeat;
+}
+
+/* ---------- ligação (tema Mensageiro): tela escura com desenhos ---------- */
+.call-overlay.msc {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180' fill='none' stroke='%23ffffff' stroke-opacity='0.07' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M28 30c-4-6-14-4-14 4 0 7 14 14 14 14s14-7 14-14c0-8-10-10-14-4z'/%3E%3Cpath d='M120 20l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z'/%3E%3Cpath d='M70 70v-18l16-4v18'/%3E%3Ccircle cx='66' cy='70' r='4'/%3E%3Ccircle cx='82' cy='66' r='4'/%3E%3Crect x='128' y='78' width='30' height='21' rx='4'/%3E%3Ccircle cx='143' cy='88' r='6'/%3E%3Cpath d='M134 78l3-5h12l3 5'/%3E%3Cpath d='M20 112h28a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H34l-8 7v-7h-6a6 6 0 0 1-6-6v-12a6 6 0 0 1 6-6z'/%3E%3Cpath d='M100 120a14 14 0 1 0 0 28 12 12 0 0 1 0-28z'/%3E%3Ccircle cx='150' cy='150' r='12'/%3E%3Cpath d='M145 147h0M155 147h0M144 154c3 3 9 3 12 0'/%3E%3Cpath d='M76 156l6-6 6 6M82 150v16'/%3E%3Cpath d='M160 30c0 6-6 10-6 10s-6-4-6-10a6 6 0 0 1 12 0z'/%3E%3C/svg%3E") repeat, #161717;
+  background-size: 130px 130px, auto;
+  justify-content: flex-start;
+  align-items: center;
+  font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Roboto, "Segoe UI", Arial, sans-serif;
+}
+.call-overlay.msc .call-bg {
+  display: none;
+}
+.msc-top {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.msc-ico {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.msc-who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 4px;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+.msc-who b {
+  font-size: 16px;
+  font-weight: 600;
+}
+.msc-who small {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.75);
+  font-variant-numeric: tabular-nums;
+}
+.msc-tile {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(74vw, 300px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -54%);
+  overflow: hidden;
+  border-radius: 6px;
+  background: #000;
+  display: grid;
+  place-items: center;
+}
+.msc-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.msc-tile span {
+  font-size: 72px;
+  color: #fff;
+}
+.msc-bar {
+  position: absolute;
+  left: 50%;
+  bottom: max(26px, env(safe-area-inset-bottom));
+  z-index: 6;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(40, 40, 42, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.msc-btn {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: default;
+}
+button.msc-btn {
+  cursor: pointer;
+}
+.msc-btn.off {
+  color: #161717;
+  background: #fff;
+}
+.msc-btn svg {
+  width: 22px;
+  height: 22px;
+}
+.msc-decline {
+  background: #ea0038;
+}
+.msc-accept {
+  background: #25d366;
+  animation: mscPulse 1.4s ease-in-out infinite;
+}
+@keyframes mscPulse {
+  50% {
+    box-shadow: 0 0 0 9px rgba(37, 211, 102, 0.22);
+  }
+}
+/* chamada em andamento: o vídeo ocupa a tela; o topo e a barra ficam por cima */
+.call-overlay.active.msc .call-shade {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.45));
+}
+.call-overlay.active.msc .call-hud .call-who {
+  display: none;
+}
+.call-overlay.active.msc .call-hud {
+  align-self: stretch;
+  justify-content: flex-end;
+  top: calc(max(14px, env(safe-area-inset-top)) + 48px);
+}
+.call-overlay.active.msc .call-self {
+  width: 86px;
+  height: 120px;
+  border-radius: 10px;
+}
+.call-overlay.active.msc .call-controls.msc-bar {
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(40, 40, 42, 0.86);
+}
+.call-overlay.active.msc .call-controls .call-hangup.msc-decline {
+  width: 46px;
+  height: 46px;
+  background: #ea0038;
+  box-shadow: none;
+}
+.call-overlay.active.msc .call-controls .call-hangup.msc-decline svg {
+  width: 22px;
+  height: 22px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .msc-accept {
+    animation: none;
+  }
+}

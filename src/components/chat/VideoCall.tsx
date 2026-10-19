@@ -98,25 +98,103 @@ const SignalBars = () => (
     <i />
   </span>
 );
+/** tema Mensageiro: ícones da tela de ligação (minimizar, adicionar pessoa, mais, microfone mudo) */
+const MinimizeIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+  </svg>
+);
+const AddPersonIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+    <circle cx="9" cy="8" r="4" />
+    <path d="M1.5 20c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5zM19 8v6M16 11h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+const DotsIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor">
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="19" cy="12" r="2" />
+  </svg>
+);
+const MicOffIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+    <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M3 3l18 18" />
+  </svg>
+);
 const CamIcon = () => (
   <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
     <path fill="currentColor" d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z" />
   </svg>
 );
 
+/** tema Mensageiro: topo da tela de ligação (minimizar, nome + status, adicionar pessoa) */
+function MsTop({ name, status }: { name: string; status: string }) {
+  return (
+    <div className="msc-top">
+      <span className="msc-ico" aria-hidden="true">
+        <MinimizeIcon />
+      </span>
+      <div className="msc-who">
+        <b>{name}</b>
+        <small>{status}</small>
+      </div>
+      <span className="msc-ico" aria-hidden="true">
+        <AddPersonIcon />
+      </span>
+    </div>
+  );
+}
+
 export function IncomingCall({
   character,
   onAccept,
   onDecline,
   kind = "video",
+  messenger,
 }: {
   character: PublicCharacter;
   onAccept: () => void;
   onDecline: () => void;
   kind?: "video" | "voice";
+  /** tema Mensageiro: tela de ligação de app de mensagens (topo com nome e "Chamando…", barra de botões embaixo) */
+  messenger?: boolean;
 }) {
   useRingtone(true);
   const { t } = useChatI18n();
+  if (messenger) {
+    return (
+      <div className="call-overlay ringing msc" role="dialog" aria-label={`${kind === "voice" ? t.voiceCall : t.videoCall} · ${character.name}`}>
+        <MsTop name={character.name} status={`${t.calling}...`} />
+        <div className="msc-tile">
+          {character.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={character.avatarUrl} alt="" />
+          ) : (
+            <span>{character.name.slice(0, 1)}</span>
+          )}
+        </div>
+        <div className="msc-bar">
+          <span className="msc-btn" aria-hidden="true">
+            <DotsIcon />
+          </span>
+          <span className="msc-btn" aria-hidden="true">
+            <SpeakerIcon />
+          </span>
+          <span className="msc-btn" aria-hidden="true">
+            <MicOffIcon />
+          </span>
+          <button className="msc-btn msc-decline" onClick={onDecline} aria-label={t.decline}>
+            <PhoneIcon down />
+          </button>
+          <button className="msc-btn msc-accept" onClick={onAccept} aria-label={t.answer}>
+            {kind === "voice" ? <PhoneIcon /> : <CamIcon />}
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="call-overlay ringing" role="dialog" aria-label={`${kind === "voice" ? t.voiceCall : t.videoCall} · ${character.name}`}>
       {character.avatarUrl && <div className="call-bg" style={{ backgroundImage: `url(${character.avatarUrl})` }} />}
@@ -379,7 +457,10 @@ export function CallScreen({
   previewMode,
   freePreview,
   onBuyMain,
+  messenger,
 }: {
+  /** tema Mensageiro: topo e barra de botões de app de mensagens */
+  messenger?: boolean;
   /** chamada de vídeo 02: antes de pagar, o trecho FREE toca uma vez e no fim dele aparece a oferta (como upsell) */
   freePreview?: boolean;
   /** chamada de vídeo 02: o lead tocou em pagar a oferta principal (ou um ingresso de uma "Oferta" no FREE) */
@@ -575,7 +656,7 @@ export function CallScreen({
   const mm = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
-    <div className="call-overlay active" role="dialog" aria-label={tx.videoCall}>
+    <div className={`call-overlay active ${messenger ? "msc" : ""}`} role="dialog" aria-label={tx.videoCall}>
       {video ? (
         <video
           ref={vRef}
@@ -604,7 +685,8 @@ export function CallScreen({
         </div>
       )}
       <div className="call-shade" aria-hidden="true" />
-      <div className="call-hud">
+      {messenger && <MsTop name={character.name} status={video ? mm : `${tx.calling}...`} />}
+      <div className={`call-hud ${messenger ? "msc-hud" : ""}`}>
         <div className="call-who">
           {character.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -753,17 +835,38 @@ export function CallScreen({
           </span>
         ))}
       </div>
-      <div className="call-controls">
-        <button className={`call-ctl ${soundOff ? "off" : ""}`} onClick={toggleSound} aria-label={soundOff ? tx.soundOff : tx.soundOn} aria-pressed={!soundOff}>
-          <SpeakerIcon off={soundOff} />
-        </button>
-        <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label={tx.hangUp}>
-          <PhoneIcon down />
-        </button>
-        <button className="call-ctl heart" onClick={sendHeart} aria-label={tx.sendHeart}>
-          ♥
-        </button>
-      </div>
+      {messenger ? (
+        // tema Mensageiro: mais · câmera (desligada) · som · microfone (mudo) · desligar
+        <div className="call-controls msc-bar">
+          <span className="call-ctl msc-btn" aria-hidden="true">
+            <DotsIcon />
+          </span>
+          <span className="call-ctl msc-btn" aria-hidden="true">
+            <CamOffIcon />
+          </span>
+          <button className={`call-ctl msc-btn ${soundOff ? "off" : ""}`} onClick={toggleSound} aria-label={soundOff ? tx.soundOff : tx.soundOn} aria-pressed={!soundOff}>
+            <SpeakerIcon off={soundOff} />
+          </button>
+          <span className="call-ctl msc-btn" aria-hidden="true">
+            <MicOffIcon />
+          </span>
+          <button className="call-btn decline call-hangup msc-btn msc-decline" onClick={onHangUp} aria-label={tx.hangUp}>
+            <PhoneIcon down />
+          </button>
+        </div>
+      ) : (
+        <div className="call-controls">
+          <button className={`call-ctl ${soundOff ? "off" : ""}`} onClick={toggleSound} aria-label={soundOff ? tx.soundOff : tx.soundOn} aria-pressed={!soundOff}>
+            <SpeakerIcon off={soundOff} />
+          </button>
+          <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label={tx.hangUp}>
+            <PhoneIcon down />
+          </button>
+          <button className="call-ctl heart" onClick={sendHeart} aria-label={tx.sendHeart}>
+            ♥
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -791,7 +894,10 @@ export function VoiceCall({
   payment,
   payerForm,
   onSimulate,
+  messenger,
 }: {
+  /** tema Mensageiro: tela de ligação de app de mensagens */
+  messenger?: boolean;
   character: PublicCharacter;
   url: string;
   phase: "ringing" | "active" | "ended";
@@ -848,7 +954,7 @@ export function VoiceCall({
   // saiu da tela no meio da ligação: para o áudio
   useEffect(() => () => audio.current?.pause(), []);
 
-  if (phase === "ringing") return <IncomingCall character={character} kind="voice" onAccept={accept} onDecline={onDecline} />;
+  if (phase === "ringing") return <IncomingCall character={character} kind="voice" onAccept={accept} onDecline={onDecline} messenger={messenger} />;
 
   return (
     <div className={`call-overlay voice-call ${phase === "ended" ? "ended" : ""} ${pay ? "paying" : ""}`} role="dialog" aria-label={`${t.voiceCall} · ${character.name}`}>

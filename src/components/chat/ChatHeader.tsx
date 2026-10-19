@@ -62,6 +62,12 @@ const Chevron = () => (
     <path d="M15 4 7 12l8 8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+const VideoOutline = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+    <rect x="2.5" y="6" width="13.5" height="12" rx="2.5" />
+    <path d="m16 10.5 5.5-3.2v9.4L16 13.5z" />
+  </svg>
+);
 const PhoneOutline = () => (
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
     <path
@@ -92,9 +98,14 @@ export function MessengerHeader({ character, typing, onBack }: { character: Publ
             <span className={`status ${typing ? "is-typing" : ""}`}>{status}</span>
           </span>
         </button>
-        <button className="ms-call" aria-label={t.contactInfo} onClick={() => setInfo(true)}>
-          <PhoneOutline />
-        </button>
+        <div className="ms-actions">
+          <button className="ms-act" aria-label={t.contactInfo} onClick={() => setInfo(true)}>
+            <VideoOutline />
+          </button>
+          <button className="ms-act" aria-label={t.contactInfo} onClick={() => setInfo(true)}>
+            <PhoneOutline />
+          </button>
+        </div>
       </header>
       {info && (
         <div className="ms-contact" role="dialog" aria-label={t.contactInfo}>
