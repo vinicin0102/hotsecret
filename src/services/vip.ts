@@ -165,6 +165,28 @@ async function entitlements(group: VipGroup, leadId: string | null) {
   return { owned, subscribed };
 }
 
+/** membros de cada grupo: pessoas (leads) com o VIP liberado, pelas mesmas regras de entitlements() */
+export async function vipMemberCounts(groups: Pick<VipGroup, "id" | "slug" | "productId" | "settings">[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (!groups.length) return counts;
+  const leadsWith = async (productIds?: string[]) =>
+    (await prisma.payment.groupBy({ by: ["leadId"], where: { status: "APPROVED", ...(productIds ? { productId: { in: productIds } } : {}) } })).length;
+
+  let anyBuyers: number | undefined;
+  const delivering = await prisma.product.findMany({ where: { deliveryUrl: { not: null } }, select: { id: true, deliveryUrl: true } });
+  for (const g of groups) {
+    if (vipSettings(g.settings).anyPurchase) {
+      counts.set(g.id, (anyBuyers ??= await leadsWith()));
+      continue;
+    }
+    const ids = await upsellGrantProducts(g.id);
+    if (g.productId) ids.add(g.productId);
+    for (const p of delivering) if (deliveryPointsToGroup(p.deliveryUrl, g.slug)) ids.add(p.id);
+    counts.set(g.id, ids.size ? await leadsWith([...ids]) : 0);
+  }
+  return counts;
+}
+
 /** página do grupo para este visitante: perfil, posts (bloqueados só com a prévia) e os pagamentos dele em andamento */
 export async function vipState(group: GroupWithPosts, leadId: string | null) {
   const [products, { owned, subscribed }] = await Promise.all([sellableProducts(group), entitlements(group, leadId)]);

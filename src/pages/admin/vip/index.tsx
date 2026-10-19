@@ -17,6 +17,8 @@ interface GroupRow {
   avatarUrl: string | null;
   published: boolean;
   postCount: number;
+  /** pessoas com o VIP liberado (compraram) */
+  memberCount: number;
   locale: string;
 }
 interface CharacterRow {
@@ -83,6 +85,9 @@ export default function VipGroupsPage() {
                 {FLAG[g.locale] ?? ""} {g.name}
               </div>
               <span className={`pill ${g.published ? "pill-on" : ""}`}>{g.published ? "Publicado" : "Rascunho"}</span>
+            </div>
+            <div className="vip-row-members" title="Pessoas com o VIP liberado (compraram)">
+              <b>{g.memberCount.toLocaleString("pt-BR")}</b> {g.memberCount === 1 ? "pessoa já entrou" : "pessoas já entraram"}
             </div>
             <div className="hint">
               /g/{g.slug} · {g.postCount} post(s)

@@ -1401,6 +1401,14 @@ code.inline {
   object-fit: cover;
   border: 3px solid var(--bg-2);
 }
+.vip-row-members {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.vip-row-members b {
+  font-size: 17px;
+  color: var(--gold);
+}
 .vip-editor {
   display: grid;
   grid-template-columns: minmax(300px, 420px) 1fr;
