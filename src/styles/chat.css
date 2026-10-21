@@ -5631,3 +5631,37 @@ button.msc-btn {
 .wau-loading {
   margin-top: 14px;
 }
+
+/* câmera do lead na chamada: o quadrinho "Você" vira a prévia da câmera (espelhada, como no celular) */
+button.call-self {
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.call-self.live {
+  background: #000;
+}
+.call-self video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.call-cam-msg {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 92px);
+  transform: translateX(-50%);
+  width: min(88%, 340px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(20, 20, 22, 0.92);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+}

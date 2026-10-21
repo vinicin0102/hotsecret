@@ -490,6 +490,62 @@ export function CallScreen({
   const [upsell, setUpsell] = useState<CallVideo["markers"][number] | null>(null);
   const [upsellBuying, setUpsellBuying] = useState(false);
   const [soundOff, setSoundOff] = useState(false);
+  /**
+   * câmera do lead: só a prévia no quadrinho "Você" — a imagem fica no aparelho dele (nunca é enviada nem gravada).
+   * Liga só quando ele toca no botão da câmera (o navegador pede a permissão) e desliga ao sair da chamada.
+   */
+  const selfRef = useRef<HTMLVideoElement>(null);
+  const camStream = useRef<MediaStream | null>(null);
+  const [cam, setCam] = useState<"off" | "starting" | "on">("off");
+  const [camMsg, setCamMsg] = useState(false);
+  const mounted = useRef(true);
+  const stopCam = () => {
+    camStream.current?.getTracks().forEach((tr) => tr.stop());
+    camStream.current = null;
+  };
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      stopCam();
+    };
+  }, []);
+  useEffect(() => {
+    const v = selfRef.current;
+    if (cam !== "on" || !v || !camStream.current) return;
+    v.srcObject = camStream.current;
+    void v.play().catch(() => undefined);
+  }, [cam]);
+  const toggleCam = async () => {
+    if (cam === "starting") return;
+    if (cam === "on") {
+      stopCam();
+      setCam("off");
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCamMsg(true);
+      return;
+    }
+    setCam("starting");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } }, audio: false });
+      // saiu da chamada enquanto o navegador pedia a permissão: desliga na hora
+      if (!mounted.current) return stream.getTracks().forEach((tr) => tr.stop());
+      camStream.current = stream;
+      setCam("on");
+      setCamMsg(false);
+    } catch {
+      if (!mounted.current) return;
+      setCam("off");
+      setCamMsg(true);
+    }
+  };
+  useEffect(() => {
+    if (!camMsg) return;
+    const id = setTimeout(() => setCamMsg(false), 4500);
+    return () => clearTimeout(id);
+  }, [camMsg]);
   /** corações que o lead manda tocando no ♥ (sobem pela tela) */
   const [hearts, setHearts] = useState<{ id: number; x: number; d: number }[]>([]);
   const shown = useRef(new Set<string>());
@@ -707,10 +763,23 @@ export function CallScreen({
             </small>
           </div>
         </div>
-        <div className="call-self" title={`${tx.you} · ${tx.yourCamOff}`}>
-          <CamOffIcon />
-          <span>{tx.you}</span>
-        </div>
+        <button
+          type="button"
+          className={`call-self ${cam === "on" ? "live" : ""}`}
+          onClick={() => void toggleCam()}
+          aria-label={cam === "on" ? tx.camOff : tx.camOn}
+          aria-pressed={cam === "on"}
+          title={cam === "on" ? tx.you : `${tx.you} · ${tx.yourCamOff}`}
+        >
+          {cam === "on" ? (
+            <video ref={selfRef} muted playsInline autoPlay disablePictureInPicture />
+          ) : (
+            <>
+              <CamOffIcon />
+              <span>{tx.you}</span>
+            </>
+          )}
+        </button>
       </div>
       {needsTap && (
         <button
@@ -854,15 +923,25 @@ export function CallScreen({
           </span>
         ))}
       </div>
+      {camMsg && (
+        <div className="call-cam-msg" role="status">
+          {tx.camBlocked}
+        </div>
+      )}
       {messenger ? (
-        // tema Mensageiro: mais · câmera (desligada) · som · microfone (mudo) · desligar
+        // tema Mensageiro: mais · câmera (liga a prévia da câmera do lead) · som · microfone (mudo) · desligar
         <div className="call-controls msc-bar">
           <span className="call-ctl msc-btn" aria-hidden="true">
             <DotsIcon />
           </span>
-          <span className="call-ctl msc-btn" aria-hidden="true">
-            <CamOffIcon />
-          </span>
+          <button
+            className={`call-ctl msc-btn ${cam === "on" ? "" : "off"}`}
+            onClick={() => void toggleCam()}
+            aria-label={cam === "on" ? tx.camOff : tx.camOn}
+            aria-pressed={cam === "on"}
+          >
+            {cam === "on" ? <CamIcon /> : <CamOffIcon />}
+          </button>
           <button className={`call-ctl msc-btn ${soundOff ? "off" : ""}`} onClick={toggleSound} aria-label={soundOff ? tx.soundOff : tx.soundOn} aria-pressed={!soundOff}>
             <SpeakerIcon off={soundOff} />
           </button>
@@ -875,6 +954,14 @@ export function CallScreen({
         </div>
       ) : (
         <div className="call-controls">
+          <button
+            className={`call-ctl ${cam === "on" ? "" : "off"}`}
+            onClick={() => void toggleCam()}
+            aria-label={cam === "on" ? tx.camOff : tx.camOn}
+            aria-pressed={cam === "on"}
+          >
+            {cam === "on" ? <CamIcon /> : <CamOffIcon />}
+          </button>
           <button className={`call-ctl ${soundOff ? "off" : ""}`} onClick={toggleSound} aria-label={soundOff ? tx.soundOff : tx.soundOn} aria-pressed={!soundOff}>
             <SpeakerIcon off={soundOff} />
           </button>
