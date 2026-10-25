@@ -189,11 +189,18 @@ function withLeadCity(funnel: PublicFunnel, header: string | string[] | undefine
   return city ? { ...funnel, live: { ...funnel.live, city } } : funnel;
 }
 
+/** Vitrine: o card escolhe o estilo do chat pelo link (?chat=whatsapp | secret); sem o parâmetro, vale o do fluxo. */
+function withChatStyle(funnel: PublicFunnel, chat: string | string[] | undefined): PublicFunnel {
+  const v = Array.isArray(chat) ? chat[0] : chat;
+  const theme = v === "whatsapp" ? "messenger" : v === "secret" ? "default" : null;
+  return theme ? { ...funnel, appearance: { ...funnel.appearance, theme } } : funnel;
+}
+
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const r = await funnelProps(ctx);
   if ("props" in r && r.props && (r.props as Props).funnel) {
     const p = r.props as Props;
-    return { props: { ...p, funnel: withLeadCity(p.funnel!, ctx.req.headers["x-vercel-ip-city"]) } };
+    return { props: { ...p, funnel: withChatStyle(withLeadCity(p.funnel!, ctx.req.headers["x-vercel-ip-city"]), ctx.query.chat) } };
   }
   return r;
 };

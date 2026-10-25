@@ -15,6 +15,7 @@ const NAV = [
   { href: "/admin/produtos", label: "Produtos", ico: "◇" },
   { href: "/admin/videos", label: "Vídeos", ico: "▶" },
   { href: "/admin/vip", label: "Grupo VIP", ico: "♛" },
+  { href: "/admin/vitrine", label: "Vitrine", ico: "❖" },
   { href: "/admin/pagamentos", label: "Pagamentos", ico: "¤" },
   { href: "/admin/analytics", label: "Analytics", ico: "↗" },
   { href: "/admin/armazenamento", label: "Armazenamento", ico: "☁" },

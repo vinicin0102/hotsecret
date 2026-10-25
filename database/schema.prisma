@@ -219,28 +219,28 @@ model Message {
 }
 
 model Product {
-  id            String   @id @default(cuid())
-  name          String
-  description   String?
-  imageUrl      String?
+  id                  String   @id @default(cuid())
+  name                String
+  description         String?
+  imageUrl            String?
   /// vídeo de prévia exibido no card da oferta (só com botão de play)
-  videoUrl      String?
+  videoUrl            String?
   /// valores em centavos (na moeda do produto)
-  originalPrice Int?
-  price         Int
+  originalPrice       Int?
+  price               Int
   /// moeda: BRL (Brasil) ou MXN (México)
-  currency      String   @default("BRL")
+  currency            String   @default("BRL")
   /// link de checkout externo opcional (se preenchido, usado no lugar do checkout integrado)
-  checkoutUrl   String?
+  checkoutUrl         String?
   /// link de acesso liberado SOMENTE após pagamento aprovado (nunca enviado ao front antes disso)
-  deliveryUrl   String?
+  deliveryUrl         String?
   /// pixel da Meta só desta oferta (checkout e compra vão para ele no lugar do pixel do fluxo)
   metaPixelId         String?
   /// token da API de Conversões desse pixel (criptografado; vazio = usa o token padrão)
   metaCapiTokenSealed String?
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   offers   Offer[]
   payments Payment[]
@@ -480,7 +480,6 @@ model Brain {
   @@map("brains")
 }
 
-
 /// Vídeo da chamada/sala: linha do tempo com trecho FREE (antes de pagar), VIP (depois), falas no chat e upsells
 model Video {
   id         String   @id @default(cuid())
@@ -539,4 +538,23 @@ model VipPost {
 
   @@index([groupId, publishedAt])
   @@map("vip_posts")
+}
+
+/// Vitrine: carrossel de modelos — o lead escolhe com qual quer conversar e cai no fluxo (chat) dela
+model Showcase {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  /// título e subtítulo acima do carrossel
+  title     String?
+  subtitle  String?
+  /// país da página (idioma dos textos)
+  locale    String   @default("pt-BR")
+  published Boolean  @default(false)
+  /// [{ id, funnelId, name?, photoUrl?, headline?, bio?, tags?: string[], chat?: "default" | "messenger" }]
+  items     Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("showcases")
 }
