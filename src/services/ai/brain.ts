@@ -760,16 +760,18 @@ ${flowOffersSection(input.flowOffers)}`;
       parsed = null;
     }
     if (!parsed) {
-      // texto puro (a IA esqueceu o formato): aproveita como mensagens
+      // texto puro (a IA esqueceu o formato): aproveita como mensagens — com o mesmo tratamento do formato certo
+      // (oferta citada no texto, anotação de ligação/prévia vira a ação de verdade e sai do balão)
       const plain = text.trim();
-      if (!plain || plain.startsWith("{") || plain.startsWith("[")) return null;
+      if (!plain || plain.startsWith("{") || /^\[\s*[[{"]/.test(plain)) return null;
       const parts = plain
         .split(/\n\s*\n|\n/)
         .map((m) => m.trim())
         .filter(Boolean)
-        .slice(0, 3)
+        .slice(0, 4)
         .map((m) => m.slice(0, 1200));
-      return parts.length ? { messages: parts, offer: null, audio: null, image: null, end: false } : null;
+      if (!parts.length) return null;
+      parsed = { messages: parts };
     }
     const rawMessages = parsed.messages ?? parsed.mensagens ?? parsed.message ?? parsed.mensagem ?? parsed.resposta;
     const list = Array.isArray(rawMessages) ? rawMessages : typeof rawMessages === "string" ? [rawMessages] : [];
@@ -778,6 +780,10 @@ ${flowOffersSection(input.flowOffers)}`;
       .slice(0, 4)
       .map((m) => m.trim().slice(0, 1200));
     let offer = findOffer(parsed.offer_id);
+    // a IA escreveu "[ligou para o lead ...]" no balão em vez de ligar: liga de verdade
+    const pastText = input.history.map((t) => t.text).join("\n");
+    const call = notedCall(messages, validOffers, voiceCalls, pastText);
+    if (!offer && call.offer) offer = call.offer;
     if (!offer) {
       // a IA escreveu o id dentro das mensagens: usa a oferta e tira o id do texto
       const inText = validOffers.find((o) => messages.some((m) => m.includes(o.id)));
@@ -795,7 +801,7 @@ ${flowOffersSection(input.flowOffers)}`;
     const audio = audios.find((a) => a.id === parsed!.audio_id) ?? null;
     const image = images.find((a) => a.id === parsed!.image_id) ?? noted;
     const vRaw = typeof parsed.voice_call_id === "string" ? parsed.voice_call_id.trim() : "";
-    const voiceCall = vRaw ? (voiceCalls.find((v) => v.id === vRaw || v.id.toLowerCase() === vRaw.toLowerCase()) ?? null) : null;
+    const voiceCall = (vRaw ? (voiceCalls.find((v) => v.id === vRaw || v.id.toLowerCase() === vRaw.toLowerCase()) ?? null) : null) ?? (offer ? null : call.voiceCall);
     if (!messages.length && !offer && !audio && !image && !voiceCall) return null;
     return {
       messages,
@@ -912,7 +918,7 @@ const plain = (v: string) =>
 const has = (re: RegExp, text: string) => re.test(plain(text));
 
 /** anotação entre colchetes que a IA às vezes escreve no balão ("[prévia do VIP]", "[foto]", "[áudio]") */
-const NOTE = /\s*\[[^\]\n]{1,80}\]\s*/g;
+const NOTE = /\s*\[[^\]\n]{1,240}\]\s*/g;
 /** tira as anotações do balão; o que sobrar sem palavra de verdade (ex.: "Á") some */
 export function stripNotes(m: string): string {
   const out = m.replace(NOTE, " ").replace(/\s{2,}/g, " ").trim();
@@ -935,6 +941,30 @@ export function notedMedia(messages: string[], images: BrainMedia[]): BrainMedia
     }
   }
   return null;
+}
+/**
+ * ligação que a IA quis fazer escrevendo a anotação do histórico no balão ("[ligou para o lead (chamada de vídeo)
+ * com a oferta ... (offer_id "of_x")]"): a oferta citada; senão ligação de voz (se ainda não houve) ou a chamada de vídeo.
+ */
+export function notedCall(
+  messages: string[],
+  offers: BrainOffer[],
+  voiceCalls: BrainVoiceCall[],
+  past: string,
+): { offer: BrainOffer | null; voiceCall: BrainVoiceCall | null } {
+  for (const m of messages) {
+    for (const note of m.match(NOTE) ?? []) {
+      const k = plain(note);
+      if (!/\b(lig(ou|ar|o|uei|ando|acao)|chamada|videochamada|llam(o|e|ada|ando)|videollamada)\b/.test(k)) continue;
+      const id = /offer_id\s*"?([\w-]+)/.exec(note)?.[1];
+      const byId = id ? offers.find((o) => o.id === id) : undefined;
+      if (byId) return { offer: byId, voiceCall: null };
+      if (/\bvoz\b/.test(k) && voiceCalls.length && !/liga[cç][aã]o de voz/.test(past)) return { offer: null, voiceCall: voiceCalls[0] };
+      const call = offers.find((o) => o.style === "call" && o.videoId);
+      if (call) return { offer: call, voiceCall: null };
+    }
+  }
+  return { offer: null, voiceCall: null };
 }
 /** a resposta fala do VIP como bônus/presente ("vc ainda ganha meu canal VIP de bônus") */
 const BOT_VIP = /\b(vip|grupo privado|canal privado)\b/i;
@@ -1053,8 +1083,10 @@ export function assistReply(
 
   if (!out.offer && !out.showOffers && !refused) {
     let pick: BrainOffer | undefined;
+    // pediu para ligar ("me liga", "liga de novo"): liga — mesmo que a chamada tenha tocado agora há pouco
+    if (callOffer && has(CALL_INTENT, leadText) && !/\bvoz\b/.test(plain(leadText))) pick = callOffer;
     // pediu um produto pelo nome
-    if (named && namedScore >= 1 && (asked || namedScore >= 2) && (!shownRecently(named) || buy)) pick = named;
+    if (!pick && named && namedScore >= 1 && (asked || namedScore >= 2) && (!shownRecently(named) || buy)) pick = named;
     // sempre que houver interesse (e ele não pediu outro produto), liga — a chamada é a oferta principal
     // (só quando o dono não escreveu o "Quando oferecer" da chamada — se escreveu, vale a ordem dele)
     if (!pick && callOffer && !callOffer.when?.trim() && interested && !callBlocked(callOffer) && !shownRecently(callOffer) && (leadMsgs.length >= 2 || asked || has(CALL_INTENT, leadText)))
