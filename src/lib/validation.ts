@@ -252,6 +252,8 @@ export const brainSchema = z.object({
   rules: txt(6000).default(""),
   mustRules: txt(6000).default(""),
   examples: txt(12000).default(""),
+  /** depois da compra: o que e como falar quando o lead já comprou e volta para o chat */
+  afterPurchase: txt(6000).default(""),
   offers: z.array(brainOfferSchema).max(20).default([]),
   audios: z.array(brainAudioSchema).max(40).default([]),
   images: z

@@ -464,6 +464,8 @@ model Brain {
   mustRules       String   @default("")
   /// exemplos de conversas que venderam bem (a IA imita o jeito, não copia)
   examples        String   @default("")
+  /// depois da compra: o que e como falar quando o lead já comprou e volta para o chat
+  afterPurchase   String   @default("")
   /// [{ id, productId, when, pitch, headline, ctaLabel }]
   offers          Json     @default("[]")
   /// áudios gravados que a IA pode enviar: [{ id, url, when }]

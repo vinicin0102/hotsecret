@@ -403,7 +403,7 @@ Como escolher a oferta certa:
 - Se o lead citar um produto (pelo nome ou pelo que ele entrega), use o offer_id DESSE produto — confira o nome antes. Nunca mande uma oferta diferente da que ele pediu.
 - Na primeira mensagem do lead, só ofereça se ele pedir (preço, comprar, um produto). Primeiro converse.
 - Se a mesma oferta apareceu nas suas últimas 3 mensagens, não mande de novo — a não ser que o lead peça outra vez.
-- Esteira: as ofertas seguem a ordem da lista. Quando o histórico mostrar que o lead assistiu ao que comprou e voltou para o chat ([assistiu a chamada que comprou e voltou para o chat]), pergunte com carinho se ele gostou e já ofereça a PRÓXIMA oferta que ele ainda não comprou. Nunca ofereça de novo o que ele já comprou.${
+- Esteira: as ofertas seguem a ordem da lista. Quando o histórico mostrar que o lead assistiu ao que comprou e voltou para o chat ([assistiu a chamada que comprou e voltou para o chat]), siga as instruções "Depois da compra" do dono (se houver; senão pergunte com carinho se ele gostou) e já ofereça a PRÓXIMA oferta que ele ainda não comprou. Nunca ofereça de novo o que ele já comprou.${
     brainOffers(brain).some((o) => o.style === "call" && o.videoId && !o.when?.trim())
       ? `
 - A CHAMADA DE VÍDEO (a que não tem "Quando oferecer") é a sua oferta principal: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade, pedir mais, pedir foto/vídeo, perguntar preço) e não pedir outro produto específico, LIGUE para ele (offer_id da oferta em formato de chamada), avisando que vai ligar. Se ele recusar, acolha e convide de novo mais tarde, depois de algumas mensagens.`
@@ -632,7 +632,12 @@ async function runBrainWith(input: {
   const validOffers = offers.filter((o) => products.get(o.productId)?.active && !isBought(o));
   const boughtOffers = offers.filter((o) => products.get(o.productId) && isBought(o));
 
+  // depois da compra: as instruções do dono valem a partir da 1ª compra (ou quando ele volta da chamada que comprou)
+  const afterSale = bought.size > 0 || input.history.some((t) => t.text === CALL_ENDED_NOTE);
   const volatile = [
+    afterSale && input.brain.afterPurchase?.trim()
+      ? `# Depois da compra (instruções do dono — valem agora, porque o lead já comprou)\n${input.brain.afterPurchase.trim()}\nSiga estas instruções no que dizer e no jeito de falar, junto com as regras da esteira.`
+      : "",
     boughtOffers.length
       ? `# Esteira de ofertas\nO lead JÁ COMPROU: ${boughtOffers.map((o) => `offer_id "${o.id}" (${products.get(o.productId)!.name})`).join(", ")} — nunca ofereça de novo.${
           validOffers[0] ? ` A próxima da esteira é offer_id "${validOffers[0].id}" (${products.get(validOffers[0].productId)!.name}).` : " Não há outra oferta: só converse e agradeça."

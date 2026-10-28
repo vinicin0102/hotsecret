@@ -68,6 +68,7 @@ interface Brain {
   knowledge: string;
   rules: string;
   mustRules: string;
+  afterPurchase?: string;
   examples?: string;
   offers: Offer[];
   audios: Audio[];
@@ -104,6 +105,7 @@ const EMPTY: Draft = {
   knowledge: "",
   rules: "",
   mustRules: "",
+  afterPurchase: "",
   examples: "",
   offers: [],
   audios: [],
@@ -764,6 +766,23 @@ export default function CerebroPage() {
                 />
                 <div className="hint">
                   Têm prioridade sobre a personalidade, o conteúdo e o objetivo do bloco. Escreva uma regra por linha, de forma direta.
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="b-after">Depois da compra (o que e como falar quando o lead compra e volta para o chat)</label>
+                <textarea
+                  id="b-after"
+                  className="textarea"
+                  rows={5}
+                  placeholder={
+                    "Ex.:\nAgradeça de um jeito carinhoso e pergunte se ele gostou da chamada\nFale como se tivesse adorado também, com mensagens curtas e provocantes\nDiga que tem uma surpresa ainda melhor e mostre a próxima oferta\nNunca peça para ele comprar de novo o que já comprou"
+                  }
+                  value={draft.afterPurchase ?? ""}
+                  onChange={(e) => set("afterPurchase", e.target.value)}
+                />
+                <div className="hint">
+                  Vale só depois que o lead compra alguma coisa — principalmente quando ele assiste à chamada e volta para o chat (aí a IA também já
+                  mostra a próxima oferta da esteira). Antes da compra, a IA segue o resto do cérebro normalmente.
                 </div>
               </div>
               <div className="field">
