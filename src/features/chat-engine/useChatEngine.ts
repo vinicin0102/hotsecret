@@ -378,11 +378,14 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           downsellProductId: r.offer.downsellProductId,
           downsellText: r.offer.downsellText,
           ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
-          ...(r.offer.style === "live" ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}) } : {}),
+          ...(r.offer.style === "live"
+            ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}) }
+            : {}),
           ...(r.offer.freeLoop ? { freeLoop: true } : {}),
         };
         if (r.offer.style === "tarot") tarotProducts.current.add(r.offer.productId);
-        if (r.offer.style === "live") setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
+        // botão + oferta: a oferta só abre quando o lead toca no botão
+        if (r.offer.style === "live" && !r.offer.vipButton) setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
         if (r.offer.style === "call") {
           // oferta do Cérebro em formato de chamada: toca a ligação
           setTyping(false);
@@ -757,6 +760,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
                         vip: (c.vip as OfferContent["vip"]) ?? undefined,
                         downsellProductId: (c.downsellProductId as string) || undefined,
                         ...(c.hasVideo ? { videoId: "brain" } : {}),
+                        ...(c.vipButton ? { vipButton: true } : {}),
                       }
                     : {}),
                 },

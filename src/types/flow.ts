@@ -137,6 +137,8 @@ export interface OfferContent {
   videoId?: string;
   /** chamada de vídeo 02: ao atender, o lead já vê o trecho FREE em loop e paga por cima do vídeo para liberar o VIP */
   freeLoop?: boolean;
+  /** botão + oferta (style "live", Cérebro): no chat só o botão (ctaLabel); tocando, abre a oferta → PIX → vídeo */
+  vipButton?: boolean;
   /** chamada: produto oferecido quando o lead recusa (ex.: chamada mais curta e mais barata) */
   downsellProductId?: string;
   /** chamada: texto do pop-up do downsell */

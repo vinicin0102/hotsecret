@@ -5665,3 +5665,50 @@ button.call-self {
   text-align: center;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }
+
+/* botão + oferta (Cérebro): só o botão no chat; tocando, abre a oferta */
+.vip-unlock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: min(100%, 300px);
+  padding: 16px 26px;
+  border: 0;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(90deg, #a020f0, #e8287f 60%, #ff3d8b);
+  box-shadow: 0 10px 26px rgba(200, 40, 200, 0.4);
+  animation: vipUnlockPulse 2.2s ease-in-out infinite;
+}
+.vip-unlock-btn svg {
+  flex-shrink: 0;
+}
+.vip-unlock-btn:active {
+  transform: scale(0.97);
+}
+.vip-unlock-btn:disabled {
+  cursor: default;
+  animation: none;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+@keyframes vipUnlockPulse {
+  0%,
+  100% {
+    box-shadow: 0 10px 26px rgba(200, 40, 200, 0.4);
+  }
+  50% {
+    box-shadow: 0 10px 34px rgba(255, 61, 139, 0.65);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vip-unlock-btn {
+    animation: none;
+  }
+}

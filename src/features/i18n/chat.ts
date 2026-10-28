@@ -51,6 +51,7 @@ const pt = {
   vipBackToCall: "Voltar para a chamada",
   vipDoneStep: "O acesso libera sozinho assim que o PIX for confirmado",
   // upsell "WhatsApp pessoal" (chamada de vídeo)
+  vipButtonDefault: "FAZER LIGAÇÃO PRIVADA",
   waUpsellTag: "💬 WhatsApp pessoal",
   waUpsellText: "Quer meu WhatsApp pessoal? Só pra você 🤫",
   waIntro: "No meu WhatsApp você ganha:",
@@ -289,6 +290,7 @@ const es: ChatTexts = {
   vipAccessSub: "Todas las fotos y videos, sin censura",
   vipBackToCall: "Volver a la llamada",
   vipDoneStep: "El acceso se libera solo en cuanto se confirme el pago",
+  vipButtonDefault: "HACER LLAMADA PRIVADA",
   waUpsellTag: "💬 WhatsApp personal",
   waUpsellText: "¿Quieres mi WhatsApp personal? Solo para ti 🤫",
   waIntro: "En mi WhatsApp ganas:",

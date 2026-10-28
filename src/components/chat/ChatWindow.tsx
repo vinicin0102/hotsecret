@@ -21,6 +21,16 @@ import { VipAccessCard, VipPreviewCard } from "./VipPreviewCard";
 import type { VipPreviewCard as VipCard } from "@/services/vip";
 import { LiveHeader, LiveIncomingCall, LivePreviewButton, LivePreviewCard, VipExitModal, VipOfferCard, VipOfferModal, VipPaySheet } from "./LiveChannel";
 
+/** cadeado do botão + oferta */
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
 /** o lead pediu prévia/provinha (pt + es): aparece o botão "Ver prévia" */
 const PREVIEW_ASK = /(pr[eé]via|previazinha|provinha|amostra|adelanto|probadita|muestra|avance|preview|\bfot(o|os|inho|inha|ito)\b|v[ií]deo|nude)/i;
 
@@ -222,6 +232,22 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           (p) => p.offerNodeId === item.nodeId && p.status === "APPROVED" && (!item.productId || p.productId === item.productId),
         );
         const offer = item.offer ?? (node?.content as OfferContent) ?? { productId: "" };
+        if (offer.style === "live" && offer.vipButton) {
+          return (
+            <div key={item.id} className="msg-row bot">
+              <button className="vip-unlock-btn" onClick={() => engine.openVip(item.nodeId, item.productId, item.offer)} disabled={bought}>
+                {bought ? (
+                  t.unlocked
+                ) : (
+                  <>
+                    {/* o cadeado já vem desenhado: um 🔒 no começo do texto não repete */}
+                    <LockIcon /> {(offer.ctaLabel || t.vipButtonDefault).replace(/^\s*🔒\s*/u, "")}
+                  </>
+                )}
+              </button>
+            </div>
+          );
+        }
         if (offer.style === "live") {
           return <VipOfferCard key={item.id} offer={offer} product={product} bought={bought} onOpen={() => engine.openVip(item.nodeId, item.productId, item.offer)} />;
         }

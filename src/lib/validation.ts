@@ -233,6 +233,8 @@ const brainOfferSchema = z.object({
   style: z.enum(["card", "call", "tarot", "live"]).optional(),
   /** chamada de vídeo 02 (style "call"): ao atender, o FREE toca em loop */
   freeLoop: z.boolean().optional(),
+  /** botão + oferta (style "live"): no chat só o botão (ctaLabel); tocando, abre a oferta */
+  button: z.boolean().optional(),
   videoId: z.string().max(64).optional(),
   downsellProductId: z.string().max(64).optional(),
   downsellText: optTxt(200),

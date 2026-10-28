@@ -69,7 +69,7 @@ function toTurns(messages: Msg[]): ChatTurn[] {
       case "offer":
         turns.push({
           role: "bot",
-          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : c.style === "live" ? "abriu o upgrade do canal VIP ao vivo com a oferta" : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? priceForAi(c.price, c.currency) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
+          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : c.style === "live" ? (c.vipButton ? `mostrou o botão "${String(c.ctaLabel || "FAZER LIGAÇÃO PRIVADA")}" (o lead toca para ver a oferta) da oferta` : "abriu o upgrade do canal VIP ao vivo com a oferta") : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? priceForAi(c.price, c.currency) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
         });
         break;
       case "checkout":
@@ -236,7 +236,7 @@ export default apiHandler({
           ...(offer.freeLoop ? { freeLoop: true } : {}),
           // canal VIP: os textos e o 2º ingresso voltam quando o lead recarrega a página
           ...(offer.style === "live"
-            ? { vip: (offer.vip ?? {}) as Prisma.InputJsonValue, downsellProductId: offer.downsellProductId ?? null, hasVideo: !!offer.hasVideo }
+            ? { vip: (offer.vip ?? {}) as Prisma.InputJsonValue, downsellProductId: offer.downsellProductId ?? null, hasVideo: !!offer.hasVideo, ...(offer.vipButton ? { vipButton: true } : {}) }
             : {}),
         } as Prisma.InputJsonValue,
         node.id,

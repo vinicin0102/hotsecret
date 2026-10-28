@@ -53,6 +53,8 @@ export interface BrainOffer {
   freeLoop?: boolean;
   /** canal VIP AO VIVO: textos do upgrade/pagamento (o 2º ingresso, acesso básico, é o downsellProductId) */
   vip?: VipOfferTexts;
+  /** botão + oferta (style "live"): no chat aparece só o botão (texto em ctaLabel); tocando, abre a oferta → PIX → vídeo */
+  button?: boolean;
   videoId?: string;
   tarotCards?: TarotCard[];
   tarotBackUrl?: string;
@@ -246,9 +248,11 @@ export function publicOfferFormat(o: BrainOffer): {
   hasVideo?: boolean;
   /** chamada de vídeo 02 */
   freeLoop?: boolean;
+  /** botão + oferta: no chat só o botão; a oferta abre ao tocar */
+  vipButton?: boolean;
 } {
   if (o.style === "call" && o.videoId) return { style: "call", ...(o.freeLoop ? { freeLoop: true } : {}) };
-  if (o.style === "live") return { style: "live", vip: o.vip ?? {}, ...(o.videoId ? { hasVideo: true } : {}) };
+  if (o.style === "live") return { style: "live", vip: o.vip ?? {}, ...(o.videoId ? { hasVideo: true } : {}), ...(o.button ? { vipButton: true } : {}) };
   const cards = o.style === "tarot" ? tarotCardsOf(o) : [];
   if (cards.length) return { style: "tarot", tarotCards: cards.map((c) => ({ id: c.id, label: c.label })), tarotBackUrl: o.tarotBackUrl || undefined };
   return { style: "card" };
@@ -333,7 +337,9 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
             ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, ele já te vê ao vivo por um tempinho grátis e, no fim, paga pelo PIX ali mesmo para continuar."
             : "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa."
           : "",
-        o.style === "live"
+        o.style === "live" && o.button
+          ? `  Formato: aparece no chat um BOTÃO "${o.ctaLabel || "FAZER LIGAÇÃO PRIVADA"}"; quando o lead toca, ele vê a oferta${o.videoId ? " e, depois do PIX, começa a chamada de vídeo com você" : " e paga pelo PIX ali mesmo"}. Avise para ele tocar no botão.`
+          : o.style === "live"
           ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO${o.videoId ? " (depois do pagamento começa a chamada de vídeo com você)" : ""} com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
           : "",
         o.style === "tarot"
@@ -647,7 +653,7 @@ async function runBrainWith(input: {
     ...Object.fromEntries(
       validOffers.map((o) => [
         o.id,
-        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? " — canal VIP ao vivo" : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
+        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? (o.button ? " — botão de ligação privada" : " — canal VIP ao vivo") : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
       ]),
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
@@ -666,7 +672,7 @@ ${
       validOffers
         .map((o) => {
           const p = products.get(o.productId)!;
-          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : ""}`;
+          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : o.style === "live" && o.button ? " | formato: botão no chat (o lead toca, vê a oferta e paga)" : ""}`;
         })
         .join("\n") || "(nenhuma)"
     }
@@ -960,7 +966,7 @@ export function notedCall(
       const byId = id ? offers.find((o) => o.id === id) : undefined;
       if (byId) return { offer: byId, voiceCall: null };
       if (/\bvoz\b/.test(k) && voiceCalls.length && !/liga[cç][aã]o de voz/.test(past)) return { offer: null, voiceCall: voiceCalls[0] };
-      const call = offers.find((o) => o.style === "call" && o.videoId);
+      const call = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId);
       if (call) return { offer: call, voiceCall: null };
     }
   }
@@ -1053,7 +1059,7 @@ export function assistReply(
   const lastBots = history.filter((t) => t.role === "bot").slice(-3).map((t) => t.text).join("\n");
   const shownRecently = (o: BrainOffer) => lastBots.includes(`offer_id "${o.id}"`);
   // chamada de vídeo: depois de uma recusa, só convida de novo depois de 4 mensagens do lead
-  const callOffer = offers.find((o) => o.style === "call" && o.videoId);
+  const callOffer = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId);
   const leadSince = (marker: string) => {
     const i = history.map((t) => t.text).lastIndexOf(marker);
     return { i, n: i < 0 ? Infinity : history.slice(i + 1).filter((t) => t.role === "lead" && !t.text.startsWith("[")).length };

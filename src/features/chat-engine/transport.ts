@@ -127,6 +127,8 @@ export interface AiReply {
     vip?: VipOfferTexts;
     /** canal VIP AO VIVO: depois do pagamento abre a chamada de vídeo */
     hasVideo?: boolean;
+    /** botão + oferta: no chat só o botão; a oferta abre ao tocar */
+    vipButton?: boolean;
     /** chamada de vídeo 02: ao atender, o FREE toca em loop */
     freeLoop?: boolean;
     tarotCards?: TarotCard[];

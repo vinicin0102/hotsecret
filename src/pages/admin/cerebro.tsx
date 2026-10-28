@@ -42,6 +42,8 @@ interface Offer {
   style?: "card" | "call" | "tarot" | "live";
   /** chamada de vídeo 02 */
   freeLoop?: boolean;
+  /** botão + oferta (style "live"): no chat só o botão; tocando, abre a oferta */
+  button?: boolean;
   vip?: VipOfferTexts;
   videoId?: string;
   tarotCards?: TarotCard[];
@@ -332,7 +334,7 @@ function TestChat({ brain }: { brain: Brain }) {
         messages: string[];
         audio: { url: string; when?: string } | null;
         image: { url: string; when?: string; kind?: string; card?: VipCard } | null;
-        offer: { name: string; price: number; headline: string; style?: string } | null;
+        offer: { name: string; price: number; headline: string; style?: string; vipButton?: boolean } | null;
         end: boolean;
         failure?: string;
         voiceCall?: { id: string } | null;
@@ -358,7 +360,7 @@ function TestChat({ brain }: { brain: Brain }) {
           : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
         ...(r.offer
-          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? "🔴 Canal VIP AO VIVO" : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
+          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? (r.offer.vipButton ? "🔒 Botão + oferta" : "🔴 Canal VIP AO VIVO") : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
           : []),
         ...(r.voiceCall ? [{ role: "bot" as const, text: "📞 Ligou para o lead (no chat de verdade toca a ligação de voz)", voice: true }] : []),
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
@@ -843,6 +845,7 @@ export default function CerebroPage() {
                           ["call2", "📹 Chamada de vídeo 02"],
                           ["tarot", "🔮 Cartas de tarot"],
                           ["live", "🔴 Canal VIP AO VIVO"],
+                          ["button", "🔒 Botão + oferta"],
                         ] as const
                       ).map(([s, label]) => (
                         <button
@@ -850,16 +853,29 @@ export default function CerebroPage() {
                           type="button"
                           className={
                             // chamada de vídeo 02 = chamada com o FREE em loop ao atender
-                            (s === "call2" ? o.style === "call" && !!o.freeLoop : s === "call" ? o.style === "call" && !o.freeLoop : (o.style ?? "card") === s) ? "active" : ""
+                            // botão + oferta = canal VIP com só o botão no chat
+                            (s === "call2"
+                              ? o.style === "call" && !!o.freeLoop
+                              : s === "call"
+                                ? o.style === "call" && !o.freeLoop
+                                : s === "button"
+                                  ? o.style === "live" && !!o.button
+                                  : s === "live"
+                                    ? o.style === "live" && !o.button
+                                    : (o.style ?? "card") === s)
+                              ? "active"
+                              : ""
                           }
                           onClick={() =>
                             setOffer(
                               i,
                               s === "call2"
-                                ? { style: "call", freeLoop: true }
+                                ? { style: "call", freeLoop: true, button: undefined }
+                                : s === "button"
+                                  ? { style: "live", button: true, freeLoop: undefined }
                                 : s === "tarot" && !o.tarotCards?.length
-                                  ? { style: s, tarotCards: defaultTarot(), freeLoop: undefined }
-                                  : { style: s, freeLoop: undefined },
+                                  ? { style: s, tarotCards: defaultTarot(), freeLoop: undefined, button: undefined }
+                                  : { style: s, freeLoop: undefined, button: undefined },
                             )
                           }
                         >
@@ -868,6 +884,25 @@ export default function CerebroPage() {
                       ))}
                     </div>
                   </div>
+                  {o.style === "live" && o.button && (
+                    <>
+                      <div className="field">
+                        <label htmlFor={`btn-label-${o.id}`}>Texto do botão no chat</label>
+                        <input
+                          id={`btn-label-${o.id}`}
+                          className="input"
+                          placeholder="FAZER LIGAÇÃO PRIVADA (o cadeado já aparece no botão)"
+                          value={o.ctaLabel ?? ""}
+                          onChange={(e) => setOffer(i, { ctaLabel: e.target.value })}
+                        />
+                      </div>
+                      <p className="hint">
+                        Quando a IA escolher esta oferta, aparece no chat só o botão (roxo, com cadeado). O lead toca e abre a oferta com o título,
+                        benefícios e o produto abaixo; pagou o PIX, libera o <b>vídeo</b> escolhido (igual ao Canal VIP). Sem vídeo, a oferta funciona
+                        como uma compra normal.
+                      </p>
+                    </>
+                  )}
                   {o.style === "live" && (
                     <VipOfferEditor
                       vip={o.vip}
@@ -1014,7 +1049,11 @@ export default function CerebroPage() {
                     <textarea className="textarea" rows={2} value={o.pitch ?? ""} onChange={(e) => setOffer(i, { pitch: e.target.value })} />
                   </div>
                   <div className="row" style={{ justifyContent: "space-between" }}>
-                    <input className="input" style={{ maxWidth: 260 }} placeholder="Texto do botão (QUERO ACESSAR ❤️)" value={o.ctaLabel ?? ""} onChange={(e) => setOffer(i, { ctaLabel: e.target.value })} />
+                    {o.style === "live" && o.button ? (
+                      <span />
+                    ) : (
+                      <input className="input" style={{ maxWidth: 260 }} placeholder="Texto do botão (QUERO ACESSAR ❤️)" value={o.ctaLabel ?? ""} onChange={(e) => setOffer(i, { ctaLabel: e.target.value })} />
+                    )}
                     <button className="btn btn-ghost btn-sm" onClick={() => set("offers", draft.offers.filter((_, j) => j !== i))}>
                       Remover oferta
                     </button>
