@@ -813,7 +813,8 @@ export default function CerebroPage() {
               </div>
               <p className="hint" style={{ marginTop: -6 }}>
                 A IA decide a hora certa de mostrar o card de compra (PIX, sem cadastro), usando o preço cadastrado no produto. Depois do pagamento,
-                o lead recebe o acesso no chat.
+                o lead recebe o acesso no chat. <b>Esteira:</b> a ordem da lista é a ordem das ofertas — o que o lead já comprou não aparece de novo, e
+                quando ele assiste à chamada que comprou e volta para o chat, a IA já oferece a próxima da lista (use ↑ ↓ para ordenar).
               </p>
               {draft.offers.length === 0 && <p className="hint">Nenhuma oferta: a IA só conversa.</p>}
               {draft.offers.map((o, i) => (
@@ -1054,9 +1055,28 @@ export default function CerebroPage() {
                     ) : (
                       <input className="input" style={{ maxWidth: 260 }} placeholder="Texto do botão (QUERO ACESSAR ❤️)" value={o.ctaLabel ?? ""} onChange={(e) => setOffer(i, { ctaLabel: e.target.value })} />
                     )}
-                    <button className="btn btn-ghost btn-sm" onClick={() => set("offers", draft.offers.filter((_, j) => j !== i))}>
-                      Remover oferta
-                    </button>
+                    <div className="row">
+                      {/* esteira: a ordem da lista é a ordem em que as ofertas são feitas */}
+                      <button
+                        className="btn btn-sm"
+                        disabled={i === 0}
+                        aria-label="Subir na esteira"
+                        onClick={() => set("offers", draft.offers.map((x, j) => (j === i - 1 ? draft.offers[i] : j === i ? draft.offers[i - 1] : x)))}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        disabled={i === draft.offers.length - 1}
+                        aria-label="Descer na esteira"
+                        onClick={() => set("offers", draft.offers.map((x, j) => (j === i + 1 ? draft.offers[i] : j === i ? draft.offers[i + 1] : x)))}
+                      >
+                        ↓
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => set("offers", draft.offers.filter((_, j) => j !== i))}>
+                        Remover oferta
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

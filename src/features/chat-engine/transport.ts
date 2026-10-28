@@ -159,7 +159,7 @@ export interface ChatTransport {
   viewOnce(nodeId: string): Promise<string | null>;
   /** Cérebro: a IA responde (message null = a IA puxa a conversa) */
   /** continue: o lead voltou para a IA (ex.: dúvida depois dos botões de oferta); message = o que ele respondeu */
-  ai(nodeId: string, message: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined"): Promise<AiReply>;
+  ai(nodeId: string, message: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined" | "call_ended"): Promise<AiReply>;
   /** ligação de voz terminou (o lead atendeu): mensagem final + oferta */
   voiceCallEnded(
     nodeId: string,
@@ -491,6 +491,7 @@ export function createPreviewTransport(
       else if (event === "photo") history.push({ role: "lead", text: "[enviou uma foto]" });
       else if (event === "continue" && message) history.push({ role: "lead", text: message });
       else if (event === "voice_declined") history.push({ role: "lead", text: "[recusou a ligação de voz]" });
+      else if (event === "call_ended") history.push({ role: "lead", text: "[assistiu a chamada que comprou e voltou para o chat]" });
       else if (message !== null) history.push({ role: "lead", text: message });
       if (!cfg?.brainId) return { messages: ["(preview) Selecione um cérebro neste bloco."], audio: null, offer: null, end: false };
       try {

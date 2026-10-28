@@ -181,7 +181,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     return runId.current === token;
   }, []);
 
-  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined") => Promise<void>>(async () => undefined);
+  const aiTurnRef = useRef<(nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined" | "call_ended") => Promise<void>>(async () => undefined);
   /** blocos Cérebro que já conversaram nesta sessão (voltar para eles = a IA continua a conversa) */
   const aiTalked = useRef(new Set<string>());
   /** última resposta do lead fora da IA (botão ou texto) — a IA responde a ela ao voltar para o bloco */
@@ -325,7 +325,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   /** Uma rodada do Cérebro: envia a mensagem do lead e mostra a resposta como se alguém estivesse digitando. */
   const aiTurn = useCallback(
-    async (nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined") => {
+    async (nodeId: string, text: string | null, event?: "call_declined" | "photo" | "continue" | "voice_declined" | "call_ended") => {
       const t = transportRef.current;
       if (!t) return;
       aiTalked.current.add(nodeId);
@@ -1057,6 +1057,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     setCall(null);
     // fechou sem pagar: deixa o card no chat para comprar depois
     if (!paid) push({ kind: "offer", id: lid(), nodeId, ...(call.productId ? { productId: call.productId, offer: call.offer } : {}), at: now() });
+    // esteira do Cérebro: assistiu ao que comprou e voltou → a IA comenta e oferece a próxima oferta
+    else if (getNode(graphRef.current, nodeId)?.type === "ai") void aiTurnRef.current(nodeId, null, "call_ended");
   }, [call, payments, push]);
 
   /** tocou no botão do card do downsell: gera o PIX como na compra principal */

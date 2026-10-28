@@ -8,7 +8,7 @@ import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes, getFunnelSettings } from "@/services/funnels";
 import { addConversationMessage } from "@/services/payments/service";
 import { trackEvent } from "@/services/tracking";
-import { describeAiError, publicOfferFormat, runBrain, type ChatTurn, type FlowOfferInfo } from "@/services/ai/brain";
+import { CALL_ENDED_NOTE, describeAiError, publicOfferFormat, runBrain, type ChatTurn, type FlowOfferInfo } from "@/services/ai/brain";
 import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import { formatBRL, formatMoney } from "@/lib/format";
 import { leadPlaceFromHeaders, nearLeadRule } from "@/lib/geo";
@@ -30,7 +30,7 @@ const schema = z.object({
   /** algo que o lead fez no chat (ex.: recusou a chamada de vídeo) */
   /** call_declined: recusou a chamada · photo: o lead acabou de mandar uma foto (já gravada por /api/public/photo) */
   /** continue: o lead voltou para a IA depois dos botões de oferta (a resposta dele já está gravada) */
-  event: z.enum(["call_declined", "photo", "continue", "voice_declined"]).optional(),
+  event: z.enum(["call_declined", "photo", "continue", "voice_declined", "call_ended"]).optional(),
 });
 
 type Msg = { sender: string; type: string; content: unknown };
@@ -78,6 +78,9 @@ function toTurns(messages: Msg[]): ChatTurn[] {
       case "call_declined":
         turns.push({ role: "lead", text: "[recusou a chamada de vídeo]" });
         break;
+      case "call_ended":
+        turns.push({ role: "lead", text: CALL_ENDED_NOTE });
+        break;
       case "voice_call":
         if (c.status === "ringing") turns.push({ role: "bot", text: "[ligou para o lead (ligação de voz)]" });
         else if (c.status === "declined") turns.push({ role: "lead", text: "[recusou a ligação de voz]" });
@@ -118,6 +121,9 @@ export default apiHandler({
     }
     if (body.event === "call_declined") {
       await addConversationMessage(session.conversationId, "user", "call_declined", { text: "Recusou a chamada de vídeo" }, node.id);
+    }
+    if (body.event === "call_ended") {
+      await addConversationMessage(session.conversationId, "user", "call_ended", { text: "Assistiu a chamada que comprou e voltou para o chat" }, node.id);
     }
     if (text) {
       await addConversationMessage(session.conversationId, "user", "text", { text }, node.id);
@@ -169,7 +175,7 @@ export default apiHandler({
     try {
       const funnelRow = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } });
       const language = getFunnelSettings(funnelRow?.settings).locale;
-      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language });
+      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language, boughtProductIds: paid.map((p) => p.productId) });
     } catch (e) {
       console.error("[ai]", e);
       const lang = await prisma.funnel

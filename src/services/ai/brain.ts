@@ -402,7 +402,8 @@ Os comandos do dono mandam: o "Quando oferecer" de cada oferta, as Regras do ven
 Como escolher a oferta certa:
 - Se o lead citar um produto (pelo nome ou pelo que ele entrega), use o offer_id DESSE produto — confira o nome antes. Nunca mande uma oferta diferente da que ele pediu.
 - Na primeira mensagem do lead, só ofereça se ele pedir (preço, comprar, um produto). Primeiro converse.
-- Se a mesma oferta apareceu nas suas últimas 3 mensagens, não mande de novo — a não ser que o lead peça outra vez.${
+- Se a mesma oferta apareceu nas suas últimas 3 mensagens, não mande de novo — a não ser que o lead peça outra vez.
+- Esteira: as ofertas seguem a ordem da lista. Quando o histórico mostrar que o lead assistiu ao que comprou e voltou para o chat ([assistiu a chamada que comprou e voltou para o chat]), pergunte com carinho se ele gostou e já ofereça a PRÓXIMA oferta que ele ainda não comprou. Nunca ofereça de novo o que ele já comprou.${
     brainOffers(brain).some((o) => o.style === "call" && o.videoId && !o.when?.trim())
       ? `
 - A CHAMADA DE VÍDEO (a que não tem "Quando oferecer") é a sua oferta principal: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade, pedir mais, pedir foto/vídeo, perguntar preço) e não pedir outro produto específico, LIGUE para ele (offer_id da oferta em formato de chamada), avisando que vai ligar. Se ele recusar, acolha e convide de novo mais tarde, depois de algumas mensagens.`
@@ -614,6 +615,8 @@ async function runBrainWith(input: {
   flowOffers?: FlowOfferInfo[];
   /** idioma do fluxo (país): es-MX = espanhol do México, es-AR = espanhol da Argentina */
   language?: "pt-BR" | "es-MX" | "es-AR";
+  /** produtos que o lead já comprou: a oferta deles sai da esteira (não aparece de novo) */
+  boughtProductIds?: string[];
 }, forced?: AiTarget, budgetMs = 30_000): Promise<BrainReply> {
   const target = forced ?? (await aiClient());
   const offers = brainOffers(input.brain);
@@ -623,9 +626,18 @@ async function runBrainWith(input: {
   const products = new Map(
     (await prisma.product.findMany({ where: { id: { in: offers.flatMap((o) => [o.productId, ...(o.style === "live" && o.downsellProductId ? [o.downsellProductId] : [])]) } } })).map((p) => [p.id, p]),
   );
-  const validOffers = offers.filter((o) => products.get(o.productId)?.active);
+  // esteira: oferta já comprada (o produto ou o ingresso/downsell dela) não volta; a próxima da lista assume o lugar
+  const bought = new Set(input.boughtProductIds ?? []);
+  const isBought = (o: BrainOffer) => bought.has(o.productId) || (!!o.downsellProductId && bought.has(o.downsellProductId));
+  const validOffers = offers.filter((o) => products.get(o.productId)?.active && !isBought(o));
+  const boughtOffers = offers.filter((o) => products.get(o.productId) && isBought(o));
 
   const volatile = [
+    boughtOffers.length
+      ? `# Esteira de ofertas\nO lead JÁ COMPROU: ${boughtOffers.map((o) => `offer_id "${o.id}" (${products.get(o.productId)!.name})`).join(", ")} — nunca ofereça de novo.${
+          validOffers[0] ? ` A próxima da esteira é offer_id "${validOffers[0].id}" (${products.get(validOffers[0].productId)!.name}).` : " Não há outra oferta: só converse e agradeça."
+        }`
+      : "",
     input.goal ? `# Objetivo neste momento da conversa\n${input.goal}` : "",
     input.context ? `# Sobre este lead\n${input.context}` : "",
     flowOffersSection(input.flowOffers),
@@ -923,6 +935,8 @@ const plain = (v: string) =>
     .replace(/[\u0300-\u036f]/g, "");
 const has = (re: RegExp, text: string) => re.test(plain(text));
 
+/** o lead assistiu à chamada que comprou, desligou e voltou para o chat (dispara a próxima oferta da esteira) */
+export const CALL_ENDED_NOTE = "[assistiu a chamada que comprou e voltou para o chat]";
 /** anotação entre colchetes que a IA às vezes escreve no balão ("[prévia do VIP]", "[foto]", "[áudio]") */
 const NOTE = /\s*\[[^\]\n]{1,240}\]\s*/g;
 /** tira as anotações do balão; o que sobrar sem palavra de verdade (ex.: "Á") some */
@@ -1085,6 +1099,12 @@ export function assistReply(
     else if (shownRecently(o) && !explicit) out.offer = null; // não repete a mesma oferta em sequência
     else if (leadMsgs.length <= 1 && !asked && !explicit && !o.when?.trim()) out.offer = null; // cedo demais (sem ordem do dono dizendo quando)
     else out.offer = asOffer(o);
+  }
+
+  // esteira: voltou da chamada que comprou → a próxima oferta ainda não comprada (as compradas já não estão na lista)
+  if (!out.offer && !out.showOffers && lastLead === CALL_ENDED_NOTE) {
+    const next = offers.find((o) => !callBlocked(o));
+    if (next) out.offer = asOffer(next);
   }
 
   if (!out.offer && !out.showOffers && !refused) {
