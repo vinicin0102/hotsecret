@@ -22,7 +22,7 @@ export default apiHandler({
       conversations: conversations.map((c) => ({
         id: c.id,
         lead: c.lead,
-        funnel: c.funnel?.name ?? "—",
+        funnel: c.funnel?.name ?? (c.currentNodeId === "whatsapp" ? "WhatsApp" : "—"),
         status: c.status,
         messageCount: c._count.messages,
         lastMessage: c.messages[0] ?? null,

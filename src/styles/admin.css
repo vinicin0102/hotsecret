@@ -1658,3 +1658,53 @@ code.inline {
     position: static;
   }
 }
+
+/* ---------- WhatsApp ---------- */
+.wa-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .wa-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.wa-list {
+  margin: 6px 0 10px;
+  padding-left: 18px;
+}
+.wa-contacts {
+  display: flex;
+  flex-direction: column;
+}
+.wa-contact {
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.wa-contact-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.wa-contact-who small,
+.wa-contact-last small {
+  color: var(--text-3);
+}
+.wa-contact-last {
+  color: var(--text-2);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 800px) {
+  .wa-contact {
+    grid-template-columns: 1fr;
+  }
+}

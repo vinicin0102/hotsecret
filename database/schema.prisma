@@ -560,3 +560,27 @@ model Showcase {
 
   @@map("showcases")
 }
+
+/// WhatsApp (Evolution API): cada número que chama vira um lead com uma conversa; o Cérebro responde por ela
+model WhatsAppContact {
+  id             String    @id @default(cuid())
+  /// endereço do WhatsApp (5511999999999@s.whatsapp.net ou ...@lid) — as respostas vão para ele
+  jid            String    @unique
+  phone          String?
+  name           String?
+  leadId         String
+  conversationId String
+  /// pausa manual (o dono assume a conversa pelo celular)
+  paused         Boolean   @default(false)
+  /// pausa automática: o dono respondeu pelo celular
+  pausedUntil    DateTime?
+  /// já recebeu o aviso de atendimento automatizado
+  noticeSent     Boolean   @default(false)
+  lastInboundAt  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([lastInboundAt])
+  @@index([conversationId])
+  @@map("whatsapp_contacts")
+}

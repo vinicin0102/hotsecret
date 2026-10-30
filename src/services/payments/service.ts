@@ -309,6 +309,8 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
     if (approved) await sendMetaPurchase(approved).catch((e) => console.error("[meta-capi]", e));
     // Grupo VIP liberado para quem comprou qualquer produto: o link de acesso aparece no chat
     if (approved) await import("../vip").then((m) => m.grantVipAccessMessage(approved)).catch((e) => console.error("[vip-access]", e));
+    // conversa do WhatsApp: avisa e entrega lá mesmo
+    if (approved) await import("../whatsapp/bot").then((m) => m.onWhatsAppPaymentApproved(approved)).catch((e) => console.error("[whatsapp] entrega", e));
   }
   return prisma.payment.findUnique({ where: { id: paymentId } });
 }
