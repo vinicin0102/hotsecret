@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { withComboProducts } from "@/services/combo-grants";
 import { sanitizeText } from "@/lib/sanitize";
 import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes, getFunnelSettings } from "@/services/funnels";
@@ -110,7 +111,7 @@ export default apiHandler({
     try {
       const funnelRow = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } });
       const language = getFunnelSettings(funnelRow?.settings).locale;
-      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language, boughtProductIds: paid.map((p) => p.productId) });
+      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language, boughtProductIds: [...(await withComboProducts(paid.map((p) => p.productId)))] });
     } catch (e) {
       console.error("[ai]", e);
       const lang = await prisma.funnel

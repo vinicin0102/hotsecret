@@ -9,7 +9,7 @@ import { api } from "@/lib/client";
 import { asCurrency, productOption } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { formatMs, normalizeTimeline, type VideoTimeline } from "@/types/video";
-import { whatsappDigits, whatsappLink } from "@/lib/whatsapp";
+import { missingDdi, whatsappDigits, whatsappLink } from "@/lib/whatsapp";
 import { UpsellScreenEditor } from "@/components/admin/UpsellScreenEditor";
 import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
 
@@ -722,14 +722,19 @@ export default function VideoEditorPage() {
                     />
                   </div>
                 </div>
-                {!whatsappDigits(selMarker.whatsapp?.phone) && (
+                {!whatsappDigits(selMarker.whatsapp?.phone) ? (
                   <p className="error-text">Informe o número com DDI e DDD — sem ele o upsell não aparece.</p>
-                )}
+                ) : missingDdi(selMarker.whatsapp?.phone) ? (
+                  <p className="error-text">
+                    Falta o DDI do país no começo do número (Brasil 55, México 52, Argentina 54). Sem ele, o lead seria mandado para outro número —
+                    por enquanto o sistema completa com o DDI do país do produto.
+                  </p>
+                ) : null}
                 {whatsappLink(selMarker.whatsapp?.phone, selMarker.whatsapp?.message) && (
                   <p className="hint">
-                    Teste o link:{" "}
+                    O lead vai para: <b>+{whatsappLink(selMarker.whatsapp?.phone)!.slice("https://wa.me/".length)}</b> ·{" "}
                     <a href={whatsappLink(selMarker.whatsapp?.phone, selMarker.whatsapp?.message)!} target="_blank" rel="noreferrer">
-                      {whatsappLink(selMarker.whatsapp?.phone)} ↗
+                      testar o link ↗
                     </a>
                   </p>
                 )}

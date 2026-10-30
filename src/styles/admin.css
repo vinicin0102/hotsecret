@@ -1719,3 +1719,10 @@ code.inline {
 .combo-edit > .checkbox {
   margin-bottom: 8px;
 }
+.combo-products {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 4px 14px;
+  max-height: 220px;
+  overflow-y: auto;
+}

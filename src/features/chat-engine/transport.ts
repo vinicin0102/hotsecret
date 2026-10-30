@@ -130,7 +130,7 @@ export interface AiReply {
     /** botão + oferta: no chat só o botão; a oferta abre ao tocar */
     vipButton?: boolean;
     /** combo: o que o PIX libera (a chamada vem em hasVideo); os links só vêm depois do pagamento (delivery) */
-    combo?: { whatsapp?: boolean; vip?: boolean };
+    combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };
     /** chamada de vídeo 02: ao atender, o FREE toca em loop */
     freeLoop?: boolean;
     tarotCards?: TarotCard[];
@@ -154,8 +154,15 @@ export interface ChatTransport {
   /** formas de pagamento do produto no catálogo do gateway (null = não pede dados) */
   paymentMethods(productId: string): Promise<PayMethods | null>;
   poll(since: string | null): Promise<{ payments: PublicPaymentInfo[]; messages: ServerMessage[]; serverTime: string }>;
-  /** whatsapp/vipUrl/accessUrl: o que um combo do Cérebro libera */
-  delivery(productId?: string | null): Promise<{ url: string | null; productName: string; whatsapp?: string; vipUrl?: string; accessUrl?: string }>;
+  /** whatsapp/vipUrl/accessUrl/items: o que um combo do Cérebro libera (items: produtos incluídos; url null = entregue no chat) */
+  delivery(productId?: string | null): Promise<{
+    url: string | null;
+    productName: string;
+    whatsapp?: string;
+    vipUrl?: string;
+    accessUrl?: string;
+    items?: { name: string; url: string | null }[];
+  }>;
   /** conteúdo pago liberado pelos pagamentos aprovados */
   unlock(): Promise<FlowNode[]>;
   /** link do vídeo de visualização única (null = já visualizado) */

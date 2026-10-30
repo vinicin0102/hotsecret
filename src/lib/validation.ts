@@ -1,5 +1,6 @@
 // Schemas de validação (zod) compartilhados pelas rotas de API.
 import { z } from "zod";
+import { missingDdi, whatsappDigits } from "@/lib/whatsapp";
 import type { FlowEdge, FlowGraph, FlowNode, NodeType } from "@/types/flow";
 import { sanitizeText, sanitizeUrl } from "./sanitize";
 
@@ -239,6 +240,8 @@ const brainOfferSchema = z.object({
   whatsapp: z.object({ phone: z.string().trim().max(32), message: optTxt(300) }).optional(),
   /** combo: o mesmo PIX libera este Grupo VIP (a chamada do combo é o videoId) */
   vipGroupId: z.string().max(64).optional(),
+  /** combo: outros produtos que o mesmo PIX libera (o acesso de cada um) */
+  comboProductIds: z.array(z.string().min(1).max(64)).max(10).optional(),
   videoId: z.string().max(64).optional(),
   downsellProductId: z.string().max(64).optional(),
   downsellText: optTxt(200),
@@ -246,12 +249,12 @@ const brainOfferSchema = z.object({
   tarotCards: tarotCards.optional(),
   tarotBackUrl: optUrl,
 })
-  .refine((o) => o.style !== "combo" || !o.whatsapp || /^\d{10,15}$/.test(o.whatsapp.phone.replace(/\D/g, "")), {
-    message: "Combo: informe o número do WhatsApp com DDI e DDD (ex.: 55 11 99999-9999)",
+  .refine((o) => o.style !== "combo" || !o.whatsapp || (!!whatsappDigits(o.whatsapp.phone) && !missingDdi(o.whatsapp.phone)), {
+    message: "Combo: informe o número do WhatsApp com o DDI do país no começo (Brasil 55, México 52, Argentina 54 — ex.: 55 11 99999-9999)",
     path: ["whatsapp", "phone"],
   })
-  .refine((o) => o.style !== "combo" || !!o.whatsapp || !!o.videoId || !!o.vipGroupId, {
-    message: "Combo: escolha pelo menos um item (WhatsApp, chamada de vídeo ou Grupo VIP)",
+  .refine((o) => o.style !== "combo" || !!o.whatsapp || !!o.videoId || !!o.vipGroupId || !!o.comboProductIds?.length, {
+    message: "Combo: escolha pelo menos um item (WhatsApp, chamada de vídeo, Grupo VIP ou um produto)",
     path: ["style"],
   });
 const brainAudioSchema = z.object({ id, url: url.pipe(z.string().min(1, "Áudio sem arquivo")), when: optTxt(500) });

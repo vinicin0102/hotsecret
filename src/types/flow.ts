@@ -139,8 +139,9 @@ export interface OfferContent {
   freeLoop?: boolean;
   /** botão + oferta (style "live", Cérebro): no chat só o botão (ctaLabel); tocando, abre a oferta → PIX → vídeo */
   vipButton?: boolean;
-  /** combo (style "live", Cérebro): o que o mesmo PIX libera — WhatsApp pessoal (número borrado até o pagamento) e Grupo VIP; a chamada é o videoId */
-  combo?: { whatsapp?: boolean; vip?: boolean };
+  /** combo (style "live", Cérebro): o que o mesmo PIX libera — WhatsApp pessoal (número borrado até o pagamento), Grupo VIP
+   * e outros produtos (ids); a chamada é o videoId */
+  combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };
   /** chamada: produto oferecido quando o lead recusa (ex.: chamada mais curta e mais barata) */
   downsellProductId?: string;
   /** chamada: texto do pop-up do downsell */

@@ -207,7 +207,7 @@ async function buildPublicFunnel(
   const brainIds = fullGraph.nodes.filter((n) => n.type === "ai").map((n) => (n.content as { brainId?: string }).brainId).filter((v): v is string => !!v);
   if (brainIds.length) {
     for (const b of await prisma.brain.findMany({ where: { id: { in: brainIds } }, select: { offers: true, voiceCalls: true } })) {
-      productIds.push(...brainOffers(b).flatMap((o) => [o.productId, o.downsellProductId].filter((v): v is string => !!v)));
+      productIds.push(...brainOffers(b).flatMap((o) => [o.productId, o.downsellProductId, ...(o.style === "combo" ? (o.comboProductIds ?? []) : [])].filter((v): v is string => !!v)));
       // produto escolhido direto na ligação de voz
       productIds.push(...brainVoiceCalls(b).flatMap((v) => (v.productId ? [v.productId] : [])));
     }

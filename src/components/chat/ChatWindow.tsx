@@ -69,7 +69,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   const i18n = useMemo(() => makeChatI18n(asChatLocale(funnel.locale)), [funnel.locale]);
   const { t } = i18n;
   // combo: os textos em branco ganham os padrões do combo (ou do WhatsApp, quando é só ele)
-  const vipOffer = engine.vipOffer?.combo ? comboOffer(engine.vipOffer, funnel.character, t) : engine.vipOffer;
+  const vipOffer = engine.vipOffer?.combo ? comboOffer(engine.vipOffer, funnel.character, t, funnel.products) : engine.vipOffer;
   const bgVideo = funnel.appearance?.bgVideoUrl || null;
   /** tema mensageiro (balões verdes, fundo escuro com desenhos) */
   const messenger = funnel.appearance?.theme === "messenger" && !live;
@@ -257,6 +257,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
               key={item.id}
               offer={offer}
               product={product}
+              products={funnel.products}
               character={funnel.character}
               transport={transport}
               bought={bought}
@@ -430,7 +431,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             character={funnel.character}
             transport={transport}
             productId={engine.vip.payProductId ?? vipOffer.productId}
-            title={vipOffer.combo?.whatsapp && !vipOffer.combo.vip && !vipOffer.videoId ? t.waUnlocked : t.comboUnlocked}
+            title={vipOffer.combo?.whatsapp && !vipOffer.combo.vip && !vipOffer.combo.products?.length && !vipOffer.videoId ? t.waUnlocked : t.comboUnlocked}
             backLabel={t.waBackToChat}
             onClose={engine.closeVip}
           />

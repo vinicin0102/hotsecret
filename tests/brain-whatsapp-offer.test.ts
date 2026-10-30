@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { comboItems, publicOfferFormat, type BrainOffer } from "../src/services/ai/brain";
-import { whatsappLinkForOffer } from "../src/lib/whatsapp";
+import { missingDdi, whatsappLink, whatsappLinkForOffer } from "../src/lib/whatsapp";
 import { brainSchema } from "../src/lib/validation";
 import { toTurns } from "../src/services/ai/history";
 
@@ -61,4 +61,31 @@ test("histórico: a IA sabe o que o combo mostrou", () => {
   ] as never);
   assert.match(turns[0].text, /combo \(WhatsApp pessoal, número borrado até o PIX \+ chamada de vídeo \+ Grupo VIP\)/);
   assert.match(turns[0].text, /of_wa/);
+});
+
+test("número sem DDI: o editor avisa e o link completa com o DDI do país do produto", () => {
+  assert.equal(missingDdi("11 98765-4321"), true);
+  assert.equal(missingDdi("(21) 3456-7890"), true);
+  assert.equal(missingDdi("+55 11 98765-4321"), false);
+  assert.equal(missingDdi("52 55 1234 5678"), false);
+  assert.equal(missingDdi("1 212 555 1234"), false); // EUA/Canadá
+  assert.equal(whatsappLink("11 98765-4321"), "https://wa.me/5511987654321");
+  assert.equal(whatsappLink("55 1234 5678", null, "MXN"), "https://wa.me/525512345678");
+  assert.equal(whatsappLink("11 2345 6789", null, "ARS"), "https://wa.me/5491123456789");
+  assert.equal(whatsappLink("+55 11 98765-4321", null, "MXN"), "https://wa.me/5511987654321");
+});
+
+test("combo com produtos: ids públicos sem o produto principal; a IA lê os nomes", () => {
+  const o: BrainOffer = { id: "c", productId: "p", style: "combo", comboProductIds: ["p", "pack", "curso"] };
+  assert.deepEqual(publicOfferFormat(o), { style: "live", vip: {}, combo: { products: ["pack", "curso"] } });
+  const names: Record<string, string> = { pack: "Pack de fotos", curso: "Áudios" };
+  assert.equal(comboItems({ ...o, vipGroupId: "g" }, (id) => names[id]), "acesso ao seu Grupo VIP + Pack de fotos + Áudios");
+});
+
+test("validação: combo só com produtos vale; número sem DDI não salva", () => {
+  const base = { name: "Júlia" };
+  assert.ok(brainSchema.safeParse({ ...base, offers: [{ id: "c", productId: "p", style: "combo", comboProductIds: ["pack"] }] }).success);
+  const r = brainSchema.safeParse({ ...base, offers: [{ ...WA, whatsapp: { phone: "11 98765-4321" } }] });
+  assert.ok(!r.success);
+  assert.match(JSON.stringify(r.error?.issues), /DDI/);
 });

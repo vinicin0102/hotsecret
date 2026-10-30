@@ -12,7 +12,7 @@ import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
 import { VipPreviewCard } from "@/components/chat/VipPreviewCard";
 import type { VipPreviewCard as VipCard } from "@/services/vip";
 import type { VipOfferTexts } from "@/types/flow";
-import { whatsappDigits, whatsappLink } from "@/lib/whatsapp";
+import { missingDdi, whatsappDigits, whatsappLink } from "@/lib/whatsapp";
 
 type Provider = "anthropic" | "deepseek" | "qwen";
 interface ProviderSettings {
@@ -49,6 +49,8 @@ interface Offer {
   whatsapp?: { phone: string; message?: string };
   /** combo: Grupo VIP liberado junto (a chamada é o videoId) */
   vipGroupId?: string;
+  /** combo: outros produtos liberados no mesmo PIX */
+  comboProductIds?: string[];
   vip?: VipOfferTexts;
   videoId?: string;
   tarotCards?: TarotCard[];
@@ -932,7 +934,7 @@ export default function CerebroPage() {
                       </p>
                     </>
                   )}
-                  {o.style === "combo" && <ComboOfferEditor offer={o} product={products.find((p) => p.id === o.productId)} videos={videos} groups={vipGroups?.groups ?? []} onChange={(patch) => setOffer(i, patch)} />}
+                  {o.style === "combo" && <ComboOfferEditor offer={o} product={products.find((p) => p.id === o.productId)} products={products} videos={videos} groups={vipGroups?.groups ?? []} onChange={(patch) => setOffer(i, patch)} />}
                   {o.style === "live" && (
                     <VipOfferEditor
                       vip={o.vip}
@@ -1361,25 +1363,36 @@ export default function CerebroPage() {
 function ComboOfferEditor({
   offer: o,
   product,
+  products,
   videos,
   groups,
   onChange,
 }: {
   offer: Offer;
   product: Product | undefined;
+  products: Product[];
   videos: { id: string; name: string }[];
   groups: { id: string; name: string; published: boolean }[];
   onChange: (patch: Partial<Offer>) => void;
 }) {
   const wa = o.whatsapp;
   const vip = o.vip ?? {};
-  const link = wa ? whatsappLink(wa.phone, wa.message) : null;
-  const onlyWa = !!wa && !o.videoId && !o.vipGroupId;
-  const items = [wa ? "o WhatsApp" : "", o.videoId ? "a chamada de vídeo" : "", o.vipGroupId ? "o Grupo VIP" : "", product?.deliveryUrl ? "o link de acesso do produto" : ""].filter(Boolean);
+  const link = wa ? whatsappLink(wa.phone, wa.message, product?.currency) : null;
+  const included = (o.comboProductIds ?? []).filter((id) => id !== o.productId);
+  const onlyWa = !!wa && !o.videoId && !o.vipGroupId && !included.length;
+  const items = [
+    wa ? "o WhatsApp" : "",
+    o.videoId ? "a chamada de vídeo" : "",
+    o.vipGroupId ? "o Grupo VIP" : "",
+    ...included.map((id) => products.find((p) => p.id === id)?.name ?? ""),
+    product?.deliveryUrl ? "o link de acesso do produto" : "",
+  ].filter(Boolean);
+  const toggleProduct = (id: string, on: boolean) =>
+    onChange({ comboProductIds: on ? [...included, id] : included.filter((x) => x !== id) });
   return (
     <>
       <p className="hint">
-        Monte o combo: marque o que o <b>mesmo PIX</b> libera. A IA mostra um pop-up com tudo o que vem no combo e o preço do produto acima; pagou,{" "}
+        Monte o combo: marque o que o <b>mesmo PIX</b> libera — WhatsApp, chamada, Grupo VIP e quantos produtos quiser. A IA mostra um pop-up com tudo o que vem no combo e o preço do produto acima; pagou,{" "}
         {o.videoId ? "a chamada de vídeo começa na hora e, ao desligar, " : ""}aparecem os botões de cada item. No chat fica um card para reabrir a
         oferta. O número do WhatsApp nunca chega ao celular do lead antes do pagamento aprovado.
       </p>
@@ -1414,12 +1427,18 @@ function ComboOfferEditor({
                 />
               </div>
             </div>
-            {!whatsappDigits(wa.phone) && <p className="error-text">Informe o número com DDI e DDD — sem ele não dá para salvar.</p>}
+            {!whatsappDigits(wa.phone) ? (
+              <p className="error-text">Informe o número com DDI e DDD — sem ele não dá para salvar.</p>
+            ) : missingDdi(wa.phone) ? (
+              <p className="error-text">
+                Falta o DDI do país no começo do número (Brasil 55, México 52, Argentina 54). Sem ele o WhatsApp abre outro número.
+              </p>
+            ) : null}
             {link && (
               <p className="hint">
-                Teste o link:{" "}
+                O lead vai para: <b>+{link.slice("https://wa.me/".length).split("?")[0]}</b> ·{" "}
                 <a href={link} target="_blank" rel="noreferrer">
-                  {whatsappLink(wa.phone)} ↗
+                  testar o link ↗
                 </a>
               </p>
             )}
@@ -1449,6 +1468,24 @@ function ComboOfferEditor({
               ))}
             </select>
           </div>
+        </div>
+        <div className="field">
+          <label>📦 Produtos incluídos</label>
+          <div className="combo-products">
+            {products
+              .filter((p) => p.id !== o.productId)
+              .map((p) => (
+                <label key={p.id} className="checkbox">
+                  <input type="checkbox" checked={included.includes(p.id)} onChange={(e) => toggleProduct(p.id, e.target.checked)} />
+                  {productOption(p)}
+                  {p.deliveryUrl ? "" : " · entrega no chat"}
+                </label>
+              ))}
+          </div>
+          <span className="hint">
+            Quem compra o combo ganha o acesso de cada produto marcado (o link de acesso dele, ou o Grupo VIP que ele assina) e, na esteira, a IA não
+            oferece de novo o que já veio no combo.
+          </span>
         </div>
         {o.vipGroupId && groups.find((g) => g.id === o.vipGroupId)?.published === false && (
           <p className="error-text">Este Grupo VIP está em rascunho: publique-o para o botão aparecer.</p>
@@ -1490,7 +1527,12 @@ function ComboOfferEditor({
           placeholder={
             onlyWa
               ? "Meu número pessoal, só pra você\nConversa só nós dois, no privado\nFotos e áudios que não mando em lugar nenhum"
-              : [wa ? "Meu WhatsApp pessoal, só pra você" : "", o.videoId ? "Chamada de vídeo comigo, liberada na hora" : "", o.vipGroupId ? "Acesso ao meu Grupo VIP" : ""]
+              : [
+                  wa ? "Meu WhatsApp pessoal, só pra você" : "",
+                  o.videoId ? "Chamada de vídeo comigo, liberada na hora" : "",
+                  o.vipGroupId ? "Acesso ao meu Grupo VIP" : "",
+                  ...included.map((id) => products.find((p) => p.id === id)?.name ?? ""),
+                ]
                   .filter(Boolean)
                   .join("\n") || "Um benefício por linha"
           }

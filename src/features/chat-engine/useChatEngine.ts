@@ -51,7 +51,7 @@ const now = () => new Date().toISOString();
 
 /** hold: o fluxo só começa quando virar false (Canal VIP AO VIVO: depois de atender a ligação da entrada) */
 /** combo que entrega no próprio card (botões do WhatsApp / Grupo VIP depois do pagamento) */
-const comboHasCard = (c: OfferContent["combo"] | undefined) => !!(c?.whatsapp || c?.vip);
+const comboHasCard = (c: OfferContent["combo"] | undefined) => !!(c?.whatsapp || c?.vip || c?.products?.length);
 
 export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | null, resume: ResumeState | null, opts: { hold?: boolean } = {}) {
   const hold = !!opts.hold;

@@ -59,6 +59,8 @@ export interface BrainOffer {
   whatsapp?: { phone: string; message?: string };
   /** combo: o mesmo PIX libera este Grupo VIP (a chamada do combo é o videoId) */
   vipGroupId?: string;
+  /** combo: outros produtos que o mesmo PIX libera */
+  comboProductIds?: string[];
   videoId?: string;
   tarotCards?: TarotCard[];
   tarotBackUrl?: string;
@@ -242,9 +244,14 @@ export function brainImages(brain: Pick<Brain, "images">): BrainMedia[] {
 export function tarotCardsOf(o: { tarotCards?: TarotCard[] }): TarotCard[] {
   return (o.tarotCards ?? []).filter((c) => c?.id && (c.name || c.imageUrl || c.meaning));
 }
-/** o que o combo libera num PIX só (para a IA) */
-export function comboItems(o: Pick<BrainOffer, "whatsapp" | "videoId" | "vipGroupId">): string {
-  return [o.whatsapp?.phone ? "seu WhatsApp pessoal" : "", o.videoId ? "chamada de vídeo com você" : "", o.vipGroupId ? "acesso ao seu Grupo VIP" : ""]
+/** o que o combo libera num PIX só (para a IA); nameOf dá o nome dos produtos incluídos */
+export function comboItems(o: Pick<BrainOffer, "whatsapp" | "videoId" | "vipGroupId" | "comboProductIds">, nameOf: (id: string) => string | undefined = () => undefined): string {
+  return [
+    o.whatsapp?.phone ? "seu WhatsApp pessoal" : "",
+    o.videoId ? "chamada de vídeo com você" : "",
+    o.vipGroupId ? "acesso ao seu Grupo VIP" : "",
+    ...(o.comboProductIds ?? []).map((id) => nameOf(id) ?? ""),
+  ]
     .filter(Boolean)
     .join(" + ");
 }
@@ -261,13 +268,17 @@ export function publicOfferFormat(o: BrainOffer): {
   /** botão + oferta: no chat só o botão; a oferta abre ao tocar */
   vipButton?: boolean;
   /** combo: o que o PIX libera (a chamada vem em hasVideo; o número do WhatsApp nunca vai junto) */
-  combo?: { whatsapp?: boolean; vip?: boolean };
+  combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };
 } {
   if (o.style === "combo")
     return {
       style: "live",
       vip: o.vip ?? {},
-      combo: { ...(o.whatsapp?.phone ? { whatsapp: true } : {}), ...(o.vipGroupId ? { vip: true } : {}) },
+      combo: {
+        ...(o.whatsapp?.phone ? { whatsapp: true } : {}),
+        ...(o.vipGroupId ? { vip: true } : {}),
+        ...(o.comboProductIds?.length ? { products: o.comboProductIds.filter((id) => id !== o.productId) } : {}),
+      },
       ...(o.videoId ? { hasVideo: true } : {}),
     };
   if (o.style === "call" && o.videoId) return { style: "call", ...(o.freeLoop ? { freeLoop: true } : {}) };
@@ -362,7 +373,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
           ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO${o.videoId ? " (depois do pagamento começa a chamada de vídeo com você)" : ""} com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
           : "",
         o.style === "combo"
-          ? `  Formato: COMBO — abre um pop-up com tudo o que o mesmo PIX libera: ${comboItems(o) || "o produto"}.${o.whatsapp?.phone ? " O número do WhatsApp aparece borrado; depois do PIX ele recebe o botão para chamar no WhatsApp. Nunca escreva nem invente o número no chat." : ""}${o.videoId ? " Depois do PIX a chamada de vídeo começa na hora." : ""}`
+          ? `  Formato: COMBO — abre um pop-up com tudo o que o mesmo PIX libera: ${comboItems(o, (id) => products.get(id)?.name) || "o produto"}.${o.whatsapp?.phone ? " O número do WhatsApp aparece borrado; depois do PIX ele recebe o botão para chamar no WhatsApp. Nunca escreva nem invente o número no chat." : ""}${o.videoId ? " Depois do PIX a chamada de vídeo começa na hora." : ""}`
           : "",
         o.style === "tarot"
           ? `  Formato: aparecem ${tarotCardsOf(o).length || 3} CARTAS DE TAROT viradas no chat; o lead toca nelas para ver o preço e, depois do PIX, as cartas são reveladas com a leitura. Você não sabe quais são as cartas: nunca invente nem antecipe a leitura — crie mistério e curiosidade.`
@@ -646,7 +657,7 @@ async function runBrainWith(input: {
   const images = brainImages(input.brain);
   const voiceCalls = brainVoiceCalls(input.brain);
   const products = new Map(
-    (await prisma.product.findMany({ where: { id: { in: offers.flatMap((o) => [o.productId, ...(o.style === "live" && o.downsellProductId ? [o.downsellProductId] : [])]) } } })).map((p) => [p.id, p]),
+    (await prisma.product.findMany({ where: { id: { in: offers.flatMap((o) => [o.productId, ...(o.style === "live" && o.downsellProductId ? [o.downsellProductId] : []), ...(o.style === "combo" ? (o.comboProductIds ?? []) : [])]) } } })).map((p) => [p.id, p]),
   );
   // esteira: oferta já comprada (o produto ou o ingresso/downsell dela) não volta; a próxima da lista assume o lugar
   const bought = new Set(input.boughtProductIds ?? []);
@@ -692,7 +703,7 @@ async function runBrainWith(input: {
     ...Object.fromEntries(
       validOffers.map((o) => [
         o.id,
-        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? (o.button ? " — botão de ligação privada" : " — canal VIP ao vivo") : o.style === "combo" ? ` — combo: ${comboItems(o)}` : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
+        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? (o.button ? " — botão de ligação privada" : " — canal VIP ao vivo") : o.style === "combo" ? ` — combo: ${comboItems(o, (id) => products.get(id)?.name)}` : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
       ]),
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
@@ -711,7 +722,7 @@ ${
       validOffers
         .map((o) => {
           const p = products.get(o.productId)!;
-          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : o.style === "live" && o.button ? " | formato: botão no chat (o lead toca, vê a oferta e paga)" : o.style === "combo" ? ` | formato: combo (${comboItems(o)}) num PIX só` : ""}`;
+          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : o.style === "live" && o.button ? " | formato: botão no chat (o lead toca, vê a oferta e paga)" : o.style === "combo" ? ` | formato: combo (${comboItems(o, (id) => products.get(id)?.name)}) num PIX só` : ""}`;
         })
         .join("\n") || "(nenhuma)"
     }

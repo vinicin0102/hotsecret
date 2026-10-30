@@ -2,15 +2,16 @@
 // Oferta vira cobrança (PIX) na própria conversa; pago, a entrega chega no WhatsApp.
 import type { Payment, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withComboProducts } from "@/services/combo-grants";
 import { absoluteUrl } from "@/lib/paths";
 import { formatMoney } from "@/lib/format";
 import { brainOffers, publicOfferFormat, runBrain } from "@/services/ai/brain";
-import { whatsappLinkForOffer } from "@/lib/whatsapp";
+import { deliveryFor } from "@/services/combo";
 import { toTurns } from "@/services/ai/history";
 import { addConversationMessage, chargeProduct, syncPaymentWithProvider } from "@/services/payments/service";
 import { publicNextAction } from "@/services/payments/zenith";
 import { trackEvent } from "@/services/tracking";
-import { vipAccessUrl, vipPreviewCard, withVipAccess } from "@/services/vip";
+import { vipAccessUrl, vipPreviewCard } from "@/services/vip";
 import { sendAudio, sendMedia, sendText, waConfig, type WaConfig } from "./client";
 import { incomingText, parseWebhook, typingDelay, type IncomingMessage } from "./incoming";
 import { getWhatsAppSettings, type WhatsAppSettings } from "./settings";
@@ -157,7 +158,7 @@ export async function replyWithBrain(cfg: WaConfig, settings: WhatsAppSettings, 
 
   let reply;
   try {
-    reply = await runBrain({ brain, history: toTurns(history.slice(-60)), context, language: settings.language, boughtProductIds: paid.map((p) => p.productId) });
+    reply = await runBrain({ brain, history: toTurns(history.slice(-60)), context, language: settings.language, boughtProductIds: [...(await withComboProducts(paid.map((p) => p.productId)))] });
   } catch (e) {
     console.error("[whatsapp] IA falhou", e);
     if (brain.fallbackMessage?.trim()) reply = { messages: [brain.fallbackMessage.trim()], offer: null, audio: null, image: null, end: false };
@@ -263,18 +264,17 @@ export async function onWhatsAppPaymentApproved(payment: Payment) {
     await addConversationMessage(contact.conversationId, "bot", "text", { text, ...(waId ? { waId } : {}) }, WA_NODE);
   };
   await say(es ? "Pago confirmado ✅" : "Pagamento confirmado ✅");
-  // entrega: o que o combo libera (número do WhatsApp, Grupo VIP), o link do produto (Grupo VIP já entra liberado)
-  // e o vídeo da oferta do cérebro
+  // entrega: o que o combo libera (número do WhatsApp, Grupo VIP, produtos incluídos), o link do produto
+  // (Grupo VIP já entra liberado) e o vídeo da oferta do cérebro — os mesmos da entrega no chat
+  if (!product) return;
+  const got = await deliveryFor({ ...payment, product }, contact.leadId);
+  if (got.whatsapp) await say(`${es ? "Aquí está mi WhatsApp personal 👇" : "Aqui está meu WhatsApp pessoal 👇"}\n${got.whatsapp}`);
+  if (got.vipUrl) await say(`${es ? "Y tu acceso a mi VIP 👇" : "E seu acesso ao meu VIP 👇"}\n${publicUrl(got.vipUrl)}`);
+  if (got.accessUrl) await say(`${es ? "Aquí está tu acceso 👇" : "Aqui está seu acesso 👇"}\n${publicUrl(got.accessUrl)}`);
+  for (const item of got.items ?? []) if (item.url) await say(`${item.name} 👇\n${publicUrl(item.url)}`);
   const brain = settings.brainId ? await prisma.brain.findUnique({ where: { id: settings.brainId } }) : null;
-  const offers = brain ? brainOffers(brain) : [];
-  const wa = whatsappLinkForOffer(offers, payment.productId);
-  const combo = offers.find((o) => o.style === "combo" && o.productId === payment.productId && o.vipGroupId);
-  if (wa) await say(`${es ? "Aquí está mi WhatsApp personal 👇" : "Aqui está meu WhatsApp pessoal 👇"}\n${wa}`);
-  const group = combo?.vipGroupId ? await prisma.vipGroup.findUnique({ where: { id: combo.vipGroupId }, select: { id: true, slug: true, published: true } }) : null;
-  if (group?.published) await say(`${es ? "Y tu acceso a mi VIP 👇" : "E seu acesso ao meu VIP 👇"}\n${publicUrl(await vipAccessUrl(group, contact.leadId))}`);
-  const link = product?.deliveryUrl ? await withVipAccess(product.deliveryUrl, contact.leadId) : null;
-  if (link) await say(`${es ? "Aquí está tu acceso 👇" : "Aqui está seu acesso 👇"}\n${publicUrl(link)}`);
-  const offer = offers.find((o) => (o.productId === payment.productId || o.downsellProductId === payment.productId) && o.videoId);
-  const video = (!link || offer?.style === "combo") && offer?.videoId ? await prisma.video.findUnique({ where: { id: offer.videoId } }) : null;
+  const offer = brain ? brainOffers(brain).find((o) => (o.productId === payment.productId || o.downsellProductId === payment.productId) && o.videoId) : undefined;
+  const video = (!got.accessUrl || offer?.style === "combo") && offer?.videoId ? await prisma.video.findUnique({ where: { id: offer.videoId } }) : null;
   if (video) await say(`${es ? "Aquí está tu video 🔥" : "Aqui está seu vídeo 🔥"}\n${publicUrl(video.url)}`);
 }
+

@@ -10,6 +10,7 @@ import { asCurrency, currencyOfLocale } from "@/lib/format";
 import { parseUserAgent } from "@/lib/device";
 import { sanitizeUrl } from "@/lib/sanitize";
 import { trackEvent } from "./tracking";
+import { combosIncluding, withComboProducts } from "./combo-grants";
 import { providerNameForCurrency } from "./payments/index";
 import { zenithDefaultPayer } from "./payments/zenith";
 import { chargeProduct, publicPayment, syncPaymentWithProvider } from "./payments/service";
@@ -151,7 +152,8 @@ export async function upsellGrantProducts(groupId: string): Promise<Set<string>>
 
 /**
  * compras aprovadas do lead: produtos e se alguma libera o VIP — a assinatura do grupo, um upsell "Grupo VIP"
- * da chamada de vídeo ou um produto do chat com o link do grupo como entrega
+ * da chamada de vídeo ou um produto do chat com o link do grupo como entrega. Os produtos incluídos num combo
+ * comprado contam como comprados.
  */
 async function entitlements(group: VipGroup, leadId: string | null) {
   if (!leadId) return { owned: new Set<string>(), subscribed: false };
@@ -159,13 +161,16 @@ async function entitlements(group: VipGroup, leadId: string | null) {
     where: { leadId, status: "APPROVED" },
     select: { productId: true, product: { select: { deliveryUrl: true } } },
   });
-  const owned = new Set(approved.map((p) => p.productId));
+  const owned = await withComboProducts(approved.map((p) => p.productId));
   const grants = approved.length ? await upsellGrantProducts(group.id) : new Set<string>();
+  const included = [...owned].filter((id) => !approved.some((p) => p.productId === id));
+  const includedLinks = included.length ? await prisma.product.findMany({ where: { id: { in: included } }, select: { deliveryUrl: true } }) : [];
   const subscribed =
     // "Liberar para quem comprou qualquer produto": qualquer pagamento aprovado vale
     (vipSettings(group.settings).anyPurchase && approved.length > 0) ||
     (!!group.productId && owned.has(group.productId)) ||
-    approved.some((p) => grants.has(p.productId) || deliveryPointsToGroup(p.product.deliveryUrl, group.slug));
+    approved.some((p) => grants.has(p.productId) || deliveryPointsToGroup(p.product.deliveryUrl, group.slug)) ||
+    includedLinks.some((p) => deliveryPointsToGroup(p.deliveryUrl, group.slug));
   return { owned, subscribed };
 }
 
@@ -186,6 +191,7 @@ export async function vipMemberCounts(groups: Pick<VipGroup, "id" | "slug" | "pr
     const ids = await upsellGrantProducts(g.id);
     if (g.productId) ids.add(g.productId);
     for (const p of delivering) if (deliveryPointsToGroup(p.deliveryUrl, g.slug)) ids.add(p.id);
+    for (const id of await combosIncluding(ids)) ids.add(id);
     counts.set(g.id, ids.size ? await leadsWith([...ids]) : 0);
   }
   return counts;

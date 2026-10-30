@@ -72,15 +72,20 @@ export function whatsappOffer(
   });
 }
 
+/** nomes dos produtos incluídos no combo (os que o chat conhece) */
+const comboProductNames = (offer: OfferContent, products: Record<string, PublicProduct>) =>
+  (offer.combo?.products ?? []).map((id) => products[id]?.name).filter((n): n is string => !!n);
+
 /** combo do Cérebro: só WhatsApp usa os textos do WhatsApp; com mais itens, os textos do combo com um benefício por item */
-export function comboOffer(offer: OfferContent, character: PublicCharacter, t: ChatTexts): OfferContent {
+export function comboOffer(offer: OfferContent, character: PublicCharacter, t: ChatTexts, products: Record<string, PublicProduct>): OfferContent {
   const c = offer.combo ?? {};
-  if (c.whatsapp && !c.vip && !offer.videoId) return whatsappOffer(offer, character, t, { ctaLabel: offer.ctaLabel });
+  const names = comboProductNames(offer, products);
+  if (c.whatsapp && !c.vip && !offer.videoId && !names.length) return whatsappOffer(offer, character, t, { ctaLabel: offer.ctaLabel });
   return withDefaults(offer, character, {
     badge: t.comboTag,
     title: t.comboTitle,
     intro: t.comboIntro,
-    benefits: [c.whatsapp ? t.comboWhatsappBenefit : "", offer.videoId ? t.waCallBenefit : "", c.vip ? t.waVipBenefit : ""].filter(Boolean),
+    benefits: [c.whatsapp ? t.comboWhatsappBenefit : "", offer.videoId ? t.waCallBenefit : "", c.vip ? t.waVipBenefit : "", ...names].filter(Boolean),
     completeLabel: offer.ctaLabel || t.comboCta,
     payTitle: t.comboPixTitle,
   });
@@ -149,7 +154,7 @@ function OpenButtons({ got, retry }: { got: Delivered | null | undefined; retry:
     );
   if (!got) return <div className="vip-sheet-sub wau-loading">{t.waLoading}</div>;
   // upsell do editor de vídeo: o link do WhatsApp vem em url
-  const wa = got.whatsapp ?? (got.vipUrl || got.accessUrl ? undefined : got.url);
+  const wa = got.whatsapp ?? (got.vipUrl || got.accessUrl || got.items?.length ? undefined : (got.url ?? undefined));
   return (
     <>
       {wa && (
@@ -166,6 +171,17 @@ function OpenButtons({ got, retry }: { got: Delivered | null | undefined; retry:
         <a className="vip-copy vipu-open wau-extra" href={withBase(got.accessUrl)} target="_blank" rel="noopener">
           {t.waOpenAccess}
         </a>
+      )}
+      {(got.items ?? []).map((i, k) =>
+        i.url ? (
+          <a key={k} className="vip-copy vipu-open wau-extra" href={withBase(i.url)} target="_blank" rel="noopener">
+            {t.comboOpenItem} {i.name} →
+          </a>
+        ) : (
+          <div key={k} className="combo-done">
+            ✓ {i.name}
+          </div>
+        ),
       )}
     </>
   );
@@ -206,6 +222,7 @@ export function WhatsAppDoneSheet({
 export function ComboOfferCard({
   offer,
   product,
+  products,
   character,
   transport,
   bought,
@@ -213,6 +230,8 @@ export function ComboOfferCard({
 }: {
   offer: OfferContent;
   product: PublicProduct | undefined;
+  /** produtos do fluxo (nomes dos incluídos no combo) */
+  products: Record<string, PublicProduct>;
   character: PublicCharacter;
   transport: ChatTransport | null;
   bought: boolean;
@@ -222,8 +241,13 @@ export function ComboOfferCard({
   const { got, retry } = useDelivered(transport, offer.productId, bought);
   if (!product) return <div className="bubble system">{t.offerUnavailable}</div>;
   const c = offer.combo ?? {};
-  const items = [c.whatsapp ? t.comboWhatsappItem : "", offer.videoId ? t.comboCallItem : "", c.vip ? t.comboVipItem : ""].filter(Boolean);
-  const hasLinks = !!(got && (got.whatsapp || got.vipUrl || got.accessUrl));
+  const items = [
+    c.whatsapp ? t.comboWhatsappItem : "",
+    offer.videoId ? t.comboCallItem : "",
+    c.vip ? t.comboVipItem : "",
+    ...comboProductNames(offer, products).map((n) => `📦 ${n}`),
+  ].filter(Boolean);
+  const hasLinks = !!(got && (got.whatsapp || got.vipUrl || got.accessUrl || got.items?.length));
   return (
     <div className="msg-row bot">
       <div className="vip-card wau-card">

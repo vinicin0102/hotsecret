@@ -11,8 +11,11 @@ export type Msg = { sender: string; type: string; content: unknown };
 /** Histórico da conversa em texto para a IA (inclui o roteiro do fluxo antes do Cérebro). */
 /** o que o combo da mensagem libera, como a IA lê */
 function comboText(combo: unknown, call: boolean): string {
-  const c = (combo ?? {}) as { whatsapp?: boolean; vip?: boolean };
-  return [c.whatsapp ? "WhatsApp pessoal, número borrado até o PIX" : "", call ? "chamada de vídeo" : "", c.vip ? "Grupo VIP" : ""].filter(Boolean).join(" + ");
+  const c = (combo ?? {}) as { whatsapp?: boolean; vip?: boolean; products?: string[] };
+  const n = c.products?.length ?? 0;
+  return [c.whatsapp ? "WhatsApp pessoal, número borrado até o PIX" : "", call ? "chamada de vídeo" : "", c.vip ? "Grupo VIP" : "", n ? `${n} produto${n > 1 ? "s" : ""} incluído${n > 1 ? "s" : ""}` : ""]
+    .filter(Boolean)
+    .join(" + ");
 }
 
 export function toTurns(messages: Msg[]): ChatTurn[] {

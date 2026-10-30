@@ -3,10 +3,7 @@ import { z } from "zod";
 import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireLeadSession } from "@/services/conversation";
-import { vipAccessUrl, withVipAccess } from "@/services/vip";
-import { whatsappLinkForOffer, whatsappLinkForProduct } from "@/lib/whatsapp";
-import { brainOffers } from "@/services/ai/brain";
-import type { UpsellMarker } from "@/types/video";
+import { deliveryFor } from "@/services/combo";
 
 const schema = z.object({ token: z.string().min(10).max(2000), productId: z.string().max(64).optional().nullable() });
 
@@ -21,31 +18,7 @@ export default apiHandler({
       orderBy: { approvedAt: "desc" },
     });
     if (!payment) throw new HttpError(402, "Pagamento ainda não confirmado");
-    const deliveryUrl = await withVipAccess(payment.product.deliveryUrl, session.leadId);
-    // combo do Cérebro: o número do WhatsApp, o Grupo VIP e o link do produto (a chamada sai pelo /api/public/call)
-    const brains = await prisma.brain.findMany({ select: { offers: true } });
-    const combos = brains.flatMap(brainOffers).filter((o) => o.style === "combo" && o.productId === payment.productId);
-    if (combos.length) {
-      const wa = whatsappLinkForOffer(combos, payment.productId) ?? undefined;
-      const groupId = combos.find((o) => o.vipGroupId)?.vipGroupId;
-      const group = groupId ? await prisma.vipGroup.findUnique({ where: { id: groupId }, select: { id: true, slug: true, published: true } }) : null;
-      const vipUrl = group?.published ? await vipAccessUrl(group, session.leadId) : undefined;
-      return {
-        productName: payment.product.name,
-        url: wa ?? vipUrl ?? deliveryUrl,
-        ...(wa ? { whatsapp: wa } : {}),
-        ...(vipUrl ? { vipUrl } : {}),
-        ...(deliveryUrl ? { accessUrl: deliveryUrl } : {}),
-      };
-    }
-    // sem link no produto: o número do upsell "WhatsApp pessoal" (editor de vídeo) que vendeu este produto
-    if (!deliveryUrl) {
-      const videos = await prisma.video.findMany({ select: { timeline: true } });
-      const markers = videos.flatMap((v) => (v.timeline as { markers?: UpsellMarker[] } | null)?.markers ?? []);
-      const link = whatsappLinkForProduct(markers, payment.productId);
-      if (link) return { productName: payment.product.name, url: link, whatsapp: link };
-    }
-    // link de um Grupo VIP: o comprador entra já liberado (o mesmo lead)
-    return { productName: payment.product.name, url: deliveryUrl };
+    // o número do WhatsApp e os itens do combo saem de onde a compra aconteceu (ver services/combo.ts)
+    return deliveryFor(payment, session.leadId);
   },
 });
