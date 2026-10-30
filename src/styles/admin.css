@@ -1734,6 +1734,10 @@ code.inline {
 }
 .pixel-row-actions {
   align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 @media (max-width: 720px) {
   .pixel-row {

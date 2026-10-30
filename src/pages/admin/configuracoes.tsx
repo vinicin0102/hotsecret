@@ -87,6 +87,19 @@ function PixelsCard() {
   const setPixel = (i: number, patch: Partial<MetaPixelRow>) => setForm({ ...f, metaPixels: f.metaPixels.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
   const addPixel = () => setForm({ ...f, metaPixels: [...f.metaPixels, { id: "", tokenConfigured: false, tokenHint: "" }] });
   const removePixel = (i: number) => setForm({ ...f, metaPixels: f.metaPixels.filter((_, j) => j !== i) });
+  /** pixel salvo: manda as vendas dos últimos 7 dias que ele ainda não recebeu */
+  const backfill = async (pixelId: string) => {
+    if (!confirm(`Enviar para o pixel ${pixelId} as vendas aprovadas dos últimos 7 dias que ele ainda não recebeu?`)) return;
+    setMsg(null);
+    try {
+      const r = await api<{ sent: number; already: number; error?: string }>("/api/admin/tracking/backfill", { body: { pixelId } });
+      const base = `${r.sent} venda${r.sent === 1 ? "" : "s"} enviada${r.sent === 1 ? "" : "s"} para o pixel ${pixelId}${r.already ? ` (${r.already} ele já tinha)` : ""}`;
+      setMsg(r.error ? { text: `${base}. A Meta recusou: ${r.error}`, error: true } : { text: `${base} ✓` });
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : "Erro ao enviar", error: true });
+    }
+  };
+  const saved = new Set((data?.tracking.metaPixels ?? []).map((p) => p.id));
 
   const save = async () => {
     setMsg(null);
@@ -123,7 +136,8 @@ function PixelsCard() {
         Um pixel por conta de anúncios — <b>todos recebem todos os eventos</b>. O token da API de Conversões envia a venda pelo servidor assim que o
         pagamento é confirmado (conta a venda mesmo se o lead fechar a página, comum no PIX); a Meta não duplica o evento do pixel e do servidor.
         Gere o token em Gerenciador de Eventos → pixel → Configurações → API de Conversões → “Gerar token de acesso”. Sem token próprio, o pixel usa
-        o primeiro token da lista.
+        o primeiro token da lista. Pixel novo: depois de salvar, “Enviar vendas dos últimos 7 dias” manda para ele as vendas que já aconteceram
+        (a Meta não aceita mais antigas).
       </p>
       {f.metaPixels.map((p, i) => (
         <div key={i} className="settings-grid pixel-row" style={{ gap: 12 }}>
@@ -163,6 +177,11 @@ function PixelsCard() {
             </span>
           </div>
           <div className="field pixel-row-actions">
+            {saved.has(p.id.trim()) && (
+              <button className="btn btn-sm" onClick={() => void backfill(p.id.trim())} title="A Meta só aceita vendas de até 7 dias atrás">
+                Enviar vendas dos últimos 7 dias
+              </button>
+            )}
             <button className="btn btn-ghost btn-sm" onClick={() => removePixel(i)} aria-label={`Remover pixel ${i + 1}`}>
               Remover
             </button>
