@@ -1,4 +1,4 @@
-// WhatsApp (Evolution API): a mensagem chega no webhook → lead/conversa do número → o Cérebro responde pela Evolution.
+// WhatsApp (Evolution API ou uazapi): a mensagem chega no webhook → lead/conversa do número → o Cérebro responde por lá.
 // Oferta vira cobrança (PIX) na própria conversa; pago, a entrega chega no WhatsApp.
 import type { Payment, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -10,8 +10,8 @@ import { addConversationMessage, chargeProduct, syncPaymentWithProvider } from "
 import { publicNextAction } from "@/services/payments/zenith";
 import { trackEvent } from "@/services/tracking";
 import { vipAccessUrl, vipPreviewCard, withVipAccess } from "@/services/vip";
-import { evolutionConfig, sendAudio, sendMedia, sendText, type EvolutionConfig } from "./evolution";
-import { incomingText, parseEvolutionWebhook, typingDelay, type IncomingMessage } from "./incoming";
+import { sendAudio, sendMedia, sendText, waConfig, type WaConfig } from "./client";
+import { incomingText, parseWebhook, typingDelay, type IncomingMessage } from "./incoming";
 import { getWhatsAppSettings, type WhatsAppSettings } from "./settings";
 
 /** "nó" das mensagens do WhatsApp (não há fluxo: o Cérebro responde direto) */
@@ -25,9 +25,10 @@ const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 /** link público (arquivos enviados pelo painel ficam em /hot-secret/api/uploads/...) */
 const publicUrl = (url: string) => (/^https?:\/\//.test(url) ? url : absoluteUrl(url.replace(/^\/hot-secret(?=\/)/, "")));
 
-async function alreadyHave(conversationId: string | null, waId: string) {
+/** a mensagem já está nesta conversa (a busca fica só na conversa do contato: rápida e sem misturar números) */
+async function alreadyHave(conversationId: string, waId: string) {
   return !!(await prisma.message.findFirst({
-    where: { ...(conversationId ? { conversationId } : {}), content: { path: ["waId"], equals: waId } },
+    where: { conversationId, content: { path: ["waId"], equals: waId } },
     select: { id: true },
   }));
 }
@@ -53,9 +54,9 @@ async function contactFor(m: IncomingMessage) {
   }
 }
 
-/** mensagem que nós mesmos enviamos (a Evolution devolve no webhook como fromMe) */
+/** mensagem que nós mesmos enviamos (volta no webhook como fromMe) */
 async function isOurEcho(conversationId: string, m: IncomingMessage) {
-  if (await alreadyHave(conversationId, m.waId)) return true;
+  if (m.byApi || (await alreadyHave(conversationId, m.waId))) return true;
   const recent = await prisma.message.findMany({
     where: { conversationId, sender: "bot", createdAt: { gte: new Date(Date.now() - 3 * 60_000) } },
     select: { content: true },
@@ -76,13 +77,13 @@ function inBackground(task: Promise<unknown>) {
   holder?.get?.()?.waitUntil?.(safe);
 }
 
-/** recebe o webhook da Evolution: grava as mensagens agora; a resposta vem em segundo plano */
-export async function handleEvolutionWebhook(body: unknown) {
-  const cfg = evolutionConfig();
+/** recebe o webhook (Evolution ou uazapi): grava as mensagens agora; a resposta vem em segundo plano */
+export async function handleWhatsAppWebhook(body: unknown) {
+  const cfg = waConfig();
   if (!cfg) return;
   const settings = await getWhatsAppSettings();
   if (!settings.enabled) return;
-  for (const m of parseEvolutionWebhook(body)) {
+  for (const m of parseWebhook(body)) {
     if (m.fromMe) {
       await ownerMessage(m);
       continue;
@@ -103,7 +104,8 @@ async function ownerMessage(m: IncomingMessage) {
 /** grava a mensagem do lead; devolve o que responder (ou null: repetida, pausada, sem cérebro) */
 async function leadMessage(settings: WhatsAppSettings, m: IncomingMessage) {
   const known = await prisma.whatsAppContact.findUnique({ where: { jid: m.jid }, select: { conversationId: true } });
-  if (await alreadyHave(known?.conversationId ?? null, m.waId)) return null; // a Evolution reenviou o mesmo webhook
+  // o serviço reenviou o mesmo webhook (número novo ainda não tem conversa: não há o que repetir)
+  if (known && (await alreadyHave(known.conversationId, m.waId))) return null;
   const contact = await contactFor(m);
   const saved = await addConversationMessage(contact.conversationId, "user", "text", { text: incomingText(m), waId: m.waId }, WA_NODE);
   await prisma.whatsAppContact.update({ where: { id: contact.id }, data: { lastInboundAt: new Date() } });
@@ -115,7 +117,7 @@ async function leadMessage(settings: WhatsAppSettings, m: IncomingMessage) {
 }
 
 /** espera o lead terminar de digitar: se chegou outra mensagem dele, a resposta fica com ela */
-async function answerAfterPause(cfg: EvolutionConfig, settings: WhatsAppSettings, contactId: string, conversationId: string, messageId: string) {
+async function answerAfterPause(cfg: WaConfig, settings: WhatsAppSettings, contactId: string, conversationId: string, messageId: string) {
   await sleep(GATHER_MS);
   const last = await prisma.message.findFirst({ where: { conversationId, sender: "user" }, orderBy: { createdAt: "desc" }, select: { id: true } });
   if (last && last.id !== messageId) return;
@@ -123,7 +125,7 @@ async function answerAfterPause(cfg: EvolutionConfig, settings: WhatsAppSettings
 }
 
 /** o Cérebro responde o contato (textos, prévias, áudios e oferta com PIX) */
-export async function replyWithBrain(cfg: EvolutionConfig, settings: WhatsAppSettings, contactId: string) {
+export async function replyWithBrain(cfg: WaConfig, settings: WhatsAppSettings, contactId: string) {
   const contact = await prisma.whatsAppContact.findUnique({ where: { id: contactId } });
   const brain = settings.brainId ? await prisma.brain.findUnique({ where: { id: settings.brainId } }) : null;
   if (!contact || !brain || !brain.active) return;
@@ -250,7 +252,7 @@ export function paymentMessages(name: string, price: string, payment: Pick<Payme
 export async function onWhatsAppPaymentApproved(payment: Payment) {
   if (!payment.conversationId) return;
   const contact = await prisma.whatsAppContact.findFirst({ where: { conversationId: payment.conversationId } });
-  const cfg = evolutionConfig();
+  const cfg = waConfig();
   if (!contact || !cfg) return;
   const settings = await getWhatsAppSettings();
   const es = settings.language !== "pt-BR";

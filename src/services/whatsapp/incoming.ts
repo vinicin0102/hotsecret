@@ -1,4 +1,5 @@
-// Mensagens que chegam da Evolution (evento messages.upsert) → formato simples. Sem banco: dá para testar isolado.
+// Mensagens que chegam da Evolution (evento messages.upsert) ou da uazapi (EventType "messages") → formato simples.
+// Sem banco: dá para testar isolado.
 
 export interface IncomingMessage {
   /** id da mensagem no WhatsApp (evita processar duas vezes) */
@@ -12,6 +13,8 @@ export interface IncomingMessage {
   kind: "text" | "image" | "audio" | "video" | "sticker" | "other";
   /** texto digitado (ou a legenda da foto/vídeo) */
   text: string;
+  /** enviada pela própria API (eco da resposta do bot) */
+  byApi?: boolean;
 }
 
 type Obj = Record<string, unknown>;
@@ -73,7 +76,7 @@ function parseOne(data: Obj): IncomingMessage | null {
   return { waId, jid, phone, fromMe: key?.fromMe === true, name: str(data.pushName).trim().slice(0, 80) || null, kind, text: text.trim().slice(0, 2000) };
 }
 
-/** mensagens novas do webhook (outros eventos são ignorados) */
+/** mensagens novas do webhook da Evolution (outros eventos são ignorados) */
 export function parseEvolutionWebhook(body: unknown): IncomingMessage[] {
   const b = obj(body);
   if (!b) return [];
@@ -95,4 +98,48 @@ export function incomingText(m: IncomingMessage): string {
 /** tempo "digitando..." antes de cada mensagem (ms): mais longa, mais tempo */
 export function typingDelay(text: string): number {
   return Math.min(4500, 1200 + text.length * 35);
+}
+
+/** mensagem da uazapi: { EventType: "messages", message: { chatid, messageid, fromMe, text, mediaType, ... }, chat: {...} } */
+export function parseUazapiWebhook(body: unknown): IncomingMessage[] {
+  const b = obj(body);
+  if (!b) return [];
+  const event = (str(b.EventType) || str(b.event)).toLowerCase();
+  if (event && event !== "messages") return [];
+  const m = obj(b.message);
+  const chat = obj(b.chat);
+  if (!m) return [];
+  const jid = str(m.chatid) || str(chat?.wa_chatid);
+  const waId = str(m.messageid) || str(m.id);
+  if (!jid || !waId) return [];
+  if (m.isGroup === true || chat?.wa_isGroup === true || /@g\.us$|@broadcast$|@newsletter$/.test(jid)) return [];
+  const content = obj(m.content);
+  const text = (str(m.text) || (typeof m.content === "string" ? m.content : str(content?.text) || str(content?.caption))).trim();
+  const media = str(m.mediaType).toLowerCase();
+  const mtype = `${str(m.messageType)} ${str(m.type)}`.toLowerCase();
+  if (/reaction|protocol|revoke|poll/.test(mtype)) return [];
+  const kind: IncomingMessage["kind"] =
+    media === "image" || /image/.test(mtype)
+      ? "image"
+      : media === "ptt" || media === "audio" || /audio/.test(mtype)
+        ? "audio"
+        : media === "video" || /video/.test(mtype)
+          ? "video"
+          : media === "sticker" || /sticker/.test(mtype)
+            ? "sticker"
+            : text
+              ? "text"
+              : "other";
+  if (kind === "other") return [];
+  const alt = str(m.sender_pn) || str(chat?.phone);
+  const phone = /@s\.whatsapp\.net$/.test(jid) ? digits(jid) : alt ? digits(alt.includes("@") ? alt : `${alt}@s.whatsapp.net`) : null;
+  const name = (str(m.senderName) || str(chat?.wa_contactName) || str(chat?.name)).trim().slice(0, 80) || null;
+  return [{ waId, jid, phone, fromMe: m.fromMe === true, name, kind, text: text.slice(0, 2000), byApi: m.wasSentByApi === true }];
+}
+
+/** webhook de qualquer uma das duas (o formato diz de quem é) */
+export function parseWebhook(body: unknown): IncomingMessage[] {
+  const b = obj(body);
+  if (!b) return [];
+  return "EventType" in b || ("message" in b && "chat" in b) ? parseUazapiWebhook(b) : parseEvolutionWebhook(b);
 }

@@ -1,4 +1,4 @@
-// WhatsApp (Evolution API): conexão, webhook, qual Cérebro responde e os contatos (assumir/devolver para a IA).
+// WhatsApp (Evolution API ou uazapi): conexão, webhook, qual Cérebro responde e os contatos (assumir/devolver para a IA).
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminLayout } from "@/components/admin/AdminLayout";
@@ -26,6 +26,7 @@ interface Contact {
 interface Data {
   configured: boolean;
   missing: string[];
+  provider: string | null;
   instance: string | null;
   state: string | null;
   stateError: string | null;
@@ -41,8 +42,8 @@ const NOTICE: Record<Lang, string> = {
 };
 const STATE: Record<string, [string, string]> = {
   open: ["Conectado", "pill-on"],
-  connecting: ["Conectando… (leia o QR Code na Evolution)", ""],
-  close: ["Desconectado — conecte o número na Evolution", ""],
+  connecting: ["Conectando… (leia o QR Code no painel do serviço)", ""],
+  close: ["Desconectado — conecte o número no painel do serviço", ""],
 };
 const fmt = (d: string) => new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
@@ -79,7 +80,7 @@ export default function WhatsAppPage() {
     setMsg(null);
     try {
       await api("/api/admin/whatsapp/webhook", { body: {} });
-      setMsg({ text: "Webhook configurado na Evolution ✓ — mande uma mensagem para o número para testar." });
+      setMsg({ text: "Webhook configurado ✓ — mande uma mensagem para o número para testar." });
     } catch (e) {
       setMsg({ text: e instanceof Error ? e.message : "Erro ao configurar", error: true });
     }
@@ -99,7 +100,7 @@ export default function WhatsAppPage() {
   return (
     <AdminLayout
       title="WhatsApp"
-      subtitle="O Cérebro responde no seu número de WhatsApp pela Evolution API — mesmas falas, prévias, áudios e esteira de ofertas, com o PIX na conversa"
+      subtitle="O Cérebro responde no seu número de WhatsApp (Evolution API ou uazapi) — mesmas falas, prévias, áudios e esteira de ofertas, com o PIX na conversa"
       actions={
         s && (
           <button className="btn btn-primary" onClick={() => void save()} disabled={saved === "saving"}>
@@ -130,14 +131,23 @@ export default function WhatsAppPage() {
                 ))}
               </ul>
               <p className="hint">
-                <code>WHATSAPP_API_URL</code>: endereço da sua Evolution (ex.: https://evo.seudominio.com) · <code>WHATSAPP_API_KEY</code>: a chave
-                (AUTHENTICATION_API_KEY) · <code>WHATSAPP_INSTANCE</code>: o nome da instância.
+                <b>uazapi:</b> <code>WHATSAPP_API_URL</code> = o endereço do servidor (https://SEU-SUBDOMINIO.uazapi.com) ·{" "}
+                <code>WHATSAPP_API_KEY</code> = o token da instância.
+                <br />
+                <b>Evolution API:</b> <code>WHATSAPP_API_URL</code> = o endereço da sua Evolution · <code>WHATSAPP_API_KEY</code> = a chave global
+                (AUTHENTICATION_API_KEY) · <code>WHATSAPP_INSTANCE</code> = o nome da instância.
               </p>
             </>
           ) : (
             <>
               <p className="hint">
-                Instância <b>{data.instance}</b>
+                <b>{data.provider}</b>
+                {data.instance ? (
+                  <>
+                    {" "}
+                    · instância <b>{data.instance}</b>
+                  </>
+                ) : null}
                 {data.stateError ? (
                   <>
                     {" "}
@@ -156,7 +166,7 @@ export default function WhatsAppPage() {
                 <span className="hint">Não compartilhe este endereço: ele tem a senha do webhook.</span>
               </div>
               <button className="btn" onClick={() => void hookUp()}>
-                Configurar webhook na Evolution automaticamente
+                Configurar webhook automaticamente
               </button>
             </>
           )}

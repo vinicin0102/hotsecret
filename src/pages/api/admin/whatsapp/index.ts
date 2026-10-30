@@ -1,21 +1,21 @@
 import { apiHandler, requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { absoluteUrl } from "@/lib/paths";
-import { connectionState, evolutionConfig, missingEvolutionEnv, webhookToken } from "@/services/whatsapp/evolution";
+import { PROVIDER_LABEL, connectionState, missingWaEnv, waConfig, webhookToken } from "@/services/whatsapp/client";
 import { getWhatsAppSettings, saveWhatsAppSettings } from "@/services/whatsapp/settings";
 
-// WhatsApp (Evolution API): estado da conexão, endereço do webhook, configurações e contatos
+// WhatsApp (Evolution API ou uazapi): estado da conexão, endereço do webhook, configurações e contatos
 export default apiHandler({
   GET: async (req) => {
     await requireAdmin(req);
-    const cfg = evolutionConfig();
+    const cfg = waConfig();
     let state: string | null = null;
     let stateError: string | null = null;
     if (cfg) {
       try {
         state = await connectionState(cfg);
       } catch (e) {
-        stateError = e instanceof Error ? e.message.slice(0, 200) : "Erro ao consultar a Evolution";
+        stateError = e instanceof Error ? e.message.slice(0, 200) : "Erro ao consultar o serviço do WhatsApp";
       }
     }
     const contacts = await prisma.whatsAppContact.findMany({ orderBy: { lastInboundAt: "desc" }, take: 60 });
@@ -26,8 +26,9 @@ export default apiHandler({
     );
     return {
       configured: !!cfg,
-      missing: missingEvolutionEnv(),
-      instance: cfg?.instance ?? null,
+      missing: missingWaEnv(),
+      provider: cfg ? PROVIDER_LABEL[cfg.provider] : null,
+      instance: cfg?.instance || null,
       state,
       stateError,
       webhookUrl: cfg ? absoluteUrl(`/api/webhooks/whatsapp?token=${webhookToken(cfg)}`) : null,

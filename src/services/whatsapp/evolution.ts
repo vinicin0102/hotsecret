@@ -1,29 +1,9 @@
 // Evolution API (WhatsApp não oficial): envio de mensagens e configuração da instância.
-// Endereço, chave e instância vêm das variáveis de ambiente — a chave nunca vai ao navegador nem aos logs.
-import { createHmac } from "node:crypto";
-
+// Endereço, chave e instância vêm de client.ts (variáveis de ambiente) — a chave nunca vai ao navegador nem aos logs.
 export interface EvolutionConfig {
   url: string;
   key: string;
   instance: string;
-}
-
-export function evolutionConfig(): EvolutionConfig | null {
-  const url = process.env.WHATSAPP_API_URL?.trim().replace(/\/+$/, "");
-  const key = process.env.WHATSAPP_API_KEY?.trim();
-  const instance = process.env.WHATSAPP_INSTANCE?.trim();
-  if (!url || !key || !instance) return null;
-  return { url: /^https?:\/\//.test(url) ? url : `https://${url}`, key, instance };
-}
-
-/** quais variáveis faltam (só os nomes) */
-export function missingEvolutionEnv(): string[] {
-  return ["WHATSAPP_API_URL", "WHATSAPP_API_KEY", "WHATSAPP_INSTANCE"].filter((k) => !process.env[k]?.trim());
-}
-
-/** token do endereço do webhook: derivado da chave (não precisa de outra variável e muda junto com ela) */
-export function webhookToken(cfg: EvolutionConfig): string {
-  return createHmac("sha256", cfg.key).update("hotsecret-whatsapp-webhook").digest("hex").slice(0, 40);
 }
 
 export class EvolutionError extends Error {
