@@ -9,6 +9,12 @@ const priceForAi = (cents: number, currency: unknown) =>
 export type Msg = { sender: string; type: string; content: unknown };
 
 /** Histórico da conversa em texto para a IA (inclui o roteiro do fluxo antes do Cérebro). */
+/** o que o combo da mensagem libera, como a IA lê */
+function comboText(combo: unknown, call: boolean): string {
+  const c = (combo ?? {}) as { whatsapp?: boolean; vip?: boolean };
+  return [c.whatsapp ? "WhatsApp pessoal, número borrado até o PIX" : "", call ? "chamada de vídeo" : "", c.vip ? "Grupo VIP" : ""].filter(Boolean).join(" + ");
+}
+
 export function toTurns(messages: Msg[]): ChatTurn[] {
   const turns: ChatTurn[] = [];
   for (const m of messages) {
@@ -42,7 +48,7 @@ export function toTurns(messages: Msg[]): ChatTurn[] {
       case "offer":
         turns.push({
           role: "bot",
-          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : c.style === "live" ? (c.vipButton ? `mostrou o botão "${String(c.ctaLabel || "FAZER LIGAÇÃO PRIVADA")}" (o lead toca para ver a oferta) da oferta` : "abriu o upgrade do canal VIP ao vivo com a oferta") : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? priceForAi(c.price, c.currency) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
+          text: `[${c.style === "call" ? "ligou para o lead (chamada de vídeo) com a oferta" : c.style === "tarot" ? "mostrou as cartas de tarot viradas da oferta" : c.style === "live" ? (c.combo ? `abriu o pop-up do combo (${comboText(c.combo, !!c.hasVideo)}) com a oferta` : c.vipButton ? `mostrou o botão "${String(c.ctaLabel || "FAZER LIGAÇÃO PRIVADA")}" (o lead toca para ver a oferta) da oferta` : "abriu o upgrade do canal VIP ao vivo com a oferta") : "mostrou o card da oferta"} ${String(c.headline || c.name || "")} — ${typeof c.price === "number" ? priceForAi(c.price, c.currency) : ""}${c.aiOfferId ? ` (offer_id "${String(c.aiOfferId)}")` : ""}]`,
         });
         break;
       case "checkout":

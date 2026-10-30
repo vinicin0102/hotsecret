@@ -5632,6 +5632,97 @@ button.msc-btn {
   margin-top: 14px;
 }
 
+/* oferta "WhatsApp pessoal" do Cérebro no chat: o contato, o preço e o botão; pago, o botão de chamar */
+.wau-card {
+  border-color: rgba(37, 211, 102, 0.4);
+}
+.wau-card .wau-contact {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  gap: 12px;
+}
+.wau-card .wau-avatar {
+  width: 48px;
+  height: 48px;
+}
+.wau-card .wau-cta {
+  background: linear-gradient(180deg, #2bd46d, #1faa53);
+  box-shadow: 0 8px 24px rgba(37, 211, 102, 0.35);
+}
+.wau-card .wau-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 14px 12px;
+  text-decoration: none;
+  background: linear-gradient(90deg, #1faa53, #25d366 55%, #1faa53);
+  box-shadow: 0 8px 26px rgba(37, 211, 102, 0.4);
+}
+/* combo sem WhatsApp: foto e título no topo do card; os itens do combo em etiquetas */
+.combo-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.combo-head .wau-avatar {
+  width: 44px;
+  height: 44px;
+}
+.combo-head b {
+  font-size: 15px;
+  line-height: 1.25;
+}
+.combo-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+.combo-items span {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.combo-done {
+  margin-top: 10px;
+  text-align: center;
+  font-weight: 800;
+  color: #7ee2a8;
+}
+.vipu-done-sheet .wau-vip,
+.wau-card .wau-vip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  text-decoration: none;
+}
+/* combo: Grupo VIP e o link do produto embaixo do botão do WhatsApp */
+.vipu-done-sheet .wau-extra,
+.wau-card .wau-extra {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 13px 12px;
+  font-size: 14px;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+.wau-card .wau-loading {
+  margin-top: 10px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* câmera do lead na chamada: o quadrinho "Você" vira a prévia da câmera (espelhada, como no celular) */
 button.call-self {
   padding: 0;

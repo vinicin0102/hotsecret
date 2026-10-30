@@ -32,7 +32,7 @@ export default apiHandler({
       const brainId = (node.content as AiContent).brainId;
       const brain = brainId ? await prisma.brain.findUnique({ where: { id: brainId } }) : null;
       const offers = brain ? brainOffers(brain) : [];
-      const withVideo = offers.filter((o) => (o.style === "call" || o.style === "live") && o.videoId);
+      const withVideo = offers.filter((o) => (o.style === "call" || o.style === "live" || o.style === "combo") && o.videoId);
       // vídeo escolhido na ligação de voz para o produto vendido no fim dela
       const voice = brain && productId ? brainVoiceCalls(brain).find((v) => v.videoId && voiceCallProductId(v, offers) === productId) : undefined;
       videoId = voice?.videoId ?? withVideo.find((o) => o.productId === productId || o.downsellProductId === productId)?.videoId;

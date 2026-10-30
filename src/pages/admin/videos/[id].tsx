@@ -749,7 +749,7 @@ export default function VideoEditorPage() {
                     id="ve-m-wa-benefits"
                     className="textarea"
                     rows={4}
-                    placeholder={"Meu número pessoal, falando direto comigo\nConversa só nós dois, no privado\nFotos e áudios que não mando em lugar nenhum"}
+                    placeholder={"Meu número pessoal, só pra você\nConversa só nós dois, no privado\nFotos e áudios que não mando em lugar nenhum"}
                     value={(selMarker.vip?.benefits ?? []).join("\n")}
                     onChange={(e) => setMarker({ vip: { ...(selMarker.vip ?? {}), benefits: e.target.value.split("\n") } })}
                   />

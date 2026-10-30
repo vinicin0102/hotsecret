@@ -19,6 +19,7 @@ import { Particles } from "./Particles";
 import { BgVideo } from "./BgVideo";
 import { VipAccessCard, VipPreviewCard } from "./VipPreviewCard";
 import type { VipPreviewCard as VipCard } from "@/services/vip";
+import { ComboOfferCard, comboOffer, WhatsAppContact, WhatsAppDoneSheet } from "./WhatsAppOffer";
 import { LiveHeader, LiveIncomingCall, LivePreviewButton, LivePreviewCard, VipExitModal, VipOfferCard, VipOfferModal, VipPaySheet } from "./LiveChannel";
 
 /** cadeado do botão + oferta */
@@ -67,6 +68,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   const engine = useChatEngine(funnel, transport, resume, { hold: ringing });
   const i18n = useMemo(() => makeChatI18n(asChatLocale(funnel.locale)), [funnel.locale]);
   const { t } = i18n;
+  // combo: os textos em branco ganham os padrões do combo (ou do WhatsApp, quando é só ele)
+  const vipOffer = engine.vipOffer?.combo ? comboOffer(engine.vipOffer, funnel.character, t) : engine.vipOffer;
   const bgVideo = funnel.appearance?.bgVideoUrl || null;
   /** tema mensageiro (balões verdes, fundo escuro com desenhos) */
   const messenger = funnel.appearance?.theme === "messenger" && !live;
@@ -248,6 +251,19 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             </div>
           );
         }
+        if (offer.style === "live" && offer.combo) {
+          return (
+            <ComboOfferCard
+              key={item.id}
+              offer={offer}
+              product={product}
+              character={funnel.character}
+              transport={transport}
+              bought={bought}
+              onOpen={() => engine.openVip(item.nodeId, item.productId, item.offer)}
+            />
+          );
+        }
         if (offer.style === "live") {
           return <VipOfferCard key={item.id} offer={offer} product={product} bought={bought} onOpen={() => engine.openVip(item.nodeId, item.productId, item.offer)} />;
         }
@@ -399,19 +415,30 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             }}
           />
         )}
-        {engine.vip && engine.vipOffer && engine.vip.phase === "offer" && (
+        {engine.vip && vipOffer && engine.vip.phase === "offer" && (
           <VipOfferModal
-            offer={engine.vipOffer}
-            product={funnel.products[engine.vip.productId ?? engine.vipOffer.productId]}
-            basic={engine.vipOffer.downsellProductId ? funnel.products[engine.vipOffer.downsellProductId] : undefined}
+            offer={vipOffer}
+            product={funnel.products[engine.vip.productId ?? vipOffer.productId]}
+            basic={vipOffer.downsellProductId && !vipOffer.combo ? funnel.products[vipOffer.downsellProductId] : undefined}
+            media={vipOffer.combo?.whatsapp ? <WhatsAppContact character={funnel.character} /> : undefined}
             onPick={(pid) => void engine.pickVip(pid)}
             onClose={engine.closeVip}
           />
         )}
-        {engine.vip && engine.vipOffer && engine.vip.phase !== "offer" && (
+        {engine.vip && vipOffer && engine.vip.phase === "done" && !engine.call && (
+          <WhatsAppDoneSheet
+            character={funnel.character}
+            transport={transport}
+            productId={engine.vip.payProductId ?? vipOffer.productId}
+            title={vipOffer.combo?.whatsapp && !vipOffer.combo.vip && !vipOffer.videoId ? t.waUnlocked : t.comboUnlocked}
+            backLabel={t.waBackToChat}
+            onClose={engine.closeVip}
+          />
+        )}
+        {engine.vip && vipOffer && (engine.vip.phase === "pay" || engine.vip.phase === "exit") && (
           <VipPaySheet
             character={funnel.character}
-            offer={engine.vipOffer}
+            offer={vipOffer}
             payment={Object.values(payments)
               .filter((p) => p.offerNodeId === engine.vip!.nodeId && p.productId === engine.vip!.payProductId)
               .sort((a, b) => (a.status === "FAILED" ? 1 : 0) - (b.status === "FAILED" ? 1 : 0))[0]}
@@ -425,7 +452,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
           />
         )}
-        {engine.vip && engine.vipOffer && engine.vip.phase === "exit" && <VipExitModal offer={engine.vipOffer} onStay={engine.stayVip} onLeave={engine.leaveVip} />}
+        {engine.vip && vipOffer && engine.vip.phase === "exit" && <VipExitModal offer={vipOffer} onStay={engine.stayVip} onLeave={engine.leaveVip} />}
         {engine.voice && (
           <VoiceCall
             key={engine.voice.id + engine.voice.nodeId}

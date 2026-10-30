@@ -230,18 +230,30 @@ const brainOfferSchema = z.object({
   pitch: optTxt(2000),
   headline: optTxt(120),
   ctaLabel: optTxt(60),
-  style: z.enum(["card", "call", "tarot", "live"]).optional(),
+  style: z.enum(["card", "call", "tarot", "live", "combo"]).optional(),
   /** chamada de vídeo 02 (style "call"): ao atender, o FREE toca em loop */
   freeLoop: z.boolean().optional(),
   /** botão + oferta (style "live"): no chat só o botão (ctaLabel); tocando, abre a oferta */
   button: z.boolean().optional(),
+  /** combo (style "combo"): WhatsApp pessoal — o número só vira link depois do pagamento aprovado */
+  whatsapp: z.object({ phone: z.string().trim().max(32), message: optTxt(300) }).optional(),
+  /** combo: o mesmo PIX libera este Grupo VIP (a chamada do combo é o videoId) */
+  vipGroupId: z.string().max(64).optional(),
   videoId: z.string().max(64).optional(),
   downsellProductId: z.string().max(64).optional(),
   downsellText: optTxt(200),
   vip: vipTextsSchema.optional(),
   tarotCards: tarotCards.optional(),
   tarotBackUrl: optUrl,
-});
+})
+  .refine((o) => o.style !== "combo" || !o.whatsapp || /^\d{10,15}$/.test(o.whatsapp.phone.replace(/\D/g, "")), {
+    message: "Combo: informe o número do WhatsApp com DDI e DDD (ex.: 55 11 99999-9999)",
+    path: ["whatsapp", "phone"],
+  })
+  .refine((o) => o.style !== "combo" || !!o.whatsapp || !!o.videoId || !!o.vipGroupId, {
+    message: "Combo: escolha pelo menos um item (WhatsApp, chamada de vídeo ou Grupo VIP)",
+    path: ["style"],
+  });
 const brainAudioSchema = z.object({ id, url: url.pipe(z.string().min(1, "Áudio sem arquivo")), when: optTxt(500) });
 
 export const brainSchema = z.object({

@@ -1708,3 +1708,14 @@ code.inline {
     grid-template-columns: 1fr;
   }
 }
+
+/* Cérebro → oferta Combo: os itens que o mesmo PIX libera */
+.combo-edit {
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 8px 0 12px;
+}
+.combo-edit > .checkbox {
+  margin-bottom: 8px;
+}

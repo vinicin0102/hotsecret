@@ -129,6 +129,8 @@ export interface AiReply {
     hasVideo?: boolean;
     /** botão + oferta: no chat só o botão; a oferta abre ao tocar */
     vipButton?: boolean;
+    /** combo: o que o PIX libera (a chamada vem em hasVideo); os links só vêm depois do pagamento (delivery) */
+    combo?: { whatsapp?: boolean; vip?: boolean };
     /** chamada de vídeo 02: ao atender, o FREE toca em loop */
     freeLoop?: boolean;
     tarotCards?: TarotCard[];
@@ -152,7 +154,8 @@ export interface ChatTransport {
   /** formas de pagamento do produto no catálogo do gateway (null = não pede dados) */
   paymentMethods(productId: string): Promise<PayMethods | null>;
   poll(since: string | null): Promise<{ payments: PublicPaymentInfo[]; messages: ServerMessage[]; serverTime: string }>;
-  delivery(productId?: string | null): Promise<{ url: string | null; productName: string }>;
+  /** whatsapp/vipUrl/accessUrl: o que um combo do Cérebro libera */
+  delivery(productId?: string | null): Promise<{ url: string | null; productName: string; whatsapp?: string; vipUrl?: string; accessUrl?: string }>;
   /** conteúdo pago liberado pelos pagamentos aprovados */
   unlock(): Promise<FlowNode[]>;
   /** link do vídeo de visualização única (null = já visualizado) */
@@ -404,7 +407,7 @@ export function createPreviewTransport(
                 headline: o?.headline,
                 ctaLabel: o?.ctaLabel,
                 style: "card",
-                hasVideo: !!(call?.videoId || ((o?.style === "call" || o?.style === "live") && o?.videoId)),
+                hasVideo: !!(call?.videoId || ((o?.style === "call" || o?.style === "live" || o?.style === "combo") && o?.videoId)),
                 ...(call?.previewUrl ? { previewUrl: call.previewUrl, previewTitle: call.previewTitle || undefined } : {}),
               }
             : null,
@@ -438,7 +441,7 @@ export function createPreviewTransport(
         }>(`/api/admin/brains/${cfg.brainId}`);
         // vídeo escolhido na ligação de voz para o produto vendido no fim dela
         videoId = brain.voiceCalls?.find((v) => v.videoId && ((v.offerId ? brain.offers.find((o) => o.id === v.offerId)?.productId : undefined) ?? v.productId) === productId)?.videoId;
-        videoId ||= brain.offers.find((o) => (o.productId === productId || (o as { downsellProductId?: string }).downsellProductId === productId) && (o.style === "call" || o.style === "live"))?.videoId;
+        videoId ||= brain.offers.find((o) => (o.productId === productId || (o as { downsellProductId?: string }).downsellProductId === productId) && (o.style === "call" || o.style === "live" || o.style === "combo"))?.videoId;
       }
       if (!videoId) return null;
       const [{ video }, { products: list }] = await Promise.all([

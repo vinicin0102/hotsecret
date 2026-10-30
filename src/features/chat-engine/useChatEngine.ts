@@ -50,6 +50,9 @@ const lid = () => `l${++localSeq}_${Date.now().toString(36)}`;
 const now = () => new Date().toISOString();
 
 /** hold: o fluxo só começa quando virar false (Canal VIP AO VIVO: depois de atender a ligação da entrada) */
+/** combo que entrega no próprio card (botões do WhatsApp / Grupo VIP depois do pagamento) */
+const comboHasCard = (c: OfferContent["combo"] | undefined) => !!(c?.whatsapp || c?.vip);
+
 export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | null, resume: ResumeState | null, opts: { hold?: boolean } = {}) {
   const hold = !!opts.hold;
   const tx = chatTexts(asChatLocale(funnel.locale));
@@ -106,7 +109,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
    */
   const [vip, setVip] = useState<{
     nodeId: string;
-    phase: "offer" | "pay" | "exit";
+    phase: "offer" | "pay" | "exit" | "done";
     productId?: string;
     offer?: OfferContent;
     payProductId?: string;
@@ -122,8 +125,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const upsellProducts = useRef(new Set<string>());
   /** produtos pagos pelo pop-up da chamada: a entrega é o próprio vídeo (sem botão de acesso no chat) */
   const callProducts = useRef(new Set<string>());
-  /** produtos de ofertas de tarot do Cérebro: o acesso é a revelação das cartas (sem botão "Acessar") */
-  const tarotProducts = useRef(new Set<string>());
+  /** produtos do Cérebro entregues no próprio card (tarot: a revelação das cartas; WhatsApp pessoal: o botão de chamar) — sem botão "Acessar" */
+  const ownCardProducts = useRef(new Set<string>());
 
   const runId = useRef(0);
   /** ofertas exibidas com mensagens de apoio rodando (param no clique em comprar ou na aprovação) */
@@ -379,11 +382,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           downsellText: r.offer.downsellText,
           ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
           ...(r.offer.style === "live"
-            ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}) }
+            ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}), ...(r.offer.combo ? { combo: r.offer.combo } : {}) }
             : {}),
           ...(r.offer.freeLoop ? { freeLoop: true } : {}),
         };
-        if (r.offer.style === "tarot") tarotProducts.current.add(r.offer.productId);
+        if (r.offer.style === "tarot" || comboHasCard(r.offer.combo)) ownCardProducts.current.add(r.offer.productId);
         // botão + oferta: a oferta só abre quando o lead toca no botão
         if (r.offer.style === "live" && !r.offer.vipButton) setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
         if (r.offer.style === "call") {
@@ -679,7 +682,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           void (async () => {
             const isCall = p.status === "APPROVED" ? await grantCallAccess(p.offerNodeId!, p.productId) : false;
             if (target) void run(target);
-            else if (p.status === "APPROVED" && !isCall && !tarotProducts.current.has(p.productId) && getNode(graphRef.current, p.offerNodeId)?.type === "ai") {
+            else if (p.status === "APPROVED" && !isCall && !ownCardProducts.current.has(p.productId) && getNode(graphRef.current, p.offerNodeId)?.type === "ai") {
               // oferta da IA sem ramo "Comprou": botão de acesso do produto e a conversa com a IA continua
               push({ kind: "delivery", id: lid(), nodeId: p.offerNodeId!, productId: p.productId, at: now() });
             }
@@ -739,7 +742,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const c = m.content ?? {};
       if (m.type === "offer" && m.nodeId) {
         const isAi = getNode(graphRef.current, m.nodeId)?.type === "ai";
-        if (isAi && c.style === "tarot" && typeof c.productId === "string") tarotProducts.current.add(c.productId);
+        if (isAi && (c.style === "tarot" || comboHasCard(c.combo as OfferContent["combo"])) && typeof c.productId === "string") ownCardProducts.current.add(c.productId);
         restored.push(
           isAi && typeof c.productId === "string"
             ? {
@@ -761,6 +764,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
                         downsellProductId: (c.downsellProductId as string) || undefined,
                         ...(c.hasVideo ? { videoId: "brain" } : {}),
                         ...(c.vipButton ? { vipButton: true } : {}),
+                        ...(c.combo ? { combo: c.combo as OfferContent["combo"] } : {}),
                       }
                     : {}),
                 },
@@ -1215,10 +1219,16 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
   // pagamento aprovado: fecha a folha (o fluxo segue pelo ramo "Comprou")
   useEffect(() => {
-    if (!vip?.payProductId) return;
+    if (!vip?.payProductId || vip.phase === "done") return;
     const ok = Object.values(payments).some((p) => p.offerNodeId === vip.nodeId && p.productId === vip.payProductId && p.status === "APPROVED");
     if (!ok) return;
     const o = vipOffer(vip);
+    // combo com WhatsApp/Grupo VIP: a folha vira "liberado" com os botões (com chamada, a chamada abre antes)
+    if (comboHasCard(o?.combo)) {
+      setVip({ ...vip, phase: "done" });
+      if (o?.videoId) setCall({ nodeId: vip.nodeId, phase: "active", payProductId: vip.payProductId, ...(vip.productId ? { productId: vip.payProductId } : {}) });
+      return;
+    }
     setVip(null);
     // vídeo escolhido na oferta: a chamada abre direto (o botão "Entrar na chamada" também fica no chat)
     if (o?.videoId) setCall({ nodeId: vip.nodeId, phase: "active", payProductId: vip.payProductId, ...(vip.productId ? { productId: vip.payProductId } : {}) });

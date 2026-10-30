@@ -134,13 +134,17 @@ export async function findGroup(slug: string, allowDraft = false): Promise<Group
   return group;
 }
 
-/** produtos dos upsells "Grupo VIP" das chamadas de vídeo que liberam este grupo */
+/** produtos que liberam este grupo: upsells "Grupo VIP" das chamadas de vídeo e combos "WhatsApp pessoal" do Cérebro */
 export async function upsellGrantProducts(groupId: string): Promise<Set<string>> {
-  const videos = await prisma.video.findMany({ select: { timeline: true } });
+  const [videos, brains] = await Promise.all([prisma.video.findMany({ select: { timeline: true } }), prisma.brain.findMany({ select: { offers: true } })]);
   const ids = new Set<string>();
   for (const v of videos) {
     const markers = (v.timeline as { markers?: { style?: string; vipGroupId?: string; productId?: string }[] } | null)?.markers ?? [];
     for (const m of markers) if (m.style === "vip" && m.vipGroupId === groupId && m.productId) ids.add(m.productId);
+  }
+  for (const b of brains) {
+    const offers = Array.isArray(b.offers) ? (b.offers as { style?: string; vipGroupId?: string; productId?: string }[]) : [];
+    for (const o of offers) if (o?.style === "combo" && o.vipGroupId === groupId && o.productId) ids.add(o.productId);
   }
   return ids;
 }

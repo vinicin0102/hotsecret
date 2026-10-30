@@ -12,6 +12,7 @@ import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
 import { VipPreviewCard } from "@/components/chat/VipPreviewCard";
 import type { VipPreviewCard as VipCard } from "@/services/vip";
 import type { VipOfferTexts } from "@/types/flow";
+import { whatsappDigits, whatsappLink } from "@/lib/whatsapp";
 
 type Provider = "anthropic" | "deepseek" | "qwen";
 interface ProviderSettings {
@@ -39,11 +40,15 @@ const defaultTarot = (): TarotCard[] =>
 interface Offer {
   id: string;
   productId: string;
-  style?: "card" | "call" | "tarot" | "live";
+  style?: "card" | "call" | "tarot" | "live" | "combo";
   /** chamada de vídeo 02 */
   freeLoop?: boolean;
   /** botão + oferta (style "live"): no chat só o botão; tocando, abre a oferta */
   button?: boolean;
+  /** combo: WhatsApp pessoal — número (com DDI) e a mensagem que já vai escrita */
+  whatsapp?: { phone: string; message?: string };
+  /** combo: Grupo VIP liberado junto (a chamada é o videoId) */
+  vipGroupId?: string;
   vip?: VipOfferTexts;
   videoId?: string;
   tarotCards?: TarotCard[];
@@ -95,6 +100,7 @@ interface Product {
   price: number;
   currency?: string;
   active: boolean;
+  deliveryUrl?: string | null;
 }
 type Draft = Omit<Brain, "id"> & { id?: string };
 
@@ -336,7 +342,7 @@ function TestChat({ brain }: { brain: Brain }) {
         messages: string[];
         audio: { url: string; when?: string } | null;
         image: { url: string; when?: string; kind?: string; card?: VipCard } | null;
-        offer: { name: string; price: number; headline: string; style?: string; vipButton?: boolean } | null;
+        offer: { name: string; price: number; headline: string; style?: string; vipButton?: boolean; combo?: unknown } | null;
         end: boolean;
         failure?: string;
         voiceCall?: { id: string } | null;
@@ -362,7 +368,7 @@ function TestChat({ brain }: { brain: Brain }) {
           : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
         ...(r.offer
-          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? (r.offer.vipButton ? "🔒 Botão + oferta" : "🔴 Canal VIP AO VIVO") : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
+          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? (r.offer.combo ? "🎁 Combo" : r.offer.vipButton ? "🔒 Botão + oferta" : "🔴 Canal VIP AO VIVO") : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
           : []),
         ...(r.voiceCall ? [{ role: "bot" as const, text: "📞 Ligou para o lead (no chat de verdade toca a ligação de voz)", voice: true }] : []),
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
@@ -866,6 +872,7 @@ export default function CerebroPage() {
                           ["tarot", "🔮 Cartas de tarot"],
                           ["live", "🔴 Canal VIP AO VIVO"],
                           ["button", "🔒 Botão + oferta"],
+                          ["combo", "🎁 Combo (WhatsApp, chamada, VIP…)"],
                         ] as const
                       ).map(([s, label]) => (
                         <button
@@ -893,6 +900,8 @@ export default function CerebroPage() {
                                 ? { style: "call", freeLoop: true, button: undefined }
                                 : s === "button"
                                   ? { style: "live", button: true, freeLoop: undefined }
+                                : s === "combo"
+                                  ? { style: "combo", freeLoop: undefined, button: undefined, downsellProductId: undefined, ...(o.style === "combo" ? {} : { videoId: undefined, whatsapp: { phone: "", message: "" } }) }
                                 : s === "tarot" && !o.tarotCards?.length
                                   ? { style: s, tarotCards: defaultTarot(), freeLoop: undefined, button: undefined }
                                   : { style: s, freeLoop: undefined, button: undefined },
@@ -923,6 +932,7 @@ export default function CerebroPage() {
                       </p>
                     </>
                   )}
+                  {o.style === "combo" && <ComboOfferEditor offer={o} product={products.find((p) => p.id === o.productId)} videos={videos} groups={vipGroups?.groups ?? []} onChange={(patch) => setOffer(i, patch)} />}
                   {o.style === "live" && (
                     <VipOfferEditor
                       vip={o.vip}
@@ -1072,7 +1082,7 @@ export default function CerebroPage() {
                     {o.style === "live" && o.button ? (
                       <span />
                     ) : (
-                      <input className="input" style={{ maxWidth: 260 }} placeholder="Texto do botão (QUERO ACESSAR ❤️)" value={o.ctaLabel ?? ""} onChange={(e) => setOffer(i, { ctaLabel: e.target.value })} />
+                      <input className="input" style={{ maxWidth: 260 }} placeholder={o.style === "combo" ? "Texto do botão (QUERO O COMBO 🔥)" : "Texto do botão (QUERO ACESSAR ❤️)"} value={o.ctaLabel ?? ""} onChange={(e) => setOffer(i, { ctaLabel: e.target.value })} />
                     )}
                     <div className="row">
                       {/* esteira: a ordem da lista é a ordem em que as ofertas são feitas */}
@@ -1344,5 +1354,154 @@ export default function CerebroPage() {
         )}
       </div>
     </AdminLayout>
+  );
+}
+
+/** combo: o dono escolhe o que o mesmo PIX libera (WhatsApp pessoal, chamada de vídeo, Grupo VIP) e os textos do pop-up */
+function ComboOfferEditor({
+  offer: o,
+  product,
+  videos,
+  groups,
+  onChange,
+}: {
+  offer: Offer;
+  product: Product | undefined;
+  videos: { id: string; name: string }[];
+  groups: { id: string; name: string; published: boolean }[];
+  onChange: (patch: Partial<Offer>) => void;
+}) {
+  const wa = o.whatsapp;
+  const vip = o.vip ?? {};
+  const link = wa ? whatsappLink(wa.phone, wa.message) : null;
+  const onlyWa = !!wa && !o.videoId && !o.vipGroupId;
+  const items = [wa ? "o WhatsApp" : "", o.videoId ? "a chamada de vídeo" : "", o.vipGroupId ? "o Grupo VIP" : "", product?.deliveryUrl ? "o link de acesso do produto" : ""].filter(Boolean);
+  return (
+    <>
+      <p className="hint">
+        Monte o combo: marque o que o <b>mesmo PIX</b> libera. A IA mostra um pop-up com tudo o que vem no combo e o preço do produto acima; pagou,{" "}
+        {o.videoId ? "a chamada de vídeo começa na hora e, ao desligar, " : ""}aparecem os botões de cada item. No chat fica um card para reabrir a
+        oferta. O número do WhatsApp nunca chega ao celular do lead antes do pagamento aprovado.
+      </p>
+      <div className="combo-edit">
+        <label className="checkbox">
+          <input type="checkbox" checked={!!wa} onChange={(e) => onChange({ whatsapp: e.target.checked ? { phone: "", message: "" } : undefined })} />
+          💬 WhatsApp pessoal
+        </label>
+        {wa && (
+          <>
+            <div className="grid-2">
+              <div className="field">
+                <label htmlFor={`wa-phone-${o.id}`}>Número do WhatsApp (com DDI)</label>
+                <input
+                  id={`wa-phone-${o.id}`}
+                  className="input"
+                  inputMode="tel"
+                  placeholder="+55 11 98765-4321"
+                  value={wa.phone}
+                  onChange={(e) => onChange({ whatsapp: { ...wa, phone: e.target.value } })}
+                />
+                <span className="hint">Brasil começa com 55, México com 52, Argentina com 54.</span>
+              </div>
+              <div className="field">
+                <label htmlFor={`wa-msg-${o.id}`}>Mensagem que já vai escrita</label>
+                <input
+                  id={`wa-msg-${o.id}`}
+                  className="input"
+                  placeholder="Oi amor, vim do chat 😘"
+                  value={wa.message ?? ""}
+                  onChange={(e) => onChange({ whatsapp: { ...wa, message: e.target.value } })}
+                />
+              </div>
+            </div>
+            {!whatsappDigits(wa.phone) && <p className="error-text">Informe o número com DDI e DDD — sem ele não dá para salvar.</p>}
+            {link && (
+              <p className="hint">
+                Teste o link:{" "}
+                <a href={link} target="_blank" rel="noreferrer">
+                  {whatsappLink(wa.phone)} ↗
+                </a>
+              </p>
+            )}
+          </>
+        )}
+        <div className="grid-2">
+          <div className="field">
+            <label htmlFor={`wa-video-${o.id}`}>📹 Chamada de vídeo</label>
+            <select id={`wa-video-${o.id}`} className="select" value={o.videoId ?? ""} onChange={(e) => onChange({ videoId: e.target.value || undefined })}>
+              <option value="">— sem chamada —</option>
+              {videos.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor={`wa-vip-${o.id}`}>👑 Grupo VIP</label>
+            <select id={`wa-vip-${o.id}`} className="select" value={o.vipGroupId ?? ""} onChange={(e) => onChange({ vipGroupId: e.target.value || undefined })}>
+              <option value="">— sem Grupo VIP —</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                  {g.published ? "" : " (rascunho)"}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {o.vipGroupId && groups.find((g) => g.id === o.vipGroupId)?.published === false && (
+          <p className="error-text">Este Grupo VIP está em rascunho: publique-o para o botão aparecer.</p>
+        )}
+        {items.length ? (
+          <p className="hint">
+            Este PIX libera: <b>{items.join(" + ")}</b>.
+          </p>
+        ) : (
+          <p className="error-text">Escolha pelo menos um item do combo.</p>
+        )}
+      </div>
+      <div className="field">
+        <label htmlFor={`wa-title-${o.id}`}>Título do pop-up</label>
+        <input
+          id={`wa-title-${o.id}`}
+          className="input"
+          placeholder={onlyWa ? "Quer meu WhatsApp pessoal? Só pra você 🤫" : "Tudo isso num PIX só 🔥"}
+          value={vip.title ?? ""}
+          onChange={(e) => onChange({ vip: { ...vip, title: e.target.value } })}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor={`wa-intro-${o.id}`}>Frase acima dos benefícios</label>
+        <input
+          id={`wa-intro-${o.id}`}
+          className="input"
+          placeholder={onlyWa ? "No meu WhatsApp você ganha:" : "No combo você ganha:"}
+          value={vip.intro ?? ""}
+          onChange={(e) => onChange({ vip: { ...vip, intro: e.target.value } })}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor={`wa-benefits-${o.id}`}>Benefícios (um por linha)</label>
+        <textarea
+          id={`wa-benefits-${o.id}`}
+          className="textarea"
+          rows={4}
+          placeholder={
+            onlyWa
+              ? "Meu número pessoal, só pra você\nConversa só nós dois, no privado\nFotos e áudios que não mando em lugar nenhum"
+              : [wa ? "Meu WhatsApp pessoal, só pra você" : "", o.videoId ? "Chamada de vídeo comigo, liberada na hora" : "", o.vipGroupId ? "Acesso ao meu Grupo VIP" : ""]
+                  .filter(Boolean)
+                  .join("\n") || "Um benefício por linha"
+          }
+          value={(vip.benefits ?? []).join("\n")}
+          onChange={(e) => onChange({ vip: { ...vip, benefits: e.target.value.split("\n") } })}
+        />
+        <span className="hint">
+          Cada linha vira um ⭐ no pop-up. Vazio: usa o exemplo acima (um por item do combo).
+          {wa ? " Se quem responde esse número não for ela em pessoa (uma equipe ou uma IA), não prometa \"falando direto comigo\"." : ""}
+        </span>
+      </div>
+    </>
   );
 }

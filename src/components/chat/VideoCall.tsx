@@ -12,6 +12,7 @@ import { withBase } from "@/lib/paths";
 import { OfferCard } from "./OfferCard";
 import { VipOfferModal, VipPaySheet } from "./LiveChannel";
 import type { OfferContent } from "@/types/flow";
+import { WhatsAppContact, WhatsAppDoneSheet, whatsappOffer } from "./WhatsAppOffer";
 
 /** Toque de celular sintetizado (sem arquivo) + vibração, enquanto a chamada está tocando. */
 export function useRingtone(active: boolean) {
@@ -1192,76 +1193,15 @@ function WhatsAppUpsell({
 }) {
   const { t } = useChatI18n();
   const [paying, setPaying] = useState(false);
-  const [link, setLink] = useState<string | null | undefined>(undefined);
-  const [attempt, setAttempt] = useState(0);
   const p = marker.product;
-  const written = (marker.vip?.benefits ?? []).map((b) => b.trim()).filter(Boolean);
-  const offer: OfferContent = {
-    productId: p.id,
-    style: "live",
-    vip: {
-      badge: t.waUpsellTag,
-      title: marker.text || t.waUpsellText,
-      highlight: character.name,
-      intro: marker.vip?.intro?.trim() || t.waIntro,
-      benefits: written.length ? written : t.waBenefits,
-      completeLabel: marker.ctaLabel || t.waCta,
-      payTitle: t.waPixTitle,
-      paySubtitle: character.name,
-    },
-  };
+  const offer = whatsappOffer(
+    { productId: p.id, vip: { intro: marker.vip?.intro, benefits: marker.vip?.benefits } },
+    character,
+    t,
+    { title: marker.text, ctaLabel: marker.ctaLabel },
+  );
 
-  // pagou: busca o link (o pagamento pode levar um instante para constar como aprovado no servidor)
-  useEffect(() => {
-    if (!bought || !transport) return;
-    let alive = true;
-    let tries = 0;
-    const load = () =>
-      transport
-        .delivery(p.id)
-        .then((r) => alive && setLink(r.url))
-        .catch(() => {
-          if (!alive) return;
-          if (++tries < 4) setTimeout(load, 1500);
-          else setLink(null);
-        });
-    setLink(undefined);
-    load();
-    return () => {
-      alive = false;
-    };
-  }, [bought, transport, p.id, attempt]);
-
-  if (bought) {
-    return (
-      <div className="vip-sheet vipu-done-sheet wau-done" role="dialog" aria-label={t.waUnlocked}>
-        <div className="wau-avatar">
-          {character.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={character.avatarUrl} alt="" />
-          ) : (
-            <span>{character.name.slice(0, 1)}</span>
-          )}
-        </div>
-        <div className="vip-sheet-title">{t.waUnlocked}</div>
-        <div className="vip-sheet-sub">{character.name}</div>
-        {link ? (
-          <a className="vip-copy vipu-open wau-open" href={link} target="_blank" rel="noopener">
-            <ChatBubbleIcon /> {t.waOpen}
-          </a>
-        ) : link === null ? (
-          <button className="vip-copy vipu-open wau-open" onClick={() => setAttempt((a) => a + 1)}>
-            {t.waRetry}
-          </button>
-        ) : (
-          <div className="vip-sheet-sub wau-loading">{t.waLoading}</div>
-        )}
-        <button className="vipu-back" onClick={onContinue}>
-          {t.vipBackToCall}
-        </button>
-      </div>
-    );
-  }
+  if (bought) return <WhatsAppDoneSheet character={character} transport={transport} productId={p.id} backLabel={t.vipBackToCall} onClose={onContinue} />;
   if (paying) {
     return <VipPaySheet character={character} offer={offer} payment={payment} error={error} onClose={onContinue} onSimulate={onSimulate} />;
   }
@@ -1270,47 +1210,13 @@ function WhatsAppUpsell({
       offer={offer}
       product={p as PublicProduct}
       basic={undefined}
-      media={
-        <div className="wau-contact">
-          <div className="wau-avatar">
-            {character.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={character.avatarUrl} alt="" />
-            ) : (
-              <span>{character.name.slice(0, 1)}</span>
-            )}
-            <i className="wau-badge">
-              <ChatBubbleIcon />
-            </i>
-          </div>
-          <div className="wau-who">
-            <b>{character.name}</b>
-            <small>
-              <span className="wau-dot" /> {t.waOnline}
-            </small>
-            <span className="wau-number" aria-hidden="true">
-              +•• •• •••••-••••
-            </span>
-          </div>
-        </div>
-      }
+      media={<WhatsAppContact character={character} />}
       onPick={() => {
         setPaying(true);
         onBuy();
       }}
       onClose={onContinue}
     />
-  );
-}
-
-function ChatBubbleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l2-5.5A8.4 8.4 0 1 1 21 11.5z" />
-      <circle cx="8.5" cy="11.5" r="1" fill="currentColor" stroke="none" />
-      <circle cx="12.5" cy="11.5" r="1" fill="currentColor" stroke="none" />
-      <circle cx="16.5" cy="11.5" r="1" fill="currentColor" stroke="none" />
-    </svg>
   );
 }
 

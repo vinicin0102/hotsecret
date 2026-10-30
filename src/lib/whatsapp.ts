@@ -25,6 +25,16 @@ export function whatsappLinkForProduct(markers: Pick<UpsellMarker, "style" | "pr
   return null;
 }
 
+/** link do WhatsApp do combo do Cérebro que vende este produto (o primeiro com número válido) */
+export function whatsappLinkForOffer(offers: { style?: string; productId: string; whatsapp?: { phone?: string; message?: string } }[], productId: string): string | null {
+  for (const o of offers) {
+    if (o.style !== "combo" || o.productId !== productId) continue;
+    const link = whatsappLink(o.whatsapp?.phone, o.whatsapp?.message);
+    if (link) return link;
+  }
+  return null;
+}
+
 /** o que vai para o navegador antes de pagar: o upsell sem o número */
 export function publicMarker<M extends Pick<UpsellMarker, "whatsapp">>(m: M): Omit<M, "whatsapp"> {
   const { whatsapp: _hidden, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars

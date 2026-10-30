@@ -48,13 +48,17 @@ export interface BrainOffer {
   headline?: string;
   ctaLabel?: string;
   /** card: card de compra · call: chamada de vídeo recebida (vídeo da aba Vídeos) */
-  style?: "card" | "call" | "tarot" | "live";
+  style?: "card" | "call" | "tarot" | "live" | "combo";
   /** chamada de vídeo 02 (style "call"): ao atender, o lead já vê o trecho FREE em loop e paga para liberar o VIP */
   freeLoop?: boolean;
   /** canal VIP AO VIVO: textos do upgrade/pagamento (o 2º ingresso, acesso básico, é o downsellProductId) */
   vip?: VipOfferTexts;
   /** botão + oferta (style "live"): no chat aparece só o botão (texto em ctaLabel); tocando, abre a oferta → PIX → vídeo */
   button?: boolean;
+  /** combo: WhatsApp pessoal (pop-up com o número borrado → PIX → link da conversa). O número nunca sai do servidor antes do pagamento */
+  whatsapp?: { phone: string; message?: string };
+  /** combo: o mesmo PIX libera este Grupo VIP (a chamada do combo é o videoId) */
+  vipGroupId?: string;
   videoId?: string;
   tarotCards?: TarotCard[];
   tarotBackUrl?: string;
@@ -238,6 +242,12 @@ export function brainImages(brain: Pick<Brain, "images">): BrainMedia[] {
 export function tarotCardsOf(o: { tarotCards?: TarotCard[] }): TarotCard[] {
   return (o.tarotCards ?? []).filter((c) => c?.id && (c.name || c.imageUrl || c.meaning));
 }
+/** o que o combo libera num PIX só (para a IA) */
+export function comboItems(o: Pick<BrainOffer, "whatsapp" | "videoId" | "vipGroupId">): string {
+  return [o.whatsapp?.phone ? "seu WhatsApp pessoal" : "", o.videoId ? "chamada de vídeo com você" : "", o.vipGroupId ? "acesso ao seu Grupo VIP" : ""]
+    .filter(Boolean)
+    .join(" + ");
+}
 /** formato da oferta mostrado ao lead + cartas do tarot só com id/posição (a leitura vem depois do pagamento) */
 export function publicOfferFormat(o: BrainOffer): {
   style: "card" | "call" | "tarot" | "live";
@@ -250,7 +260,16 @@ export function publicOfferFormat(o: BrainOffer): {
   freeLoop?: boolean;
   /** botão + oferta: no chat só o botão; a oferta abre ao tocar */
   vipButton?: boolean;
+  /** combo: o que o PIX libera (a chamada vem em hasVideo; o número do WhatsApp nunca vai junto) */
+  combo?: { whatsapp?: boolean; vip?: boolean };
 } {
+  if (o.style === "combo")
+    return {
+      style: "live",
+      vip: o.vip ?? {},
+      combo: { ...(o.whatsapp?.phone ? { whatsapp: true } : {}), ...(o.vipGroupId ? { vip: true } : {}) },
+      ...(o.videoId ? { hasVideo: true } : {}),
+    };
   if (o.style === "call" && o.videoId) return { style: "call", ...(o.freeLoop ? { freeLoop: true } : {}) };
   if (o.style === "live") return { style: "live", vip: o.vip ?? {}, ...(o.videoId ? { hasVideo: true } : {}), ...(o.button ? { vipButton: true } : {}) };
   const cards = o.style === "tarot" ? tarotCardsOf(o) : [];
@@ -341,6 +360,9 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
           ? `  Formato: aparece no chat um BOTÃO "${o.ctaLabel || "FAZER LIGAÇÃO PRIVADA"}"; quando o lead toca, ele vê a oferta${o.videoId ? " e, depois do PIX, começa a chamada de vídeo com você" : " e paga pelo PIX ali mesmo"}. Avise para ele tocar no botão.`
           : o.style === "live"
           ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO${o.videoId ? " (depois do pagamento começa a chamada de vídeo com você)" : ""} com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
+          : "",
+        o.style === "combo"
+          ? `  Formato: COMBO — abre um pop-up com tudo o que o mesmo PIX libera: ${comboItems(o) || "o produto"}.${o.whatsapp?.phone ? " O número do WhatsApp aparece borrado; depois do PIX ele recebe o botão para chamar no WhatsApp. Nunca escreva nem invente o número no chat." : ""}${o.videoId ? " Depois do PIX a chamada de vídeo começa na hora." : ""}`
           : "",
         o.style === "tarot"
           ? `  Formato: aparecem ${tarotCardsOf(o).length || 3} CARTAS DE TAROT viradas no chat; o lead toca nelas para ver o preço e, depois do PIX, as cartas são reveladas com a leitura. Você não sabe quais são as cartas: nunca invente nem antecipe a leitura — crie mistério e curiosidade.`
@@ -670,7 +692,7 @@ async function runBrainWith(input: {
     ...Object.fromEntries(
       validOffers.map((o) => [
         o.id,
-        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? (o.button ? " — botão de ligação privada" : " — canal VIP ao vivo") : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
+        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? (o.button ? " — botão de ligação privada" : " — canal VIP ao vivo") : o.style === "combo" ? ` — combo: ${comboItems(o)}` : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
       ]),
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
@@ -689,7 +711,7 @@ ${
       validOffers
         .map((o) => {
           const p = products.get(o.productId)!;
-          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : o.style === "live" && o.button ? " | formato: botão no chat (o lead toca, vê a oferta e paga)" : ""}`;
+          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : o.style === "live" && o.button ? " | formato: botão no chat (o lead toca, vê a oferta e paga)" : o.style === "combo" ? ` | formato: combo (${comboItems(o)}) num PIX só` : ""}`;
         })
         .join("\n") || "(nenhuma)"
     }
@@ -985,7 +1007,7 @@ export function notedCall(
       const byId = id ? offers.find((o) => o.id === id) : undefined;
       if (byId) return { offer: byId, voiceCall: null };
       if (/\bvoz\b/.test(k) && voiceCalls.length && !/liga[cç][aã]o de voz/.test(past)) return { offer: null, voiceCall: voiceCalls[0] };
-      const call = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId);
+      const call = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId) ?? offers.find((o) => o.style === "combo" && o.videoId);
       if (call) return { offer: call, voiceCall: null };
     }
   }
@@ -1078,7 +1100,7 @@ export function assistReply(
   const lastBots = history.filter((t) => t.role === "bot").slice(-3).map((t) => t.text).join("\n");
   const shownRecently = (o: BrainOffer) => lastBots.includes(`offer_id "${o.id}"`);
   // chamada de vídeo: depois de uma recusa, só convida de novo depois de 4 mensagens do lead
-  const callOffer = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId);
+  const callOffer = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId) ?? offers.find((o) => o.style === "combo" && o.videoId);
   const leadSince = (marker: string) => {
     const i = history.map((t) => t.text).lastIndexOf(marker);
     return { i, n: i < 0 ? Infinity : history.slice(i + 1).filter((t) => t.role === "lead" && !t.text.startsWith("[")).length };
