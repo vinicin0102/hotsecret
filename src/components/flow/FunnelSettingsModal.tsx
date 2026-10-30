@@ -44,6 +44,10 @@ export function FunnelSettingsModal({
   const [delay, setDelay] = useState<FunnelDelay>({ ...DEFAULT_FUNNEL_DELAY, ...(meta.settings?.delay ?? {}) });
   const [applied, setApplied] = useState<number | null>(null);
   const [tracking, setTracking] = useState<TrackingIds>({ ...(meta.settings?.tracking ?? {}) });
+  // pixels da Meta do fluxo, um por linha (o pixel único de antes entra na lista)
+  const [metaText, setMetaText] = useState(
+    (meta.settings?.tracking?.metaPixelIds?.length ? meta.settings.tracking.metaPixelIds : [meta.settings?.tracking?.metaPixelId ?? ""]).filter(Boolean).join("\n"),
+  );
   const [recovery, setRecovery] = useState<RecoverySettings>({ ...DEFAULT_RECOVERY, ...(meta.settings?.recovery ?? {}) });
   const [appearance, setAppearance] = useState<ChatAppearance>({ bgDim: 35, ...(meta.settings?.appearance ?? {}) });
   const [locale, setLocale] = useState<"pt-BR" | "es-MX" | "es-AR">(
@@ -70,7 +74,9 @@ export function FunnelSettingsModal({
     setError(null);
     try {
       const cleanLive: LiveSettings = { ...live, previews: (live.previews ?? []).filter(livePreviewReady) };
-      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking, appearance, locale, live: cleanLive } });
+      const metaPixelIds = [...new Set(metaText.split(/[\s,;]+/).map((v) => v.trim()).filter(Boolean))];
+      const cleanTracking: TrackingIds = { ...tracking, metaPixelId: undefined, metaPixelIds: metaPixelIds.length ? metaPixelIds : undefined };
+      await onSave({ ...m, settings: { ...(m.settings ?? {}), recovery, delay, tracking: cleanTracking, appearance, locale, live: cleanLive } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -373,13 +379,28 @@ export function FunnelSettingsModal({
 
       <div className="section-title">Pixels deste fluxo</div>
       <p className="hint" style={{ marginTop: -4 }}>
-        Deixe vazio para usar os pixels padrão (Configurações → Pixels e rastreamento). Preencha só se este fluxo usa outra conta de anúncios.
+        Deixe vazio para usar os pixels padrão (Configurações → Pixels e rastreamento). Preencha só se este fluxo usa outra(s) conta(s) de anúncios.
       </p>
+      <div className="field">
+        <label htmlFor="fp-meta">Pixels da Meta deste fluxo (um por linha)</label>
+        <textarea
+          id="fp-meta"
+          className="textarea"
+          rows={2}
+          inputMode="numeric"
+          placeholder="padrão (todos os pixels das Configurações)"
+          value={metaText}
+          onChange={(e) => setMetaText(e.target.value)}
+        />
+        {metaText.trim() && (
+          <label className="checkbox" style={{ marginTop: 6 }}>
+            <input type="checkbox" checked={!!tracking.metaWithDefault} onChange={(e) => setTracking({ ...tracking, metaWithDefault: e.target.checked })} />
+            Marcar também os pixels padrão (Configurações)
+          </label>
+        )}
+        <span className="hint">Todos os pixels da lista recebem todos os eventos. O token da API de Conversões de cada pixel vem das Configurações.</span>
+      </div>
       <div className="grid-2">
-        <div className="field">
-          <label htmlFor="fp-meta">Pixel da Meta</label>
-          <input id="fp-meta" className="input" inputMode="numeric" placeholder="padrão" value={tracking.metaPixelId ?? ""} onChange={(e) => setTracking({ ...tracking, metaPixelId: e.target.value })} />
-        </div>
         <div className="field">
           <label htmlFor="fp-tiktok">Pixel do TikTok</label>
           <input id="fp-tiktok" className="input" placeholder="padrão" value={tracking.tiktokPixelId ?? ""} onChange={(e) => setTracking({ ...tracking, tiktokPixelId: e.target.value })} />

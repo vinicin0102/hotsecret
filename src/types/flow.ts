@@ -231,7 +231,12 @@ export const DEFAULT_FUNNEL_DELAY: FunnelDelay = { mode: "auto" };
 
 /** IDs públicos dos pixels (vão ao navegador). Tokens secretos ficam só no servidor. */
 export interface TrackingIds {
+  /** legado: um pixel da Meta só (hoje é o 1º de metaPixelIds) */
   metaPixelId?: string;
+  /** pixels da Meta (várias contas de anúncio): todos recebem PageView, InitiateCheckout e Purchase */
+  metaPixelIds?: string[];
+  /** fluxo com pixels próprios: true = marca também os pixels padrão; false/ausente = só os do fluxo */
+  metaWithDefault?: boolean;
   tiktokPixelId?: string;
   googleTagId?: string;
 }

@@ -126,6 +126,10 @@ export const graphSchema = z
 const emptyToUndef = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : typeof v === "string" ? v.trim() : v);
 export const trackingIdsSchema = z.object({
   metaPixelId: z.preprocess(emptyToUndef, z.string().regex(/^\d{5,20}$/, "Pixel da Meta: só números").optional()),
+  /** fluxo: pixels da Meta próprios (várias contas de anúncio) */
+  metaPixelIds: z.array(z.string().trim().regex(/^\d{5,25}$/, "Pixel da Meta: use só os números do ID do pixel")).max(20).optional(),
+  /** fluxo com pixels próprios: marca também os pixels padrão */
+  metaWithDefault: z.boolean().optional(),
   tiktokPixelId: z.preprocess(emptyToUndef, z.string().regex(/^[A-Z0-9]{10,32}$/i, "Pixel do TikTok inválido").optional()),
   googleTagId: z.preprocess(emptyToUndef, z.string().regex(/^(G|AW|GT)-[A-Z0-9]{4,20}$/i, "Use um ID como G-XXXXXXX").optional()),
 });

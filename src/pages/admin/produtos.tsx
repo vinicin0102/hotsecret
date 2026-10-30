@@ -208,8 +208,8 @@ export default function Products() {
           </div>
           <div className="section-title" style={{ marginTop: 6 }}>Pixel desta oferta (opcional)</div>
           <p className="hint" style={{ marginTop: -4 }}>
-            Preencha só se esta oferta usa outro pixel/conta de anúncios. O InitiateCheckout e a compra dela vão para este pixel no lugar do pixel do fluxo
-            (no navegador e pela API de Conversões). O PageView do chat vai para os dois.
+            Preencha só se esta oferta usa mais um pixel/conta de anúncios. O InitiateCheckout e a compra dela vão para este pixel <b>e</b> para os pixels
+            do fluxo (no navegador e pela API de Conversões).
           </p>
           <div className="grid-2">
             <div className="field">

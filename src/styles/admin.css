@@ -1726,3 +1726,17 @@ code.inline {
   max-height: 220px;
   overflow-y: auto;
 }
+
+/* Configurações → pixels da Meta: um por linha (ID, token, remover) */
+.pixel-row {
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) auto;
+  align-items: start;
+}
+.pixel-row-actions {
+  align-self: end;
+}
+@media (max-width: 720px) {
+  .pixel-row {
+    grid-template-columns: 1fr;
+  }
+}

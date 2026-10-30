@@ -61,39 +61,47 @@ const CONFIG_LABEL: Record<string, string> = {
   blobStorage: "BLOB_READ_WRITE_TOKEN (uploads)",
 };
 
+interface MetaPixelRow {
+  id: string;
+  tokenConfigured: boolean;
+  tokenHint: string;
+  /** token novo digitado (vazio = manter) */
+  token?: string;
+  removeToken?: boolean;
+}
 interface TrackingForm {
-  metaPixelId: string;
+  metaPixels: MetaPixelRow[];
   tiktokPixelId: string;
   googleTagId: string;
   metaTestEventCode: string;
-  metaCapiConfigured: boolean;
-  metaCapiHint: string;
 }
 
 /** Pixels padrão (valem para todos os fluxos que não definirem os próprios). */
 function PixelsCard() {
   const { data, reload } = useFetch<{ tracking: TrackingForm }>("/api/admin/tracking");
   const [form, setForm] = useState<TrackingForm | null>(null);
-  const [token, setToken] = useState("");
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const f = form ?? data?.tracking ?? null;
   if (!f) return <div className="card">Carregando pixels...</div>;
-  const set = (k: keyof TrackingForm, v: string) => setForm({ ...f, [k]: v });
+  const set = (k: "tiktokPixelId" | "googleTagId" | "metaTestEventCode", v: string) => setForm({ ...f, [k]: v });
+  const setPixel = (i: number, patch: Partial<MetaPixelRow>) => setForm({ ...f, metaPixels: f.metaPixels.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+  const addPixel = () => setForm({ ...f, metaPixels: [...f.metaPixels, { id: "", tokenConfigured: false, tokenHint: "" }] });
+  const removePixel = (i: number) => setForm({ ...f, metaPixels: f.metaPixels.filter((_, j) => j !== i) });
 
-  const save = async (removeToken = false) => {
+  const save = async () => {
     setMsg(null);
     try {
       await api("/api/admin/tracking", {
         method: "PUT",
         body: {
-          metaPixelId: f.metaPixelId,
+          metaPixels: f.metaPixels
+            .filter((p) => p.id.trim())
+            .map((p) => ({ id: p.id.trim(), ...(p.removeToken ? { token: "" } : p.token?.trim() ? { token: p.token.trim() } : {}) })),
           tiktokPixelId: f.tiktokPixelId,
           googleTagId: f.googleTagId,
           metaTestEventCode: f.metaTestEventCode,
-          ...(removeToken ? { metaCapiToken: "" } : token.trim() ? { metaCapiToken: token.trim() } : {}),
         },
       });
-      setToken("");
       setForm(null);
       await reload();
       setMsg({ text: "Pixels salvos ✓" });
@@ -109,10 +117,67 @@ function PixelsCard() {
         Eventos enviados automaticamente: <b>PageView</b> (abriu o chat), <b>InitiateCheckout</b> (clicou na oferta) e <b>Purchase</b> (pagamento
         confirmado pelo gateway, com o valor). Valem para todos os fluxos — cada fluxo pode usar pixels próprios em ⚙ Configurar.
       </p>
+
+      <div className="section-title">Pixels da Meta (Facebook / Instagram)</div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        Um pixel por conta de anúncios — <b>todos recebem todos os eventos</b>. O token da API de Conversões envia a venda pelo servidor assim que o
+        pagamento é confirmado (conta a venda mesmo se o lead fechar a página, comum no PIX); a Meta não duplica o evento do pixel e do servidor.
+        Gere o token em Gerenciador de Eventos → pixel → Configurações → API de Conversões → “Gerar token de acesso”. Sem token próprio, o pixel usa
+        o primeiro token da lista.
+      </p>
+      {f.metaPixels.map((p, i) => (
+        <div key={i} className="settings-grid pixel-row" style={{ gap: 12 }}>
+          <div className="field">
+            <label htmlFor={`px-meta-${i}`}>Pixel {i + 1} — ID</label>
+            <input
+              id={`px-meta-${i}`}
+              className="input"
+              inputMode="numeric"
+              placeholder="Ex.: 123456789012345"
+              value={p.id}
+              onChange={(e) => setPixel(i, { id: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor={`px-token-${i}`}>Token da API de Conversões</label>
+            <input
+              id={`px-token-${i}`}
+              className="input"
+              type="password"
+              autoComplete="off"
+              placeholder={p.tokenConfigured && !p.removeToken ? `Configurado (${p.tokenHint}) — cole outro para trocar` : "Cole o token aqui"}
+              value={p.token ?? ""}
+              onChange={(e) => setPixel(i, { token: e.target.value, removeToken: false })}
+            />
+            <span className="hint">
+              {p.tokenConfigured && !p.removeToken ? <span className="check-ok">✓ Ativo</span> : "Sem token"} · fica só no servidor, criptografado.
+              {p.tokenConfigured && (
+                <>
+                  {" "}
+                  <label className="checkbox" style={{ display: "inline-flex", marginLeft: 6 }}>
+                    <input type="checkbox" checked={!!p.removeToken} onChange={(e) => setPixel(i, { removeToken: e.target.checked, token: "" })} />
+                    remover token
+                  </label>
+                </>
+              )}
+            </span>
+          </div>
+          <div className="field pixel-row-actions">
+            <button className="btn btn-ghost btn-sm" onClick={() => removePixel(i)} aria-label={`Remover pixel ${i + 1}`}>
+              Remover
+            </button>
+          </div>
+        </div>
+      ))}
+      <button className="btn btn-sm" style={{ marginBottom: 14 }} onClick={addPixel}>
+        + Adicionar pixel da Meta
+      </button>
+
       <div className="settings-grid" style={{ gap: 12 }}>
         <div className="field">
-          <label htmlFor="px-meta">Pixel da Meta (Facebook / Instagram)</label>
-          <input id="px-meta" className="input" inputMode="numeric" placeholder="Ex.: 123456789012345" value={f.metaPixelId} onChange={(e) => set("metaPixelId", e.target.value)} />
+          <label htmlFor="px-test">Código de teste da Meta (opcional)</label>
+          <input id="px-test" className="input" placeholder="Ex.: TEST12345" value={f.metaTestEventCode} onChange={(e) => set("metaTestEventCode", e.target.value)} />
+          <span className="hint">Use para ver os eventos em “Testar eventos” na Meta. Apague depois de testar.</span>
         </div>
         <div className="field">
           <label htmlFor="px-tiktok">Pixel do TikTok</label>
@@ -123,44 +188,10 @@ function PixelsCard() {
           <input id="px-google" className="input" placeholder="Ex.: G-XXXXXXXXXX" value={f.googleTagId} onChange={(e) => set("googleTagId", e.target.value)} />
         </div>
       </div>
-
-      <div className="section-title">API de Conversões da Meta (recomendado)</div>
-      <p className="hint" style={{ marginTop: -4 }}>
-        Envia a venda pelo servidor assim que o pagamento é confirmado — conta a venda mesmo se o lead fechar a página (comum no PIX) e não é
-        bloqueada por navegadores. A Meta não duplica: o mesmo evento do pixel e do servidor é contado uma vez. Gere o token em Gerenciador de
-        Eventos → seu pixel → Configurações → API de Conversões → “Gerar token de acesso”.
-      </p>
-      <div className="settings-grid" style={{ gap: 12 }}>
-        <div className="field">
-          <label htmlFor="px-token">Token de acesso</label>
-          <input
-            id="px-token"
-            className="input"
-            type="password"
-            autoComplete="off"
-            placeholder={f.metaCapiConfigured ? `Configurado (${f.metaCapiHint}) — cole outro para trocar` : "Cole o token aqui"}
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-          />
-          <span className="hint">{f.metaCapiConfigured ? <span className="check-ok">✓ Ativo</span> : "Não configurado"} · fica só no servidor, nunca aparece na página.</span>
-        </div>
-        <div className="field">
-          <label htmlFor="px-test">Código de teste (opcional)</label>
-          <input id="px-test" className="input" placeholder="Ex.: TEST12345" value={f.metaTestEventCode} onChange={(e) => set("metaTestEventCode", e.target.value)} />
-          <span className="hint">Use para ver os eventos em “Testar eventos” na Meta. Apague depois de testar.</span>
-        </div>
-      </div>
       {msg && <div className={msg.error ? "error-text" : "check-ok"} style={{ marginBottom: 10 }}>{msg.text}</div>}
-      <div className="row" style={{ flexWrap: "wrap" }}>
-        <button className="btn btn-primary btn-sm" onClick={() => save()}>
-          Salvar pixels
-        </button>
-        {f.metaCapiConfigured && (
-          <button className="btn btn-ghost btn-sm" onClick={() => confirm("Remover o token da API de Conversões?") && save(true)}>
-            Remover token
-          </button>
-        )}
-      </div>
+      <button className="btn btn-primary btn-sm" onClick={() => save()}>
+        Salvar pixels
+      </button>
     </div>
   );
 }

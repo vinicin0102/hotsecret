@@ -40,7 +40,7 @@ export function initPixels(ids: TrackingIds | undefined, offerPixels: string[] =
   if (typeof window === "undefined" || (!ids && !offerPixels.length)) return;
   const w = window as W;
   active = ids ?? {};
-  const metaIds = [...new Set([ids?.metaPixelId, ...offerPixels].filter((v): v is string => !!v && /^\d{6,25}$/.test(v)))];
+  const metaIds = [...new Set([...flowMetaPixels(), ...offerPixels].filter((v) => /^\d{5,25}$/.test(v)))];
 
   if (metaIds.length && !w.fbq) {
     const n = function (...args: unknown[]) {
@@ -112,16 +112,25 @@ interface PixelProduct {
   id: string;
   /** id do evento — o mesmo é usado na API de Conversões para não contar duas vezes */
   eventId: string;
-  /** pixel da Meta próprio da oferta (no lugar do pixel do fluxo) */
+  /** pixel da Meta próprio da oferta (recebe junto com os pixels do fluxo) */
   metaPixelId?: string | null;
   /** BRL ou MXN */
   currency?: string | null;
 }
 
-/** Evento da Meta só para um pixel: o da oferta, se tiver; senão o do fluxo. */
+/** pixels da Meta do fluxo (todas as contas de anúncio) */
+function flowMetaPixels(): string[] {
+  return [...new Set([...(active.metaPixelIds ?? []), active.metaPixelId].filter((v): v is string => !!v))];
+}
+
+/**
+ * Evento da Meta para cada pixel do fluxo e para o pixel da oferta (se tiver). trackSingle: os pixels de outras
+ * ofertas, iniciados para o PageView, não recebem. O mesmo eventID em todos: cada pixel deduplica com a API de Conversões.
+ */
 function metaTrack(w: W, event: string, data: Record<string, unknown>, p: PixelProduct) {
-  const target = p.metaPixelId || active.metaPixelId;
-  if (target) w.fbq?.("trackSingle", target, event, data, { eventID: p.eventId });
+  for (const target of new Set([...flowMetaPixels(), ...(p.metaPixelId ? [p.metaPixelId] : [])])) {
+    w.fbq?.("trackSingle", target, event, data, { eventID: p.eventId });
+  }
 }
 
 export function pixelInitiateCheckout(p: PixelProduct) {

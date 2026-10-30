@@ -2,7 +2,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getGlobalTracking, publicTracking } from "./tracking-settings";
+import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
 
 export const SHOWCASE_LOCALES = ["pt-BR", "es-MX", "es-AR"] as const;
 export type ShowcaseLocale = (typeof SHOWCASE_LOCALES)[number];
@@ -136,7 +136,7 @@ export async function publicShowcase(slug: string, allowDraft = false) {
     locale: s.locale as ShowcaseLocale,
     published: s.published,
     cards,
-    tracking: publicTracking(await getGlobalTracking()),
+    tracking: publicTracking(mergeTracking(await getGlobalTracking())),
   };
 }
 export type PublicShowcase = NonNullable<Awaited<ReturnType<typeof publicShowcase>>>;
