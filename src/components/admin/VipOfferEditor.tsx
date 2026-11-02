@@ -40,6 +40,8 @@ export function VipOfferEditor({
 }) {
   const v = vip ?? {};
   const set = (patch: Partial<VipOfferTexts>) => onChange({ ...v, ...patch });
+  /** tema WhatsApp com conversa escrita: ela substitui título, destaque, frase e benefícios no pop-up */
+  const chatOn = v.theme === "whatsapp" && (v.waChat ?? []).some((m) => m.text?.trim());
   const field = (key: keyof VipOfferTexts, label: string, placeholder: string) => (
     <div className="field">
       <label>{label}</label>
@@ -131,24 +133,36 @@ export function VipOfferEditor({
           </div>
         </div>
       )}
-      <div className="grid-2">
-        {field("badge", "Selo do topo", "UPGRADE EXCLUSIVO 💎")}
-        {field("intro", "Frase acima dos benefícios", "Libere a ligação privada completa e ganhe acesso a:")}
-      </div>
-      <div className="grid-2">
-        {field("title", "Título", "QUER O ACESSO")}
-        {field("highlight", "Título em destaque (verde)", "TOTAL? 💦")}
-      </div>
-      <div className="field">
-        <label>Benefícios (um por linha)</label>
-        <textarea
-          className="textarea"
-          rows={4}
-          placeholder={"Tiro a roupa toda pra você 😍\nPasso meu WhatsApp pessoal agora 📱"}
-          value={(v.benefits ?? []).join("\n")}
-          onChange={(e) => set({ benefits: linesOf(e.target.value) })}
-        />
-      </div>
+      {chatOn ? (
+        <>
+          {field("badge", "Selo do topo", "UPGRADE EXCLUSIVO 💎")}
+          <p className="hint vip-wide">
+            💬 A <b>Conversa do pop-up</b> está preenchida: o pop-up mostra essas mensagens no lugar de título, destaque, frase e benefícios (por isso
+            esses campos não aparecem aqui). Para voltar a usá-los, apague as mensagens da conversa.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="grid-2">
+            {field("badge", "Selo do topo", "UPGRADE EXCLUSIVO 💎")}
+            {field("intro", "Frase acima dos benefícios", "Libere a ligação privada completa e ganhe acesso a:")}
+          </div>
+          <div className="grid-2">
+            {field("title", "Título", "QUER O ACESSO")}
+            {field("highlight", "Título em destaque (verde)", "TOTAL? 💦")}
+          </div>
+          <div className="field">
+            <label>Benefícios (um por linha)</label>
+            <textarea
+              className="textarea"
+              rows={4}
+              placeholder={"Tiro a roupa toda pra você 😍\nPasso meu WhatsApp pessoal agora 📱"}
+              value={(v.benefits ?? []).join("\n")}
+              onChange={(e) => set({ benefits: linesOf(e.target.value) })}
+            />
+          </div>
+        </>
+      )}
       <div className="grid-2">
         {field("completeLabel", "Botão do ingresso 1", "ACESSO COMPLETO")}
         {field("basicLabel", "Botão do ingresso 2", "ACESSO BÁSICO")}
@@ -216,7 +230,8 @@ function WaChatEditor({ vip: v, onChange }: { vip: VipOfferTexts; onChange: (pat
       <label>Conversa do pop-up</label>
       <span className="hint">
         Escreva as mensagens como numa conversa do WhatsApp. <b>Ela</b> = balão cinza (recebido); <b>Lead</b> = balão verde (enviado, com ✓✓). Use{" "}
-        <code>{"{nome}"}</code> para o nome dela. O preço e o botão aparecem sozinhos no fim. Vazio: usa o título, a frase e os benefícios.
+        <code>{"{nome}"}</code> para o nome dela. O preço e o botão aparecem sozinhos no fim. Com mensagens aqui, título, destaque, frase e benefícios
+        deixam de valer (somem do editor); sem nenhuma, o pop-up usa esses campos.
       </span>
       {chat.map((m, i) => (
         <div key={i} className="wa-chat-row">
