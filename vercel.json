@@ -1,5 +1,8 @@
 {
   "buildCommand": "npm run vercel-build",
+  "regions": [
+    "iad1"
+  ],
   "crons": [
     {
       "path": "/hot-secret/api/cron/recovery",
