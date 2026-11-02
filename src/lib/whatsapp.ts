@@ -28,14 +28,14 @@ export function whatsappLink(phone: string | null | undefined, message?: string 
   return `https://wa.me/${d}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
 }
 
-/** link do upsell "WhatsApp pessoal" que vende este produto (o primeiro com número válido) */
+/** link do upsell que vende este produto com número de WhatsApp ("WhatsApp pessoal" ou oferta com o número; o primeiro válido) */
 export function whatsappLinkForProduct(
-  markers: Pick<UpsellMarker, "style" | "productId" | "whatsapp">[],
+  markers: Pick<UpsellMarker, "style" | "productId" | "basicProductId" | "whatsapp" | "vip">[],
   productId: string,
   currency?: string | null,
 ): string | null {
   for (const m of markers) {
-    if (m.style !== "whatsapp" || m.productId !== productId) continue;
+    if (!markerSendsWhatsapp(m) || (m.productId !== productId && m.basicProductId !== productId)) continue;
     const link = whatsappLink(m.whatsapp?.phone, m.whatsapp?.message, currency);
     if (link) return link;
   }
@@ -56,8 +56,13 @@ export function whatsappLinkForOffer(
   return null;
 }
 
-/** o que vai para o navegador antes de pagar: o upsell sem o número */
-export function publicMarker<M extends Pick<UpsellMarker, "whatsapp">>(m: M): Omit<M, "whatsapp"> {
-  const { whatsapp: _hidden, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return rest;
+/** o que vai para o navegador antes de pagar: o upsell sem o número (oferta com número: só o aviso de que há o botão) */
+export function publicMarker<M extends Pick<UpsellMarker, "whatsapp" | "style" | "vip">>(m: M): Omit<M, "whatsapp"> & { whatsappAfter?: true } {
+  const { whatsapp, ...rest } = m;
+  return { ...rest, ...(markerSendsWhatsapp(m) ? { whatsappAfter: true as const } : {}) };
+}
+
+/** o upsell entrega o WhatsApp depois do pagamento: "WhatsApp pessoal", ou oferta no tema WhatsApp com o número */
+export function markerSendsWhatsapp(m: Pick<UpsellMarker, "whatsapp" | "style" | "vip">): boolean {
+  return !!whatsappDigits(m.whatsapp?.phone) && (m.style === "whatsapp" || m.vip?.theme === "whatsapp");
 }

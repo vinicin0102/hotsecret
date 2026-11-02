@@ -422,6 +422,8 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                 videos={videos}
                 videoId={(c.videoId as string) || undefined}
                 onVideoChange={(id) => setContent({ videoId: id })}
+                whatsapp={c.whatsapp as { phone: string; message?: string } | undefined}
+                onWhatsappChange={(whatsapp) => setContent({ whatsapp })}
               />
             )}
             <div className="field">

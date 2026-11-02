@@ -70,6 +70,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   const { t } = i18n;
   // combo: os textos em branco ganham os padrões do combo (ou do WhatsApp, quando é só ele)
   const vipOffer = engine.vipOffer?.combo ? comboOffer(engine.vipOffer, funnel.character, t, funnel.products) : engine.vipOffer;
+  // depois de pago, a oferta com WhatsApp mostra o "liberado" com o botão (comboHasCard no motor)
   const bgVideo = funnel.appearance?.bgVideoUrl || null;
   /** tema mensageiro (balões verdes, fundo escuro com desenhos) */
   const messenger = funnel.appearance?.theme === "messenger" && !live;
@@ -235,7 +236,8 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
           (p) => p.offerNodeId === item.nodeId && p.status === "APPROVED" && (!item.productId || p.productId === item.productId),
         );
         const offer = item.offer ?? (node?.content as OfferContent) ?? { productId: "" };
-        if (offer.style === "live" && offer.vipButton) {
+        // botão + oferta com WhatsApp: depois de pago, o card com o botão de chamar no WhatsApp
+        if (offer.style === "live" && offer.vipButton && !(bought && offer.whatsappAfter)) {
           return (
             <div key={item.id} className="msg-row bot">
               <button className={`vip-unlock-btn${offer.vip?.theme === "whatsapp" ? " theme-wa" : ""}`} onClick={() => engine.openVip(item.nodeId, item.productId, item.offer)} disabled={bought}>
@@ -251,11 +253,11 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             </div>
           );
         }
-        if (offer.style === "live" && offer.combo) {
+        if (offer.style === "live" && (offer.combo || offer.whatsappAfter)) {
           return (
             <ComboOfferCard
               key={item.id}
-              offer={offer}
+              offer={offer.combo ? offer : { ...offer, combo: { whatsapp: true } }}
               product={product}
               products={funnel.products}
               character={funnel.character}
@@ -432,7 +434,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             character={funnel.character}
             transport={transport}
             productId={engine.vip.payProductId ?? vipOffer.productId}
-            title={vipOffer.combo?.whatsapp && !vipOffer.combo.vip && !vipOffer.combo.products?.length && !vipOffer.videoId ? t.waUnlocked : t.comboUnlocked}
+            title={!vipOffer.combo || (vipOffer.combo.whatsapp && !vipOffer.combo.vip && !vipOffer.combo.products?.length && !vipOffer.videoId) ? t.waUnlocked : t.comboUnlocked}
             backLabel={t.waBackToChat}
             onClose={engine.closeVip}
           />

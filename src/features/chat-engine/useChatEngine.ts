@@ -382,11 +382,11 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           downsellText: r.offer.downsellText,
           ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
           ...(r.offer.style === "live"
-            ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}), ...(r.offer.combo ? { combo: r.offer.combo } : {}) }
+            ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}), ...(r.offer.combo ? { combo: r.offer.combo } : {}), ...(r.offer.whatsappAfter ? { whatsappAfter: true } : {}) }
             : {}),
           ...(r.offer.freeLoop ? { freeLoop: true } : {}),
         };
-        if (r.offer.style === "tarot" || comboHasCard(r.offer.combo)) ownCardProducts.current.add(r.offer.productId);
+        if (r.offer.style === "tarot" || comboHasCard(r.offer.combo) || r.offer.whatsappAfter) ownCardProducts.current.add(r.offer.productId);
         // botão + oferta: a oferta só abre quando o lead toca no botão
         if (r.offer.style === "live" && !r.offer.vipButton) setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
         if (r.offer.style === "call") {
@@ -742,7 +742,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const c = m.content ?? {};
       if (m.type === "offer" && m.nodeId) {
         const isAi = getNode(graphRef.current, m.nodeId)?.type === "ai";
-        if (isAi && (c.style === "tarot" || comboHasCard(c.combo as OfferContent["combo"])) && typeof c.productId === "string") ownCardProducts.current.add(c.productId);
+        if (isAi && (c.style === "tarot" || comboHasCard(c.combo as OfferContent["combo"]) || !!c.whatsappAfter) && typeof c.productId === "string") ownCardProducts.current.add(c.productId);
         restored.push(
           isAi && typeof c.productId === "string"
             ? {
@@ -765,6 +765,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
                         ...(c.hasVideo ? { videoId: "brain" } : {}),
                         ...(c.vipButton ? { vipButton: true } : {}),
                         ...(c.combo ? { combo: c.combo as OfferContent["combo"] } : {}),
+                        ...(c.whatsappAfter ? { whatsappAfter: true } : {}),
                       }
                     : {}),
                 },
@@ -1224,7 +1225,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     if (!ok) return;
     const o = vipOffer(vip);
     // combo com WhatsApp/Grupo VIP: a folha vira "liberado" com os botões (com chamada, a chamada abre antes)
-    if (comboHasCard(o?.combo)) {
+    if (comboHasCard(o?.combo) || o?.whatsappAfter) {
       setVip({ ...vip, phase: "done" });
       if (o?.videoId) setCall({ nodeId: vip.nodeId, phase: "active", payProductId: vip.payProductId, ...(vip.productId ? { productId: vip.payProductId } : {}) });
       return;

@@ -182,7 +182,7 @@ export default apiHandler({
           ...(offer.freeLoop ? { freeLoop: true } : {}),
           // canal VIP: os textos e o 2º ingresso voltam quando o lead recarrega a página
           ...(offer.style === "live"
-            ? { vip: (offer.vip ?? {}) as Prisma.InputJsonValue, downsellProductId: offer.downsellProductId ?? null, hasVideo: !!offer.hasVideo, ...(offer.vipButton ? { vipButton: true } : {}), ...(offer.combo ? { combo: offer.combo } : {}) }
+            ? { vip: (offer.vip ?? {}) as Prisma.InputJsonValue, downsellProductId: offer.downsellProductId ?? null, hasVideo: !!offer.hasVideo, ...(offer.vipButton ? { vipButton: true } : {}), ...(offer.combo ? { combo: offer.combo } : {}), ...(offer.whatsappAfter ? { whatsappAfter: true } : {}) }
             : {}),
         } as Prisma.InputJsonValue,
         node.id,

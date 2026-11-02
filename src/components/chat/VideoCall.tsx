@@ -684,7 +684,7 @@ export function CallScreen({
   // upsell pago: mostra "Desbloqueado ✓", fecha e continua o vídeo
   useEffect(() => {
     // upsell "Grupo VIP" / "WhatsApp pessoal": fica aberto com o botão de abrir (ele volta para a chamada quando quiser)
-    if (!upsellDone || upsell?.style === "vip" || upsell?.style === "whatsapp") return;
+    if (!upsellDone || upsell?.style === "vip" || upsell?.style === "whatsapp" || upsell?.whatsappAfter) return;
     const id = setTimeout(() => {
       setUpsell(null);
       void vRef.current?.play().catch(() => undefined);
@@ -810,6 +810,18 @@ export function CallScreen({
       {upsell && upsell.style === "offer" && (() => {
         const offer: OfferContent = { productId: upsell.productId, downsellProductId: upsell.basicProductId, style: "live", vip: upsell.vip };
         const inFree = !paid && !!freePreview;
+        // oferta com número de WhatsApp: pagou, o botão de chamar (o vídeo segue quando ele voltar)
+        if (upsellDone && upsell.whatsappAfter) {
+          return (
+            <WhatsAppDoneSheet
+              character={character}
+              transport={transport}
+              productId={offerPick ?? upsell.productId}
+              backLabel={tx.vipBackToCall}
+              onClose={closeUpsell}
+            />
+          );
+        }
         return offerPick ? (
           <VipPaySheet
             character={character}

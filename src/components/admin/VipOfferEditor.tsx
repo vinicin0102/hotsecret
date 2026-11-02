@@ -2,6 +2,7 @@
 // 2º ingresso (acesso básico), textos do upgrade, mensagens do pagamento e o pop-up de saída.
 import type { VipOfferTexts } from "@/types/flow";
 import { productOption } from "@/lib/format";
+import { missingDdi, whatsappDigits, whatsappLink } from "@/lib/whatsapp";
 import { UploadInput } from "./UploadInput";
 import { withBase } from "@/lib/paths";
 
@@ -18,7 +19,12 @@ export function VipOfferEditor({
   videoId,
   onVideoChange,
   inCall,
+  whatsapp,
+  onWhatsappChange,
 }: {
+  /** tema WhatsApp: número para o botão depois do pagamento (guardado fora dos textos — só sai do servidor depois do PIX) */
+  whatsapp?: { phone: string; message?: string };
+  onWhatsappChange?: (w: { phone: string; message?: string } | undefined) => void;
   /** oferta dentro da chamada (aba Vídeos): sem os campos que só existem no chat (mensagens, imagem bloqueada, pop-up de saída) */
   inCall?: boolean;
   vip: VipOfferTexts | undefined;
@@ -42,7 +48,7 @@ export function VipOfferEditor({
   );
   return (
     <div className="vip-editor">
-      <div className="field">
+      <div className="field vip-wide">
         <label>Tema do pop-up</label>
         <div className="segmented">
           {(
@@ -58,11 +64,13 @@ export function VipOfferEditor({
         </div>
         {v.theme === "whatsapp" && (
           <span className="hint">
-            O pop-up vira uma conversa: barra verde com a foto e o nome dela, benefícios como mensagens recebidas, preço em balão e botão verde — o
-            pagamento e o “vai desistir?” também ficam verdes. Ideal quando a oferta é o número de WhatsApp.
+            O pop-up vira uma conversa: barra verde com a foto e o nome dela, as mensagens abaixo, o preço em balão e o botão verde — o pagamento e o
+            “vai desistir?” também ficam verdes.
           </span>
         )}
       </div>
+      {v.theme === "whatsapp" && <WaChatEditor vip={v} onChange={set} />}
+      {v.theme === "whatsapp" && onWhatsappChange && <WaNumberEditor value={whatsapp} onChange={onWhatsappChange} />}
       {!inCall && (
       <p className="hint" style={{ marginTop: 0 }}>
         Abre um <b>upgrade</b> por cima do chat com os benefícios e dois ingressos. Ao escolher, gera o pagamento numa folha embaixo, com o chat
@@ -174,6 +182,105 @@ export function VipOfferEditor({
         {field("leaveLabel", "Botão para sair", "SOU BROXA 🤏")}
       </div>
       </>
+      )}
+    </div>
+  );
+}
+
+/** tema WhatsApp: a conversa do pop-up, mensagem por mensagem (dela ou do lead) */
+function WaChatEditor({ vip: v, onChange }: { vip: VipOfferTexts; onChange: (patch: Partial<VipOfferTexts>) => void }) {
+  const chat = v.waChat ?? [];
+  const setChat = (next: NonNullable<VipOfferTexts["waChat"]>) => onChange({ waChat: next.length ? next : undefined });
+  const setMsg = (i: number, patch: Partial<NonNullable<VipOfferTexts["waChat"]>[number]>) => setChat(chat.map((m, j) => (j === i ? { ...m, ...patch } : m)));
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= chat.length) return;
+    const next = [...chat];
+    [next[i], next[j]] = [next[j], next[i]];
+    setChat(next);
+  };
+  /** começa a conversa com o que já está nos campos (título, frase, benefícios) */
+  const fromFields = () =>
+    setChat(
+      [
+        [v.title, v.highlight].filter(Boolean).join(" "),
+        v.intro ?? "",
+        ...(v.benefits ?? []),
+      ]
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .map((text) => ({ from: "in" as const, text })),
+    );
+  return (
+    <div className="field wa-chat-editor vip-wide">
+      <label>Conversa do pop-up</label>
+      <span className="hint">
+        Escreva as mensagens como numa conversa do WhatsApp. <b>Ela</b> = balão cinza (recebido); <b>Lead</b> = balão verde (enviado, com ✓✓). Use{" "}
+        <code>{"{nome}"}</code> para o nome dela. O preço e o botão aparecem sozinhos no fim. Vazio: usa o título, a frase e os benefícios.
+      </span>
+      {chat.map((m, i) => (
+        <div key={i} className="wa-chat-row">
+          <select className="select" value={m.from} onChange={(e) => setMsg(i, { from: e.target.value as "in" | "out" })} aria-label={`Quem envia a mensagem ${i + 1}`}>
+            <option value="in">Ela</option>
+            <option value="out">Lead</option>
+          </select>
+          <input className="input" value={m.text} maxLength={400} placeholder="Mensagem…" onChange={(e) => setMsg(i, { text: e.target.value })} aria-label={`Mensagem ${i + 1}`} />
+          <button type="button" className="btn btn-sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Subir mensagem">
+            ↑
+          </button>
+          <button type="button" className="btn btn-sm" disabled={i === chat.length - 1} onClick={() => move(i, 1)} aria-label="Descer mensagem">
+            ↓
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setChat(chat.filter((_, j) => j !== i))} aria-label="Remover mensagem">
+            ✕
+          </button>
+        </div>
+      ))}
+      <div className="row" style={{ flexWrap: "wrap" }}>
+        {chat.length < 15 && (
+          <button type="button" className="btn btn-sm" onClick={() => setChat([...chat, { from: "in", text: "" }])}>
+            + Mensagem
+          </button>
+        )}
+        {!chat.length && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={fromFields}>
+            Começar com os textos atuais
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** tema WhatsApp: o número que o lead recebe depois do pagamento (botão "Chamar no WhatsApp") */
+function WaNumberEditor({ value, onChange }: { value?: { phone: string; message?: string }; onChange: (w: { phone: string; message?: string } | undefined) => void }) {
+  const w = value ?? { phone: "" };
+  const set = (patch: Partial<{ phone: string; message: string }>) => {
+    const next = { ...w, ...patch };
+    onChange(next.phone.trim() || next.message?.trim() ? next : undefined);
+  };
+  const link = whatsappLink(w.phone, w.message);
+  return (
+    <div className="field vip-wide">
+      <label>Botão do WhatsApp depois do pagamento</label>
+      <div className="grid-2">
+        <input className="input" inputMode="tel" placeholder="Número com DDI: +55 11 98765-4321" value={w.phone} onChange={(e) => set({ phone: e.target.value })} aria-label="Número do WhatsApp" />
+        <input className="input" placeholder="Mensagem que já vai escrita (opcional)" value={w.message ?? ""} onChange={(e) => set({ message: e.target.value })} aria-label="Mensagem do WhatsApp" />
+      </div>
+      {w.phone.trim() && !whatsappDigits(w.phone) ? (
+        <p className="error-text">Número inválido — use DDI + DDD + número.</p>
+      ) : w.phone.trim() && missingDdi(w.phone) ? (
+        <p className="error-text">Falta o DDI do país no começo (Brasil 55, México 52, Argentina 54). Sem ele o WhatsApp abre outro número.</p>
+      ) : link ? (
+        <span className="hint">
+          Pagou, aparece <b>“Chamar no WhatsApp”</b> e o lead vai para <b>+{link.slice("https://wa.me/".length).split("?")[0]}</b> ·{" "}
+          <a href={link} target="_blank" rel="noreferrer">
+            testar o link ↗
+          </a>
+          . O número só chega ao celular dele depois do PIX aprovado.
+        </span>
+      ) : (
+        <span className="hint">Vazio: sem botão de WhatsApp depois do pagamento.</span>
       )}
     </div>
   );

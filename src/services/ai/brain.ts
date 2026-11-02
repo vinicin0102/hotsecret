@@ -269,6 +269,8 @@ export function publicOfferFormat(o: BrainOffer): {
   vipButton?: boolean;
   /** combo: o que o PIX libera (a chamada vem em hasVideo; o número do WhatsApp nunca vai junto) */
   combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };
+  /** pagou: botão para o WhatsApp (o número só sai pelo delivery) */
+  whatsappAfter?: boolean;
 } {
   if (o.style === "combo")
     return {
@@ -282,7 +284,14 @@ export function publicOfferFormat(o: BrainOffer): {
       ...(o.videoId ? { hasVideo: true } : {}),
     };
   if (o.style === "call" && o.videoId) return { style: "call", ...(o.freeLoop ? { freeLoop: true } : {}) };
-  if (o.style === "live") return { style: "live", vip: o.vip ?? {}, ...(o.videoId ? { hasVideo: true } : {}), ...(o.button ? { vipButton: true } : {}) };
+  if (o.style === "live")
+    return {
+      style: "live",
+      vip: o.vip ?? {},
+      ...(o.videoId ? { hasVideo: true } : {}),
+      ...(o.button ? { vipButton: true } : {}),
+      ...(o.whatsapp?.phone && o.vip?.theme === "whatsapp" ? { whatsappAfter: true } : {}),
+    };
   const cards = o.style === "tarot" ? tarotCardsOf(o) : [];
   if (cards.length) return { style: "tarot", tarotCards: cards.map((c) => ({ id: c.id, label: c.label })), tarotBackUrl: o.tarotBackUrl || undefined };
   return { style: "card" };

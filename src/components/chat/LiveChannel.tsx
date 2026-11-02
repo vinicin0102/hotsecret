@@ -314,6 +314,7 @@ function WaOfferModal({
   const { t, money } = useChatI18n();
   const time = clock();
   const name = character?.name ?? "";
+  const chat = (v.waChat ?? []).filter((m) => m.text?.trim());
   return (
     <div className="vip-overlay theme-wa" role="dialog" aria-label={v.title || t.vipTitle}>
       <div className="wa-modal">
@@ -337,17 +338,37 @@ function WaOfferModal({
         <div className="wa-chat">
           <div className="wa-chip">{v.badge || t.vipBadge}</div>
           {media && <div className="wa-media">{media}</div>}
-          <div className="wa-msg in">
-            <b>{v.title || t.vipTitle}</b> <span className="wa-hl">{v.highlight || t.vipHighlight}</span>
-            <i>{time}</i>
-          </div>
-          {(benefits.length > 0 || v.intro) && <div className="wa-msg in">{v.intro || t.vipIntro}<i>{time}</i></div>}
-          {benefits.map((b, i) => (
-            <div key={i} className="wa-msg in">
-              {b}
-              <i>{time}</i>
-            </div>
-          ))}
+          {chat.length ? (
+            // conversa escrita pelo dono: mensagens dela (recebidas) e do lead (enviadas, com ✓✓)
+            chat.map((m, i) => (
+              <div key={i} className={`wa-msg ${m.from}`}>
+                {m.text.replace(/\{nome\}/gi, name)}
+                <i>
+                  {time}
+                  {m.from === "out" && <span className="wa-ticks"> ✓✓</span>}
+                </i>
+              </div>
+            ))
+          ) : (
+            <>
+              <div className="wa-msg in">
+                <b>{v.title || t.vipTitle}</b> <span className="wa-hl">{v.highlight || t.vipHighlight}</span>
+                <i>{time}</i>
+              </div>
+              {(benefits.length > 0 || v.intro) && (
+                <div className="wa-msg in">
+                  {v.intro || t.vipIntro}
+                  <i>{time}</i>
+                </div>
+              )}
+              {benefits.map((b, i) => (
+                <div key={i} className="wa-msg in">
+                  {b}
+                  <i>{time}</i>
+                </div>
+              ))}
+            </>
+          )}
           <div className="wa-msg out wa-price">
             {product.originalPrice && product.originalPrice > product.price ? (
               <s>

@@ -946,6 +946,8 @@ export default function CerebroPage() {
                       videos={videos}
                       videoId={o.videoId || undefined}
                       onVideoChange={(id) => setOffer(i, { videoId: id })}
+                      whatsapp={o.whatsapp}
+                      onWhatsappChange={(whatsapp) => setOffer(i, { whatsapp })}
                     />
                   )}
                   {o.style === "call" && (

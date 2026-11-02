@@ -30,6 +30,7 @@ const delaySettings = z.object({
 const lines = (max: number, each: number) => z.array(txt(each)).max(max).transform((a) => a.map((v) => v.trim()).filter(Boolean));
 export const vipTextsSchema = z.object({
   theme: z.enum(["default", "whatsapp"]).optional(),
+  waChat: z.array(z.object({ from: z.enum(["in", "out"]), text: txt(400) })).max(15).optional(),
   previewUrl: optUrl,
   previewTitle: optTxt(80),
   previewButton: optTxt(60),
@@ -76,6 +77,11 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
     downsellProductId: z.string().max(64).optional(),
     downsellText: optTxt(200),
     vip: vipTextsSchema.optional(),
+    /** pagou: botão para o WhatsApp neste número (só sai do servidor depois do pagamento) */
+    whatsapp: z.object({ phone: z.string().trim().max(32), message: optTxt(300) }).optional(),
+  }).refine((o) => !o.whatsapp?.phone || (!!whatsappDigits(o.whatsapp.phone) && !missingDdi(o.whatsapp.phone)), {
+    message: "WhatsApp da oferta: informe o número com o DDI do país no começo (Brasil 55, México 52, Argentina 54)",
+    path: ["whatsapp", "phone"],
   }),
   delivery: z.object({ text: optTxt(1000), productId: z.string().max(64).optional(), buttonLabel: optTxt(60) }),
   link: z.object({ text: optTxt(1000), url, buttonLabel: optTxt(60) }),
@@ -256,6 +262,10 @@ const brainOfferSchema = z.object({
 })
   .refine((o) => o.style !== "combo" || !o.whatsapp || (!!whatsappDigits(o.whatsapp.phone) && !missingDdi(o.whatsapp.phone)), {
     message: "Combo: informe o número do WhatsApp com o DDI do país no começo (Brasil 55, México 52, Argentina 54 — ex.: 55 11 99999-9999)",
+    path: ["whatsapp", "phone"],
+  })
+  .refine((o) => o.style === "combo" || !o.whatsapp?.phone || (!!whatsappDigits(o.whatsapp.phone) && !missingDdi(o.whatsapp.phone)), {
+    message: "WhatsApp da oferta: informe o número com o DDI do país no começo (Brasil 55, México 52, Argentina 54)",
     path: ["whatsapp", "phone"],
   })
   .refine((o) => o.style !== "combo" || !!o.whatsapp || !!o.videoId || !!o.vipGroupId || !!o.comboProductIds?.length, {

@@ -557,6 +557,8 @@ export default function VideoEditorPage() {
               onChange={(vip) => setMarker({ vip })}
               onBasicChange={(id) => setMarker({ basicProductId: id || undefined })}
               inCall
+              whatsapp={selMarker.whatsapp}
+              onWhatsappChange={(whatsapp) => setMarker({ whatsapp })}
             />
             <CurrencyHint products={products} ids={[selMarker.productId, selMarker.basicProductId]} />
             {selMarker.at >= tl.free.end && selMarker.at < tl.vip.start && (

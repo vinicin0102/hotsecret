@@ -3,7 +3,7 @@
 // com várias modelos vendendo o mesmo produto, cada lead recebe o número da conversa em que comprou.
 import type { Brain, Payment, Product } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { whatsappLinkForOffer, whatsappLinkForProduct } from "@/lib/whatsapp";
+import { markerSendsWhatsapp, whatsappLink, whatsappLinkForOffer, whatsappLinkForProduct } from "@/lib/whatsapp";
 import { brainOffers, brainVoiceCalls, type BrainOffer } from "@/services/ai/brain";
 import { vipAccessUrl, withVipAccess } from "@/services/vip";
 import { getWhatsAppSettings } from "@/services/whatsapp/settings";
@@ -14,19 +14,16 @@ const WA_NODE = "whatsapp";
 
 type PaymentRef = Pick<Payment, "funnelId" | "offerNodeId" | "productId">;
 
-/** Cérebro em que a compra aconteceu: o do bloco de IA do fluxo ou o que responde no canal WhatsApp */
-async function purchaseBrainId(payment: PaymentRef): Promise<string | undefined> {
-  if (payment.offerNodeId === WA_NODE) return (await getWhatsAppSettings()).brainId || undefined;
-  if (!payment.funnelId || !payment.offerNodeId) return undefined;
-  const node = await prisma.funnelNode.findUnique({ where: { funnelId_id: { funnelId: payment.funnelId, id: payment.offerNodeId } } });
-  return node?.type === "ai" ? (node.content as { brainId?: string }).brainId : undefined;
+/** bloco do fluxo em que a compra aconteceu (canal WhatsApp não tem bloco) */
+async function purchaseNode(payment: PaymentRef) {
+  if (!payment.funnelId || !payment.offerNodeId || payment.offerNodeId === WA_NODE) return null;
+  return prisma.funnelNode.findUnique({ where: { funnelId_id: { funnelId: payment.funnelId, id: payment.offerNodeId } } });
 }
 
-/** vídeo da chamada do bloco de oferta em que a compra aconteceu */
-async function purchaseVideoId(payment: PaymentRef): Promise<string | undefined> {
-  if (!payment.funnelId || !payment.offerNodeId || payment.offerNodeId === WA_NODE) return undefined;
-  const node = await prisma.funnelNode.findUnique({ where: { funnelId_id: { funnelId: payment.funnelId, id: payment.offerNodeId } } });
-  return node?.type === "offer" ? (node.content as { videoId?: string }).videoId : undefined;
+/** Cérebro em que a compra aconteceu: o do bloco de IA do fluxo ou o que responde no canal WhatsApp */
+async function purchaseBrainId(payment: PaymentRef, node: Awaited<ReturnType<typeof purchaseNode>>): Promise<string | undefined> {
+  if (payment.offerNodeId === WA_NODE) return (await getWhatsAppSettings()).brainId || undefined;
+  return node?.type === "ai" ? (node.content as { brainId?: string }).brainId : undefined;
 }
 
 /**
@@ -34,11 +31,13 @@ async function purchaseVideoId(payment: PaymentRef): Promise<string | undefined>
  * any = os de todos os Cérebros/vídeos (usados só quando a conversa não tem nenhum).
  */
 export async function purchaseSources(payment: PaymentRef) {
-  const [brainId, offerVideoId, brains] = await Promise.all([
-    purchaseBrainId(payment),
-    purchaseVideoId(payment),
-    prisma.brain.findMany({ select: { id: true, offers: true, voiceCalls: true } }),
-  ]);
+  const [node, brains] = await Promise.all([purchaseNode(payment), prisma.brain.findMany({ select: { id: true, offers: true, voiceCalls: true } })]);
+  const brainId = await purchaseBrainId(payment, node);
+  const offerContent =
+    node?.type === "offer"
+      ? (node.content as { videoId?: string; productId?: string; downsellProductId?: string; whatsapp?: { phone?: string; message?: string }; vip?: { theme?: string } })
+      : null;
+  const offerVideoId = offerContent?.videoId;
   const own = brains.find((b) => b.id === brainId);
   const sells = (b: Pick<Brain, "offers">) => brainOffers(b).filter((o) => o.style === "combo" && o.productId === payment.productId);
   const ownCombos = own ? sells(own) : [];
@@ -54,9 +53,29 @@ export async function purchaseSources(payment: PaymentRef) {
   );
   const videos = await prisma.video.findMany({ select: { id: true, timeline: true } });
   const markersOf = (v: { timeline: unknown }) =>
-    ((v.timeline as { markers?: UpsellMarker[] } | null)?.markers ?? []).filter((m) => m.style === "whatsapp" && m.productId === payment.productId);
+    ((v.timeline as { markers?: UpsellMarker[] } | null)?.markers ?? []).filter(
+      (m) => markerSendsWhatsapp(m) && (m.productId === payment.productId || m.basicProductId === payment.productId),
+    );
   const ownMarkers = videos.filter((v) => ownVideoIds.has(v.id)).flatMap(markersOf);
-  return { combos, ownCombos: ownCombos.length > 0, markers: ownMarkers.length ? ownMarkers : videos.flatMap(markersOf), ownMarkers: ownMarkers.length > 0 };
+  // oferta (bloco do fluxo ou do Cérebro) com número de WhatsApp para depois do pagamento
+  const nodeWhatsapp =
+    offerContent?.whatsapp?.phone &&
+    offerContent.vip?.theme === "whatsapp" &&
+    (offerContent.productId === payment.productId || offerContent.downsellProductId === payment.productId)
+      ? offerContent.whatsapp
+      : undefined;
+  const brainWhatsapp = own
+    ? brainOffers(own).find(
+        (o) => o.style !== "combo" && !!o.whatsapp?.phone && o.vip?.theme === "whatsapp" && (o.productId === payment.productId || o.downsellProductId === payment.productId),
+      )?.whatsapp
+    : undefined;
+  return {
+    combos,
+    ownCombos: ownCombos.length > 0,
+    markers: ownMarkers.length ? ownMarkers : videos.flatMap(markersOf),
+    ownMarkers: ownMarkers.length > 0,
+    offerWhatsapp: nodeWhatsapp ?? brainWhatsapp,
+  };
 }
 
 export interface Delivered {
@@ -83,7 +102,7 @@ async function productAccess(product: Pick<Product, "id" | "deliveryUrl">, leadI
 export async function deliveryFor(payment: Payment & { product: Product }, leadId: string): Promise<Delivered> {
   const productName = payment.product.name;
   const accessUrl = (await withVipAccess(payment.product.deliveryUrl, leadId)) ?? undefined;
-  const { combos, markers, ownMarkers } = await purchaseSources(payment);
+  const { combos, markers, ownMarkers, offerWhatsapp } = await purchaseSources(payment);
 
   if (combos.length) {
     const combo: BrainOffer = combos.find((o) => o.whatsapp?.phone) ?? combos[0];
@@ -106,7 +125,10 @@ export async function deliveryFor(payment: Payment & { product: Product }, leadI
       ...(items.length ? { items } : {}),
     };
   }
-  // upsell "WhatsApp pessoal" do editor de vídeo: o da chamada em que ele comprou vale mesmo com link de acesso no produto
+  // oferta do bloco/Cérebro em que ele comprou, com o número de WhatsApp para depois do pagamento
+  const offerLink = offerWhatsapp ? whatsappLink(offerWhatsapp.phone, offerWhatsapp.message, payment.currency) : null;
+  if (offerLink) return { productName, url: offerLink, whatsapp: offerLink, ...(accessUrl ? { accessUrl } : {}) };
+  // upsell com número de WhatsApp do editor de vídeo: o da chamada em que ele comprou vale mesmo com link de acesso no produto
   if (ownMarkers || !accessUrl) {
     const whatsapp = whatsappLinkForProduct(markers, payment.productId, payment.currency);
     if (whatsapp) return { productName, url: whatsapp, whatsapp, ...(accessUrl ? { accessUrl } : {}) };

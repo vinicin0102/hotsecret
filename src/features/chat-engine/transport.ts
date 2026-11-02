@@ -131,6 +131,8 @@ export interface AiReply {
     vipButton?: boolean;
     /** combo: o que o PIX libera (a chamada vem em hasVideo); os links só vêm depois do pagamento (delivery) */
     combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };
+    /** pagou: botão para o WhatsApp (o link vem do delivery) */
+    whatsappAfter?: boolean;
     /** chamada de vídeo 02: ao atender, o FREE toca em loop */
     freeLoop?: boolean;
     tarotCards?: TarotCard[];

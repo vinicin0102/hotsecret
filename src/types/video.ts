@@ -58,6 +58,8 @@ export interface UpsellMarker {
   vipGroupId?: string;
   /** whatsapp: número (com DDI) e a mensagem que já vai escrita — só sai do servidor depois do pagamento aprovado */
   whatsapp?: { phone: string; message?: string };
+  /** oferta com número de WhatsApp (o número em si fica no servidor): pagou, aparece o botão para a conversa */
+  whatsappAfter?: boolean;
   screen?: UpsellScreen;
   /** oferta: 2º ingresso (acesso básico) */
   basicProductId?: string;

@@ -92,6 +92,8 @@ export interface TarotCard {
 export interface VipOfferTexts {
   /** visual do pop-up e do pagamento: padrão ou "whatsapp" (conversa verde, benefícios em balões) — para ofertas do número de WhatsApp */
   theme?: "default" | "whatsapp";
+  /** tema WhatsApp: a conversa do pop-up escrita pelo dono (no lugar de título, frase e benefícios) */
+  waChat?: { from: "in" | "out"; text: string }[];
   /** prévia ao tocar no card: vídeo ou foto da live com título ("Já estou começando 🔴") e o botão que já gera o PIX */
   previewUrl?: string;
   previewTitle?: string;
@@ -141,6 +143,10 @@ export interface OfferContent {
   freeLoop?: boolean;
   /** botão + oferta (style "live", Cérebro): no chat só o botão (ctaLabel); tocando, abre a oferta → PIX → vídeo */
   vipButton?: boolean;
+  /** pagou: botão para o WhatsApp (o número fica no servidor e só vem pelo /api/public/delivery depois do pagamento) */
+  whatsappAfter?: boolean;
+  /** só no painel/servidor — nunca vai ao navegador (o fluxo público recebe whatsappAfter no lugar) */
+  whatsapp?: { phone: string; message?: string };
   /** combo (style "live", Cérebro): o que o mesmo PIX libera — WhatsApp pessoal (número borrado até o pagamento), Grupo VIP
    * e outros produtos (ids); a chamada é o videoId */
   combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };

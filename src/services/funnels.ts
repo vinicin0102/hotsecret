@@ -14,6 +14,7 @@ import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, livePreviewReady } from "@/type
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
 import { getGlobalTrackingCached, mergeTracking, publicTracking } from "./tracking-settings";
 import { cached, forget } from "@/lib/memo";
+import { whatsappDigits } from "@/lib/whatsapp";
 import { brainOffers, brainVoiceCalls } from "./ai/brain";
 import { providerNameForCurrency } from "./payments/index";
 import { zenithDefaultPayer } from "./payments/zenith";
@@ -98,6 +99,13 @@ export async function saveGraph(funnelId: string, graph: FlowGraph) {
 
 /** Vídeo de visualização única: o link nunca vai na página, só pelo /api/public/view-once (uma vez por lead). */
 export function publicNode(n: FlowNode): FlowNode {
+  // oferta com WhatsApp: o número fica no servidor; o chat só sabe que depois do pagamento há o botão
+  if (n.type === "offer" && (n.content as { whatsapp?: unknown }).whatsapp) {
+    const { whatsapp, ...rest } = n.content as { whatsapp?: { phone?: string }; vip?: { theme?: string } } & Record<string, unknown>;
+    // o botão só vale no tema WhatsApp (trocar o tema desliga sem apagar o número)
+    const on = !!whatsappDigits(whatsapp?.phone) && (rest.vip as { theme?: string } | undefined)?.theme === "whatsapp";
+    return { ...n, content: { ...rest, ...(on ? { whatsappAfter: true } : {}) } as FlowNode["content"] };
+  }
   if (n.type === "video" && (n.content as { viewOnce?: boolean }).viewOnce) {
     return { ...n, content: { ...(n.content as object), url: "" } as FlowNode["content"] };
   }

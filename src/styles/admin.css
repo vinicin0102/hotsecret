@@ -1762,3 +1762,25 @@ code.inline {
   font-size: 13px;
   margin-bottom: 10px;
 }
+
+/* oferta no tema WhatsApp: a conversa do pop-up, uma mensagem por linha */
+.wa-chat-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto auto auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+@media (max-width: 640px) {
+  .wa-chat-row {
+    grid-template-columns: 80px 1fr auto;
+  }
+  .wa-chat-row button:nth-of-type(1),
+  .wa-chat-row button:nth-of-type(2) {
+    display: none;
+  }
+}
+/* tema do pop-up, conversa e número do WhatsApp ocupam a largura toda do editor da oferta */
+.vip-editor > .vip-wide {
+  grid-column: 1 / -1;
+}
