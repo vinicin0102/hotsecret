@@ -14,5 +14,6 @@ fi
 export DATABASE_URL="$BASE_URL"
 npx prisma generate
 npx prisma migrate deploy
-npx tsx database/seed.ts --if-enabled
+# o seed só garante o admin inicial: banco oscilando nesse segundo não deve impedir a publicação
+npx tsx database/seed.ts --if-enabled || echo "AVISO: seed não rodou (banco indisponível); seguindo com o build."
 npx next build
