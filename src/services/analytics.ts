@@ -2,6 +2,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma, tbl } from "@/lib/prisma";
 
+/** o painel roda estas consultas numa transação com limite de tempo (lib/admin-query.ts); fora dela, o cliente normal */
+type Db = Prisma.TransactionClient;
+
 export const FUNNEL_STEPS = [
   { key: "page_view", label: "Visitantes" },
   { key: "chat_started", label: "Conversas iniciadas" },
@@ -17,8 +20,8 @@ function funnelFilter(funnelId?: string | null) {
   return funnelId ? Prisma.sql`AND "funnelId" = ${funnelId}` : Prisma.empty;
 }
 
-export async function distinctLeadsByType(from: Date, to: Date, funnelId?: string | null) {
-  const rows = await prisma.$queryRaw<{ type: string; count: bigint }[]>`
+export async function distinctLeadsByType(from: Date, to: Date, funnelId?: string | null, db: Db = prisma) {
+  const rows = await db.$queryRaw<{ type: string; count: bigint }[]>`
     SELECT type, COUNT(DISTINCT "leadId") AS count
     FROM ${tbl("events")}
     WHERE "createdAt" BETWEEN ${from} AND ${to} ${funnelFilter(funnelId)}
@@ -26,8 +29,8 @@ export async function distinctLeadsByType(from: Date, to: Date, funnelId?: strin
   return Object.fromEntries(rows.map((r) => [r.type, Number(r.count)])) as Record<string, number>;
 }
 
-export async function funnelSteps(from: Date, to: Date, funnelId?: string | null) {
-  const counts = await distinctLeadsByType(from, to, funnelId);
+export async function funnelSteps(from: Date, to: Date, funnelId?: string | null, db: Db = prisma) {
+  const counts = await distinctLeadsByType(from, to, funnelId, db);
   return FUNNEL_STEPS.map((s, i) => {
     const value = counts[s.key] ?? 0;
     const prev = i === 0 ? value : counts[FUNNEL_STEPS[i - 1].key] ?? 0;
@@ -42,8 +45,8 @@ export async function funnelSteps(from: Date, to: Date, funnelId?: string | null
   });
 }
 
-export async function revenue(from: Date, to: Date, funnelId?: string | null) {
-  const agg = await prisma.payment.aggregate({
+export async function revenue(from: Date, to: Date, funnelId?: string | null, db: Db = prisma) {
+  const agg = await db.payment.aggregate({
     where: { status: "APPROVED", approvedAt: { gte: from, lte: to }, ...(funnelId ? { funnelId } : {}) },
     _sum: { amount: true },
     _count: true,
@@ -51,8 +54,8 @@ export async function revenue(from: Date, to: Date, funnelId?: string | null) {
   return { amount: agg._sum.amount ?? 0, count: agg._count };
 }
 
-export async function dailySeries(from: Date, to: Date, funnelId?: string | null) {
-  const rows = await prisma.$queryRaw<{ day: Date; type: string; count: bigint }[]>`
+export async function dailySeries(from: Date, to: Date, funnelId?: string | null, db: Db = prisma) {
+  const rows = await db.$queryRaw<{ day: Date; type: string; count: bigint }[]>`
     SELECT date_trunc('day', "createdAt" AT TIME ZONE ${TZ}) AS day, type, COUNT(DISTINCT "leadId") AS count
     FROM ${tbl("events")}
     WHERE "createdAt" BETWEEN ${from} AND ${to}
@@ -82,11 +85,11 @@ export async function dailySeries(from: Date, to: Date, funnelId?: string | null
   return [...byDay.values()];
 }
 
-export async function dashboard(from: Date, to: Date) {
+export async function dashboard(from: Date, to: Date, db: Db = prisma) {
   const [counts, rev, series] = await Promise.all([
-    distinctLeadsByType(from, to),
-    revenue(from, to),
-    dailySeries(from, to),
+    distinctLeadsByType(from, to, null, db),
+    revenue(from, to, null, db),
+    dailySeries(from, to, null, db),
   ]);
   return {
     cards: {
@@ -100,10 +103,10 @@ export async function dashboard(from: Date, to: Date) {
   };
 }
 
-/** Visitantes, vendas e conversão por fluxo (lista de fluxos). */
-export async function funnelSummaries(from?: Date) {
-  const since = from ?? new Date(0);
-  const rows = await prisma.$queryRaw<{ funnelId: string; visitors: bigint; sales: bigint }[]>`
+/** Visitantes, vendas e conversão por fluxo (lista de fluxos) — por padrão, dos últimos 30 dias (desde sempre varria a tabela de eventos inteira). */
+export async function funnelSummaries(from?: Date, db: Db = prisma) {
+  const since = from ?? new Date(Date.now() - 30 * 24 * 3600_000);
+  const rows = await db.$queryRaw<{ funnelId: string; visitors: bigint; sales: bigint }[]>`
     SELECT f.id AS "funnelId",
       (SELECT COUNT(DISTINCT e."leadId") FROM ${tbl("events")} e WHERE e."funnelId" = f.id AND e.type = 'page_view' AND e."createdAt" >= ${since}) AS visitors,
       (SELECT COUNT(*) FROM ${tbl("payments")} p WHERE p."funnelId" = f.id AND p.status = 'APPROVED' AND p."createdAt" >= ${since}) AS sales
@@ -114,9 +117,9 @@ export async function funnelSummaries(from?: Date) {
 }
 
 /** Vendas por campanha (UTM). */
-export async function campaigns(from: Date, to: Date, funnelId?: string | null) {
+export async function campaigns(from: Date, to: Date, funnelId?: string | null, db: Db = prisma) {
   const ff = funnelId ? Prisma.sql`AND l."funnelId" = ${funnelId}` : Prisma.empty;
-  const rows = await prisma.$queryRaw<
+  const rows = await db.$queryRaw<
     { source: string | null; campaign: string | null; leads: bigint; checkouts: bigint; sales: bigint; revenue: bigint | null }[]
   >`
     SELECT l."utmSource" AS source, l."utmCampaign" AS campaign,

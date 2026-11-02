@@ -1,6 +1,7 @@
 import type { LeadStage, Prisma } from "@prisma/client";
 import { apiHandler, queryString, requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { heavyAdminQuery } from "@/lib/admin-query";
 
 function hostOf(url: string | null): string | null {
   if (!url) return null;
@@ -58,7 +59,8 @@ export default apiHandler({
           payments: { where: { status: "APPROVED" }, select: { amount: true, product: { select: { name: true } } } },
         },
       }),
-      prisma.lead.groupBy({ by: ["stage"], _count: true }),
+      // contagem por etapa de todos os leads (pesada): guardada 3 min, com limite de tempo; falhou → sem os números
+      heavyAdminQuery("lead-stages", 180_000, (db) => db.lead.groupBy({ by: ["stage"], _count: true })).catch(() => [] as { stage: string; _count: number }[]),
     ]);
 
     return {

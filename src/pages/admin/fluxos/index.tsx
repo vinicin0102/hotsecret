@@ -102,11 +102,11 @@ export default function Funnels() {
             <div className="metrics">
               <div>
                 <b>{formatNumber(f.stats.visitors)}</b>
-                <span>visitantes</span>
+                <span>visitantes (30 dias)</span>
               </div>
               <div>
                 <b>{formatNumber(f.stats.sales)}</b>
-                <span>vendas</span>
+                <span>vendas (30 dias)</span>
               </div>
               <div>
                 <b>{(f.stats.conversion * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</b>

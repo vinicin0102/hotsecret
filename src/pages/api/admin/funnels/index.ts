@@ -2,6 +2,7 @@ import { apiHandler, requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { funnelMetaSchema } from "@/lib/validation";
 import { funnelSummaries } from "@/services/analytics";
+import { heavyAdminQuery } from "@/lib/admin-query";
 import { saveGraph, starterGraph } from "@/services/funnels";
 
 export default apiHandler({
@@ -12,7 +13,11 @@ export default apiHandler({
         orderBy: { updatedAt: "desc" },
         include: { character: { select: { name: true, avatarUrl: true } }, _count: { select: { nodes: true } } },
       }),
-      funnelSummaries(),
+      // estatísticas dos últimos 30 dias, guardadas 5 min; se estourar o tempo, a lista abre sem os números
+      heavyAdminQuery("funnel-summaries", 300_000, (db) => funnelSummaries(undefined, db)).catch((e) => {
+        console.error("[admin] estatísticas dos fluxos indisponíveis", e instanceof Error ? e.message.slice(0, 200) : e);
+        return {} as Awaited<ReturnType<typeof funnelSummaries>>;
+      }),
     ]);
     return {
       funnels: funnels.map((f) => {
