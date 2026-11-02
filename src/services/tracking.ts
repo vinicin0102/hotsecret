@@ -88,6 +88,20 @@ export async function trackEvent(input: TrackInput) {
   return event;
 }
 
+/**
+ * Eventos que não ficam registrados ("entrou no bloco"/"viu a mensagem"): o lead conta como ativo, fica no último
+ * bloco e as automações desses eventos continuam rodando — uma vez por pedido, sem gravar um evento por bloco.
+ */
+export async function touchLead(input: { leadId: string; funnelId?: string | null; nodeId?: string | null; types: string[] }) {
+  await prisma.lead.update({
+    where: { id: input.leadId },
+    data: { lastInteractionAt: new Date(), ...(input.nodeId ? { currentNodeId: input.nodeId } : {}) },
+  });
+  for (const type of new Set(input.types)) {
+    await runAutomations({ leadId: input.leadId, funnelId: input.funnelId, type }).catch((e) => console.error("[automations]", e));
+  }
+}
+
 /** Automações configuradas no painel: QUANDO <evento> [no fluxo X] → adicionar/remover tag. */
 async function runAutomations(input: TrackInput) {
   const rules = await prisma.automation.findMany({

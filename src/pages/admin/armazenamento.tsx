@@ -260,12 +260,15 @@ export default function Armazenamento() {
   );
 }
 
-type CleanupId = "webhook_logs" | "webhook_events" | "events" | "media" | "leads";
+type CleanupId = "webhook_logs" | "webhook_events" | "noise_events" | "events" | "media" | "leads";
 interface DbInfo {
   tables: { table: string; bytes: number; rows: number }[];
   appBytes: number;
   databaseBytes: number;
   defaults: Record<CleanupId, number>;
+  /** o que o "Limpar tudo" apaga (e a limpeza automática de madrugada) */
+  quickPlan: { id: CleanupId; days: number }[];
+  quickLeads: { id: CleanupId; days: number };
 }
 const TABLE_LABEL: Record<string, string> = {
   events: "Eventos (analytics)",
@@ -282,6 +285,12 @@ const TABLE_LABEL: Record<string, string> = {
 const CLEANUP_INFO: { id: CleanupId; title: string; what: string; days: boolean; danger?: boolean }[] = [
   { id: "webhook_logs", title: "Registros de webhooks antigos", what: "Histórico técnico dos avisos do gateway de pagamento. Os pagamentos continuam salvos.", days: true },
   { id: "webhook_events", title: "Controle de webhooks antigos", what: "Lista usada para não processar o mesmo aviso duas vezes. O gateway não reenvia avisos tão antigos.", days: true },
+  {
+    id: "noise_events",
+    title: "Eventos que nenhum relatório usa",
+    what: "Registros de “entrou no bloco” e “viu a mensagem” (dois por bloco, por lead). Não aparecem em nenhum relatório e não são mais gravados.",
+    days: false,
+  },
   {
     id: "events",
     title: "Eventos antigos do analytics",
@@ -306,8 +315,43 @@ function DbCleanupCard() {
   const [busy, setBusy] = useState<CleanupId | null>(null);
   const [done, setDone] = useState<Partial<Record<CleanupId, number>>>({});
   const [error, setError] = useState("");
+  const [withLeads, setWithLeads] = useState(false);
+  const [quick, setQuick] = useState<{ step: string; total: number; done: boolean; before: number } | null>(null);
   if (!data) return null;
   const daysOf = (id: CleanupId) => days[id] ?? data.defaults[id];
+  const titleOf = (id: CleanupId) => CLEANUP_INFO.find((c) => c.id === id)?.title ?? id;
+
+  /** "Limpar tudo": cada limpeza segura em sequência, em lotes, até acabar; no fim o banco reaproveita o espaço */
+  const cleanAll = async () => {
+    const plan = [...data.quickPlan, ...(withLeads ? [data.quickLeads] : [])];
+    const msg = withLeads
+      ? `Limpar tudo, incluindo os leads abandonados (sem compra e sem conversar há mais de ${data.quickLeads.days} dias)? Não dá para desfazer.`
+      : "Limpar o banco agora? Sai só o que é seguro: registros técnicos antigos, eventos do analytics com mais de 60 dias e arquivos sem uso.";
+    if (!confirm(msg)) return;
+    setBusy("events");
+    setError("");
+    let total = 0;
+    setQuick({ step: "", total: 0, done: false, before: data.databaseBytes });
+    try {
+      for (const step of plan) {
+        setQuick((q) => q && { ...q, step: titleOf(step.id) });
+        for (let i = 0; i < 200; i++) {
+          const r = await api<{ deleted: number; more: boolean }>("/api/admin/db-cleanup", { body: { action: "run", id: step.id, days: step.days } });
+          total += r.deleted;
+          setQuick((q) => q && { ...q, total });
+          if (!r.more) break;
+        }
+        await api("/api/admin/db-cleanup", { body: { action: "vacuum", id: step.id } }).catch(() => undefined);
+      }
+      setQuick((q) => q && { ...q, step: "", done: true });
+      reload();
+    } catch (e) {
+      setError(`${errMsg(e)} — o que já foi apagado ficou apagado; toque de novo para continuar.`);
+      setQuick((q) => q && { ...q, step: "" });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const check = async (id: CleanupId) => {
     setBusy(id);
@@ -351,8 +395,8 @@ function DbCleanupCard() {
         <span className="pill">{gb(data.databaseBytes)}</span>
       </div>
       <p className="hint">
-        O banco inteiro tem <b>{gb(data.databaseBytes)}</b>, sendo <b>{gb(data.appBytes)}</b> das tabelas do sistema. Nada é apagado sem você tocar em{" "}
-        <b>Apagar</b> e confirmar.
+        O banco inteiro tem <b>{gb(data.databaseBytes)}</b>, sendo <b>{gb(data.appBytes)}</b> das tabelas do sistema. Fora a limpeza automática de madrugada (só o
+        que é seguro), nada é apagado sem você confirmar.
       </p>
       <div className="db-tables">
         {data.tables.slice(0, 8).map((t) => (
@@ -363,7 +407,28 @@ function DbCleanupCard() {
           </div>
         ))}
       </div>
+      <div className="db-quick">
+        <button className="btn btn-primary" disabled={busy !== null} onClick={() => void cleanAll()} data-testid="clean-all">
+          {quick && !quick.done && busy ? "Limpando…" : "🧹 Limpar tudo"}
+        </button>
+        <label className="checkbox">
+          <input type="checkbox" checked={withLeads} disabled={busy !== null} onChange={(e) => setWithLeads(e.target.checked)} />
+          incluir leads abandonados (sem compra e sem conversar há +{data.quickLeads.days} dias)
+        </label>
+        {quick && (
+          <span className="hint" data-testid="clean-all-status">
+            {quick.done ? `✅ Pronto: ${fmtNum(quick.total)} item(ns) apagado(s).` : `${quick.step ? `${quick.step}… ` : ""}${fmtNum(quick.total)} apagado(s)`}
+          </span>
+        )}
+      </div>
+      <p className="hint">
+        Apaga só o que é seguro: registros técnicos de webhooks com mais de 30 dias, eventos que nenhum relatório usa, eventos do analytics com mais
+        de 60 dias e arquivos guardados no banco que nada usa. Leads, conversas, pagamentos e fluxos não são tocados (a não ser que você marque os leads abandonados).{" "}
+        <b>Isso também roda sozinho toda madrugada.</b>
+      </p>
       {error && <p className="error-text">{error}</p>}
+      <details className="db-advanced">
+        <summary>Opções avançadas (limpar item por item)</summary>
       <div className="db-cleanups">
         {CLEANUP_INFO.map((c) => {
           const p = preview[c.id];
@@ -416,6 +481,7 @@ function DbCleanupCard() {
           );
         })}
       </div>
+      </details>
       <p className="hint" style={{ marginTop: 12 }}>
         Depois de apagar, o banco reaproveita o espaço para os dados novos. O número no Supabase (Database Size) pode demorar a cair.
       </p>

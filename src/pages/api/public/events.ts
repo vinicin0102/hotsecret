@@ -5,7 +5,7 @@ import { z } from "zod";
 import { apiHandler, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { sanitizeText } from "@/lib/sanitize";
-import { trackEvent } from "@/services/tracking";
+import { touchLead, trackEvent } from "@/services/tracking";
 import { addTagToLead } from "@/services/tags";
 import { addConversationMessage } from "@/services/payments/service";
 import { requireLeadSession } from "@/services/conversation";
@@ -45,6 +45,8 @@ const schema = z.object({
 });
 
 const MEDIA_MESSAGE: Record<string, string> = { image: "image", video: "video", audio: "audio" };
+/** eventos que só disparam efeitos e não ficam registrados */
+const SILENT = new Set(["node_entered", "message_viewed"]);
 
 export default apiHandler({
   POST: async (req) => {
@@ -65,6 +67,8 @@ export default apiHandler({
     // "Fim" dentro das mensagens de apoio de uma oferta não encerra a conversa
     const followUps = followUpNodeIds(access.graph);
 
+    const silent: string[] = [];
+    let lastNode: string | null = null;
     for (const ev of body.events) {
       const node = ev.nodeId ? nodeMap.get(ev.nodeId) : undefined;
       if (ev.nodeId && !node) continue; // nó inexistente: ignora
@@ -185,8 +189,16 @@ export default apiHandler({
         if (content.viewOnce) data.viewOnce = true;
       }
 
+      // "entrou no bloco"/"viu a mensagem" (2 por bloco por lead) não alimentam nenhum relatório: só os efeitos acima
+      // (conversa, mensagens, etiquetas) importam — gravá-los como evento era a maior parte da tabela de eventos
+      if (SILENT.has(ev.type)) {
+        silent.push(ev.type);
+        if (node) lastNode = node.id;
+        continue;
+      }
       await trackEvent({ leadId, funnelId, conversationId, type: ev.type, nodeId: node?.id ?? null, data });
     }
+    if (silent.length) await touchLead({ leadId, funnelId, nodeId: lastNode, types: silent });
     return { ok: true };
   },
 });

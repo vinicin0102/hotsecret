@@ -2,13 +2,28 @@
 // (registros de webhook antigos, eventos antigos, arquivos guardados no banco sem uso e leads abandonados).
 import { dbSchema, prisma } from "@/lib/prisma";
 
-export const CLEANUPS = ["webhook_logs", "webhook_events", "events", "media", "leads"] as const;
+export const CLEANUPS = ["webhook_logs", "webhook_events", "noise_events", "events", "media", "leads"] as const;
 export type CleanupId = (typeof CLEANUPS)[number];
 
 /** dias padrão de cada limpeza (o que for mais antigo que isso sai) */
-export const DEFAULT_DAYS: Record<CleanupId, number> = { webhook_logs: 30, webhook_events: 30, events: 180, media: 1, leads: 90 };
+export const DEFAULT_DAYS: Record<CleanupId, number> = { webhook_logs: 30, webhook_events: 30, noise_events: 1, events: 180, media: 1, leads: 90 };
 /** limpezas com prazo que o dono pode mudar (as outras usam o padrão) */
-export const MIN_DAYS: Record<CleanupId, number> = { webhook_logs: 7, webhook_events: 7, events: 30, media: 1, leads: 30 };
+export const MIN_DAYS: Record<CleanupId, number> = { webhook_logs: 7, webhook_events: 7, noise_events: 1, events: 30, media: 1, leads: 30 };
+/** eventos que nenhum relatório usa ("entrou no bloco" / "viu a mensagem"; não são mais gravados) */
+const NOISE_TYPES = ["node_entered", "message_viewed"];
+
+/**
+ * "Limpar tudo" (botão do painel e limpeza automática de madrugada): só o que é seguro apagar.
+ * Eventos do analytics ficam 60 dias; leads abandonados só saem quando o dono marca a opção no painel.
+ */
+export const QUICK_PLAN: { id: CleanupId; days: number }[] = [
+  { id: "webhook_logs", days: 30 },
+  { id: "webhook_events", days: 30 },
+  { id: "noise_events", days: 1 },
+  { id: "events", days: 60 },
+  { id: "media", days: 1 },
+];
+export const QUICK_LEADS = { id: "leads" as const, days: 90 };
 
 const BATCH = 2000;
 /** cada pedido apaga por até ~40s (limite da função) e o painel repete enquanto houver mais */
@@ -64,6 +79,7 @@ export async function previewCleanup(id: CleanupId, days: number): Promise<{ cou
   const d = Math.max(days, MIN_DAYS[id]);
   if (id === "webhook_logs") return { count: await prisma.webhookLog.count({ where: { createdAt: { lt: cutoff(d) } } }) };
   if (id === "webhook_events") return { count: await prisma.webhookEvent.count({ where: { createdAt: { lt: cutoff(d) } } }) };
+  if (id === "noise_events") return { count: await prisma.event.count({ where: { type: { in: NOISE_TYPES }, createdAt: { lt: cutoff(d) } } }) };
   if (id === "events") return { count: await prisma.event.count({ where: { createdAt: { lt: cutoff(d) } } }) };
   if (id === "media") {
     const list = await unusedMedia(d);
@@ -97,6 +113,11 @@ export async function runCleanup(id: CleanupId, days: number): Promise<{ deleted
       const ids = (await prisma.webhookEvent.findMany({ where: { createdAt: { lt: cutoff(d) } }, select: { id: true }, take: BATCH })).map((r) => r.id);
       return byIds(ids, (ids) => prisma.webhookEvent.deleteMany({ where: { id: { in: ids } } }));
     });
+  } else if (id === "noise_events") {
+    more = await loop(async () => {
+      const ids = (await prisma.event.findMany({ where: { type: { in: NOISE_TYPES }, createdAt: { lt: cutoff(d) } }, select: { id: true }, take: BATCH })).map((r) => r.id);
+      return byIds(ids, (ids) => prisma.event.deleteMany({ where: { id: { in: ids } } }));
+    });
   } else if (id === "events") {
     more = await loop(async () => {
       const ids = (await prisma.event.findMany({ where: { createdAt: { lt: cutoff(d) } }, select: { id: true }, take: BATCH })).map((r) => r.id);
@@ -120,6 +141,7 @@ export async function runCleanup(id: CleanupId, days: number): Promise<{ deleted
 const TABLE_OF: Record<CleanupId, string[]> = {
   webhook_logs: ["webhook_logs"],
   webhook_events: ["webhook_events"],
+  noise_events: ["events"],
   events: ["events"],
   media: ["media"],
   leads: ["leads", "conversations", "messages", "events", "lead_tags"],
@@ -130,4 +152,21 @@ export async function vacuumAfter(id: CleanupId): Promise<void> {
   for (const t of TABLE_OF[id]) {
     await prisma.$executeRawUnsafe(`VACUUM (ANALYZE) ${qt(t)}`).catch((e) => console.warn("[db-cleanup] vacuum", t, e));
   }
+}
+
+/** limpeza automática (cron): o plano do "Limpar tudo", dentro do tempo da função; o que sobrar sai na próxima noite */
+export async function runAutoCleanup(budgetMs = 50_000): Promise<Record<string, number>> {
+  const started = Date.now();
+  const deleted: Record<string, number> = {};
+  for (const step of QUICK_PLAN) {
+    if (Date.now() - started > budgetMs - 15_000) break;
+    try {
+      const r = await runCleanup(step.id, step.days);
+      deleted[step.id] = r.deleted;
+      if (r.deleted) await vacuumAfter(step.id);
+    } catch (e) {
+      console.error("[db-cleanup] automática", step.id, e instanceof Error ? e.message.slice(0, 200) : e);
+    }
+  }
+  return deleted;
 }

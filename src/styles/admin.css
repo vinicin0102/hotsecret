@@ -1744,3 +1744,21 @@ code.inline {
     grid-template-columns: 1fr;
   }
 }
+
+/* Armazenamento → limpeza do banco: o botão "Limpar tudo" em destaque; o item a item fica em "Opções avançadas" */
+.db-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 14px 0 6px;
+}
+.db-advanced {
+  margin-top: 12px;
+}
+.db-advanced > summary {
+  cursor: pointer;
+  color: var(--muted, #9a9aa3);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
