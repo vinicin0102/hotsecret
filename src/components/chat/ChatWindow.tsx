@@ -238,7 +238,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         if (offer.style === "live" && offer.vipButton) {
           return (
             <div key={item.id} className="msg-row bot">
-              <button className="vip-unlock-btn" onClick={() => engine.openVip(item.nodeId, item.productId, item.offer)} disabled={bought}>
+              <button className={`vip-unlock-btn${offer.vip?.theme === "whatsapp" ? " theme-wa" : ""}`} onClick={() => engine.openVip(item.nodeId, item.productId, item.offer)} disabled={bought}>
                 {bought ? (
                   t.unlocked
                 ) : (
@@ -418,6 +418,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         )}
         {engine.vip && vipOffer && engine.vip.phase === "offer" && (
           <VipOfferModal
+            character={funnel.character}
             offer={vipOffer}
             product={funnel.products[engine.vip.productId ?? vipOffer.productId]}
             basic={vipOffer.downsellProductId && !vipOffer.combo ? funnel.products[vipOffer.downsellProductId] : undefined}

@@ -825,6 +825,7 @@ export function CallScreen({
           />
         ) : (
           <VipOfferModal
+            character={character}
             offer={offer}
             product={upsell.product as PublicProduct}
             basic={upsell.basicProduct as PublicProduct | undefined}
@@ -1207,6 +1208,7 @@ function WhatsAppUpsell({
   }
   return (
     <VipOfferModal
+      character={character}
       offer={offer}
       product={p as PublicProduct}
       basic={undefined}
@@ -1282,6 +1284,7 @@ function VipUpsell({
   }
   return (
     <VipOfferModal
+      character={character}
       offer={offer}
       product={p as PublicProduct}
       basic={undefined}

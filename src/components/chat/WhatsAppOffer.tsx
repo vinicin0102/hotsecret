@@ -63,6 +63,7 @@ export function whatsappOffer(
   own: { title?: string; ctaLabel?: string } = {},
 ): OfferContent {
   return withDefaults(offer, character, {
+    theme: "whatsapp",
     badge: t.waUpsellTag,
     title: own.title || t.waUpsellText,
     intro: t.waIntro,
@@ -82,6 +83,7 @@ export function comboOffer(offer: OfferContent, character: PublicCharacter, t: C
   const names = comboProductNames(offer, products);
   if (c.whatsapp && !c.vip && !offer.videoId && !names.length) return whatsappOffer(offer, character, t, { ctaLabel: offer.ctaLabel });
   return withDefaults(offer, character, {
+    theme: c.whatsapp ? "whatsapp" : "default",
     badge: t.comboTag,
     title: t.comboTitle,
     intro: t.comboIntro,
@@ -94,7 +96,7 @@ export function comboOffer(offer: OfferContent, character: PublicCharacter, t: C
 function withDefaults(
   offer: OfferContent,
   character: PublicCharacter,
-  d: { badge: string; title: string; intro: string; benefits: string[]; completeLabel: string; payTitle: string },
+  d: { theme: "default" | "whatsapp"; badge: string; title: string; intro: string; benefits: string[]; completeLabel: string; payTitle: string },
 ): OfferContent {
   const v = offer.vip ?? {};
   const written = (v.benefits ?? []).map((b) => b.trim()).filter(Boolean);
@@ -103,6 +105,7 @@ function withDefaults(
     style: "live",
     vip: {
       ...v,
+      theme: v.theme ?? d.theme,
       badge: v.badge?.trim() || d.badge,
       title: v.title?.trim() || d.title,
       highlight: v.highlight?.trim() || character.name,

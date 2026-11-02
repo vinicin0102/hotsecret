@@ -90,6 +90,8 @@ export interface TarotCard {
 }
 /** Textos da oferta "Canal VIP AO VIVO" (vazios = textos padrão do país do fluxo). */
 export interface VipOfferTexts {
+  /** visual do pop-up e do pagamento: padrão ou "whatsapp" (conversa verde, benefícios em balões) — para ofertas do número de WhatsApp */
+  theme?: "default" | "whatsapp";
   /** prévia ao tocar no card: vídeo ou foto da live com título ("Já estou começando 🔴") e o botão que já gera o PIX */
   previewUrl?: string;
   previewTitle?: string;

@@ -29,6 +29,7 @@ const delaySettings = z.object({
 /** textos da oferta Canal VIP AO VIVO (bloco Oferta e Cérebro) */
 const lines = (max: number, each: number) => z.array(txt(each)).max(max).transform((a) => a.map((v) => v.trim()).filter(Boolean));
 export const vipTextsSchema = z.object({
+  theme: z.enum(["default", "whatsapp"]).optional(),
   previewUrl: optUrl,
   previewTitle: optTxt(80),
   previewButton: optTxt(60),

@@ -42,6 +42,27 @@ export function VipOfferEditor({
   );
   return (
     <div className="vip-editor">
+      <div className="field">
+        <label>Tema do pop-up</label>
+        <div className="segmented">
+          {(
+            [
+              ["default", "Padrão"],
+              ["whatsapp", "💬 WhatsApp"],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} type="button" className={(v.theme ?? "default") === k ? "active" : ""} onClick={() => set({ theme: k === "default" ? undefined : k })}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {v.theme === "whatsapp" && (
+          <span className="hint">
+            O pop-up vira uma conversa: barra verde com a foto e o nome dela, benefícios como mensagens recebidas, preço em balão e botão verde — o
+            pagamento e o “vai desistir?” também ficam verdes. Ideal quando a oferta é o número de WhatsApp.
+          </span>
+        )}
+      </div>
       {!inCall && (
       <p className="hint" style={{ marginTop: 0 }}>
         Abre um <b>upgrade</b> por cima do chat com os benefícios e dois ingressos. Ao escolher, gera o pagamento numa folha embaixo, com o chat

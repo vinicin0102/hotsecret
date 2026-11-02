@@ -178,6 +178,7 @@ export function VipOfferModal({
   product,
   basic,
   media,
+  character,
   onPick,
   onClose,
 }: {
@@ -186,6 +187,8 @@ export function VipOfferModal({
   basic: PublicProduct | undefined;
   /** conteúdo extra abaixo do título (ex.: o mosaico do Grupo VIP) */
   media?: ReactNode;
+  /** tema WhatsApp: foto e nome na barra do topo */
+  character?: PublicCharacter;
   onPick: (productId: string) => void;
   onClose: () => void;
 }) {
@@ -193,6 +196,9 @@ export function VipOfferModal({
   const v: VipOfferTexts = offer.vip ?? {};
   if (!product) return null;
   const benefits = (v.benefits ?? []).filter(Boolean);
+  if (v.theme === "whatsapp" && !v.previewUrl) {
+    return <WaOfferModal v={v} benefits={benefits} product={product} basic={basic} media={media} character={character} onPick={onPick} onClose={onClose} />;
+  }
   if (v.previewUrl) {
     // prévia da live: vídeo/foto com o título e o botão que já gera o PIX
     const isVideo = /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(v.previewUrl);
@@ -283,10 +289,112 @@ export function VipOfferModal({
   );
 }
 
+const clock = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+/** Pop-up da oferta com tema WhatsApp: uma conversa — barra verde, mensagens recebidas com os benefícios, preço e botão verdes. */
+function WaOfferModal({
+  v,
+  benefits,
+  product,
+  basic,
+  media,
+  character,
+  onPick,
+  onClose,
+}: {
+  v: VipOfferTexts;
+  benefits: string[];
+  product: PublicProduct;
+  basic: PublicProduct | undefined;
+  media?: ReactNode;
+  character?: PublicCharacter;
+  onPick: (productId: string) => void;
+  onClose: () => void;
+}) {
+  const { t, money } = useChatI18n();
+  const time = clock();
+  const name = character?.name ?? "";
+  return (
+    <div className="vip-overlay theme-wa" role="dialog" aria-label={v.title || t.vipTitle}>
+      <div className="wa-modal">
+        <div className="wa-bar">
+          <div className="wa-bar-avatar">
+            {character?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={character.avatarUrl} alt="" />
+            ) : (
+              <span>{name.slice(0, 1) || "?"}</span>
+            )}
+          </div>
+          <div className="wa-bar-who">
+            <b>{name}</b>
+            <small>{t.waOnline}</small>
+          </div>
+          <button className="wa-bar-close" onClick={onClose} aria-label={t.close}>
+            ✕
+          </button>
+        </div>
+        <div className="wa-chat">
+          <div className="wa-chip">{v.badge || t.vipBadge}</div>
+          {media && <div className="wa-media">{media}</div>}
+          <div className="wa-msg in">
+            <b>{v.title || t.vipTitle}</b> <span className="wa-hl">{v.highlight || t.vipHighlight}</span>
+            <i>{time}</i>
+          </div>
+          {(benefits.length > 0 || v.intro) && <div className="wa-msg in">{v.intro || t.vipIntro}<i>{time}</i></div>}
+          {benefits.map((b, i) => (
+            <div key={i} className="wa-msg in">
+              {b}
+              <i>{time}</i>
+            </div>
+          ))}
+          <div className="wa-msg out wa-price">
+            {product.originalPrice && product.originalPrice > product.price ? (
+              <s>
+                {t.vipFrom} {money(product.originalPrice, product.currency)}
+              </s>
+            ) : null}
+            <b>{money(product.price, product.currency)}</b>
+            <span className="wa-secret">🔒 {t.vipSecret}</span>
+            <i>
+              {time} <span className="wa-ticks">✓✓</span>
+            </i>
+          </div>
+        </div>
+        <div className="wa-actions">
+          <button className="wa-cta" onClick={() => onPick(product.id)}>
+            {v.completeLabel || t.vipComplete} · {money(product.price, product.currency)}
+          </button>
+          {basic && (
+            <button className="wa-cta basic" onClick={() => onPick(basic.id)}>
+              {v.basicLabel || t.vipBasic} · {money(basic.price, basic.currency)}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Card compacto no chat: reabre o upgrade ou o pagamento. */
 export function VipOfferCard({ offer, product, bought, onOpen }: { offer: OfferContent; product: PublicProduct | undefined; bought: boolean; onOpen: () => void }) {
   const { t, money } = useChatI18n();
   if (!product) return <div className="bubble system">{t.offerUnavailable}</div>;
+  if (offer.vip?.theme === "whatsapp") {
+    return (
+      <div className="msg-row bot">
+        <div className="vip-card theme-wa wa-card">
+          <div className="vip-card-top">
+            <span className="wa-card-tag">💬 {t.waOnline}</span> <b>{offer.headline || product.name}</b>
+          </div>
+          <div className="vip-card-price">{money(product.price, product.currency)}</div>
+          <button className="wa-cta" onClick={onOpen} disabled={bought}>
+            {offer.ctaLabel || t.vipSeeOffer}
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="msg-row bot">
       <div className="vip-card">
@@ -337,14 +445,14 @@ export function VipPaySheet({
     setTimeout(() => setCopied(false), 2500);
   };
   return (
-    <div className="vip-sheet" role="dialog" aria-label={t.vipPending}>
+    <div className={`vip-sheet${v.theme === "whatsapp" ? " theme-wa" : ""}`} role="dialog" aria-label={t.vipPending}>
       <div className="vip-sheet-head">
         <span className="vip-pending">● {t.vipPending}</span>
         <button className="vip-sheet-close" onClick={onClose} aria-label={t.close}>
           ✕
         </button>
       </div>
-      <div className="vip-sheet-title">🔥 {v.payTitle?.replace(/\{nome\}/gi, character.name.toUpperCase()) || `${character.name.toUpperCase()} ${t.vipStarted}`}</div>
+      <div className="vip-sheet-title">{v.theme === "whatsapp" ? "💬" : "🔥"} {v.payTitle?.replace(/\{nome\}/gi, character.name.toUpperCase()) || `${character.name.toUpperCase()} ${t.vipStarted}`}</div>
       <div className="vip-sheet-sub">{v.paySubtitle || t.vipStartedSub}</div>
       {payerForm && !payment ? (
         <PayerForm
@@ -408,7 +516,7 @@ export function VipExitModal({ offer, onStay, onLeave }: { offer: OfferContent; 
   const { t } = useChatI18n();
   const v = offer.vip ?? {};
   return (
-    <div className="vip-overlay" role="dialog" aria-label={v.exitTitle || t.vipExitTitle}>
+    <div className={`vip-overlay${v.theme === "whatsapp" ? " theme-wa" : ""}`} role="dialog" aria-label={v.exitTitle || t.vipExitTitle}>
       <div className="vip-exit">
         <button className="vip-close" onClick={onStay} aria-label={t.close}>
           ✕
