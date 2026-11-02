@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { apiHandler, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { cached } from "@/lib/memo";
 import { withComboProducts } from "@/services/combo-grants";
 import { sanitizeText } from "@/lib/sanitize";
 import { requireLeadSession } from "@/services/conversation";
@@ -42,7 +43,8 @@ export default apiHandler({
     if (!node || node.type !== "ai") throw new HttpError(404, "Bloco não encontrado");
     if (locked.has(node.id) && !unlocked.has(node.id)) throw new HttpError(403, "Conteúdo bloqueado");
     const content = node.content as AiContent;
-    const brain = content.brainId ? await prisma.brain.findUnique({ where: { id: content.brainId } }) : null;
+    // o cérebro é o mesmo em todas as mensagens: guardado alguns segundos (edição no painel aparece em até 20 s)
+    const brain = content.brainId ? await cached(`brain:${content.brainId}`, 20_000, () => prisma.brain.findUnique({ where: { id: content.brainId } })) : null;
     if (!brain || !brain.active) throw new HttpError(404, "Cérebro indisponível");
 
     const where = { conversationId: session.conversationId, nodeId: node.id, type: "ai_reply" };
@@ -109,7 +111,9 @@ export default apiHandler({
 
     let reply;
     try {
-      const funnelRow = await prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } });
+      const funnelRow = await cached(`funnel-settings:${session.funnelId}`, 20_000, () =>
+        prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } }),
+      );
       const language = getFunnelSettings(funnelRow?.settings).locale;
       reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language, boughtProductIds: [...(await withComboProducts(paid.map((p) => p.productId)))] });
     } catch (e) {

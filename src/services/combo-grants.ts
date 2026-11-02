@@ -1,6 +1,7 @@
 // Combo do Cérebro: comprar o produto do combo vale como ter comprado os produtos incluídos nele.
 // Só lê o banco (o vip.ts usa este módulo; o combo.ts, que entrega os links, usa o vip.ts).
 import { prisma } from "@/lib/prisma";
+import { cached } from "@/lib/memo";
 
 interface ComboRow {
   style?: string;
@@ -8,9 +9,12 @@ interface ComboRow {
   comboProductIds?: string[];
 }
 
-async function allCombos(): Promise<ComboRow[]> {
-  const brains = await prisma.brain.findMany({ select: { offers: true } });
-  return brains.flatMap((b) => (Array.isArray(b.offers) ? (b.offers as ComboRow[]) : [])).filter((o) => o?.style === "combo" && !!o.productId);
+/** combos de todos os cérebros (lido a cada mensagem da IA: guardado 1 min) */
+function allCombos(): Promise<ComboRow[]> {
+  return cached("combos", 60_000, async () => {
+    const brains = await prisma.brain.findMany({ select: { offers: true } });
+    return brains.flatMap((b) => (Array.isArray(b.offers) ? (b.offers as ComboRow[]) : [])).filter((o) => o?.style === "combo" && !!o.productId);
+  });
 }
 
 /** os produtos comprados + os incluídos nos combos comprados */

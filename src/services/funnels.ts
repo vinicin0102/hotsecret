@@ -12,7 +12,8 @@ import type {
 } from "@/types/flow";
 import { DEFAULT_FUNNEL_DELAY, DEFAULT_RECOVERY, livePreviewReady } from "@/types/flow";
 import { lockedNodeIds, unlockedByOffers } from "@/features/chat-engine/engine";
-import { getGlobalTracking, mergeTracking, publicTracking } from "./tracking-settings";
+import { getGlobalTrackingCached, mergeTracking, publicTracking } from "./tracking-settings";
+import { cached, forget } from "@/lib/memo";
 import { brainOffers, brainVoiceCalls } from "./ai/brain";
 import { providerNameForCurrency } from "./payments/index";
 import { zenithDefaultPayer } from "./payments/zenith";
@@ -37,6 +38,10 @@ export function rowsToGraph(nodes: NodeRow[], edges: EdgeRow[]): FlowGraph {
   };
 }
 
+/** leituras públicas (lead): o mesmo fluxo para todos, guardado alguns segundos */
+const PUBLIC_TTL = 20_000;
+export const loadGraphCached = (funnelId: string) => cached(`graph:${funnelId}`, PUBLIC_TTL, () => loadGraph(funnelId));
+
 export async function loadGraph(funnelId: string): Promise<FlowGraph> {
   const [nodes, edges] = await Promise.all([
     prisma.funnelNode.findMany({ where: { funnelId }, orderBy: { createdAt: "asc" } }),
@@ -47,6 +52,8 @@ export async function loadGraph(funnelId: string): Promise<FlowGraph> {
 
 /** Persiste o grafo inteiro em uma transação (substitui nós e conexões) e sincroniza ofertas. */
 export async function saveGraph(funnelId: string, graph: FlowGraph) {
+  forget(`graph:${funnelId}`);
+  forget(`pf:`);
   const offerNodes = graph.nodes.filter((n) => n.type === "offer" && (n.content as { productId?: string }).productId);
   const productIds = [...new Set(offerNodes.map((n) => (n.content as { productId: string }).productId))];
   const existingProducts = new Set(
@@ -175,6 +182,12 @@ export async function getPublicFunnelBySlug(
   slug: string,
   opts: { allowDraft?: boolean; includeLocked?: boolean } = {},
 ): Promise<PublicFunnel | null> {
+  // fluxo publicado: o mesmo para todo visitante — guardado alguns segundos (rascunho/preview do admin lê na hora)
+  if (!opts.allowDraft && !opts.includeLocked) return cached(`pf:slug:${slug}`, PUBLIC_TTL, () => loadPublicFunnelBySlug(slug, opts));
+  return loadPublicFunnelBySlug(slug, opts);
+}
+
+async function loadPublicFunnelBySlug(slug: string, opts: { allowDraft?: boolean; includeLocked?: boolean }): Promise<PublicFunnel | null> {
   const funnel = await prisma.funnel.findUnique({ where: { slug }, include: { character: true } });
   if (!funnel) return null;
   if (funnel.status !== "PUBLISHED" && !opts.allowDraft) return null;
@@ -182,16 +195,18 @@ export async function getPublicFunnelBySlug(
 }
 
 export async function getPublicFunnelById(id: string): Promise<PublicFunnel | null> {
-  const funnel = await prisma.funnel.findUnique({ where: { id }, include: { character: true } });
-  if (!funnel) return null;
-  return buildPublicFunnel(funnel);
+  return cached(`pf:id:${id}`, PUBLIC_TTL, async () => {
+    const funnel = await prisma.funnel.findUnique({ where: { id }, include: { character: true } });
+    if (!funnel) return null;
+    return buildPublicFunnel(funnel);
+  });
 }
 
 async function buildPublicFunnel(
   funnel: Prisma.FunnelGetPayload<{ include: { character: true } }>,
   includeLocked = false,
 ): Promise<PublicFunnel> {
-  const fullGraph = await loadGraph(funnel.id);
+  const fullGraph = includeLocked ? await loadGraph(funnel.id) : await loadGraphCached(funnel.id);
   // conteúdo pago (depois de "pagamento aprovado") só vai ao navegador após a confirmação
   const locked = includeLocked ? new Set<string>() : lockedNodeIds(fullGraph);
   const graph = {
@@ -250,7 +265,7 @@ async function buildPublicFunnel(
     appearance: getFunnelSettings(funnel.settings).appearance,
     locale: getFunnelSettings(funnel.settings).locale,
     ...(publicLive(getFunnelSettings(funnel.settings).live) ? { live: publicLive(getFunnelSettings(funnel.settings).live) } : {}),
-    tracking: publicTracking(mergeTracking(await getGlobalTracking(), (funnel.settings as FunnelSettings | null)?.tracking)),
+    tracking: publicTracking(mergeTracking(await getGlobalTrackingCached(), (funnel.settings as FunnelSettings | null)?.tracking)),
   };
 }
 
@@ -259,10 +274,13 @@ async function buildPublicFunnel(
  * `stickyVariantId` mantém o visitante na mesma variante (cookie).
  */
 export async function resolveExperiment(slug: string, stickyVariantId?: string | null, rng = Math.random) {
-  const exp = await prisma.experiment.findUnique({
-    where: { slug },
-    include: { variants: { include: { funnel: { select: { status: true } } } } },
-  });
+  // toda visita a /f/[slug] passa aqui (quase sempre não é experimento): guardado alguns segundos
+  const exp = await cached(`exp:${slug}`, PUBLIC_TTL, () =>
+    prisma.experiment.findUnique({
+      where: { slug },
+      include: { variants: { include: { funnel: { select: { status: true } } } } },
+    }),
+  );
   if (!exp || !exp.active) return null;
   const variants = exp.variants.filter((v) => v.funnel.status === "PUBLISHED" && v.weight > 0);
   if (variants.length === 0) return null;
@@ -279,7 +297,7 @@ export async function resolveExperiment(slug: string, stickyVariantId?: string |
 
 /** Nós pagos que o lead já desbloqueou (pagamentos aprovados neste fluxo). */
 export async function entitledNodes(funnelId: string, leadId: string) {
-  const graph = await loadGraph(funnelId);
+  const graph = await loadGraphCached(funnelId);
   const paid = await prisma.payment.findMany({
     where: { leadId, funnelId, status: "APPROVED", offerNodeId: { not: null } },
     select: { offerNodeId: true },

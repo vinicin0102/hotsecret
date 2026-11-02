@@ -2,6 +2,7 @@
 // Meta: vários pixels (uma conta de anúncios cada); todos recebem os eventos, cada um com o seu token da API de Conversões.
 import { prisma } from "@/lib/prisma";
 import { openSecret } from "@/lib/secret-box";
+import { cached, forget } from "@/lib/memo";
 import type { TrackingIds } from "@/types/flow";
 
 /** pixel da Meta cadastrado nas Configurações; o token fica criptografado (nunca vai ao navegador) */
@@ -25,7 +26,11 @@ export async function getGlobalTracking(): Promise<GlobalTracking> {
   return (row?.value as GlobalTracking | undefined) ?? {};
 }
 
+/** leitura das páginas públicas e da API de Conversões (o painel lê sempre na hora) */
+export const getGlobalTrackingCached = () => cached("tracking", 60_000, getGlobalTracking);
+
 export async function saveGlobalTracking(value: GlobalTracking) {
+  forget("tracking");
   const clean: Record<string, unknown> = Object.fromEntries(Object.entries(value).filter(([, v]) => typeof v === "string" && v.trim() !== ""));
   if (value.metaPixels?.length) clean.metaPixels = value.metaPixels.map((p) => ({ id: p.id, ...(p.tokenSealed ? { tokenSealed: p.tokenSealed } : {}) }));
   await prisma.appSetting.upsert({ where: { key: KEY }, create: { key: KEY, value: clean as object }, update: { value: clean as object } });
