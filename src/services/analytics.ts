@@ -103,12 +103,16 @@ export async function dashboard(from: Date, to: Date, db: Db = prisma) {
   };
 }
 
-/** Visitantes, vendas e conversão por fluxo (lista de fluxos) — por padrão, dos últimos 30 dias (desde sempre varria a tabela de eventos inteira). */
+/**
+ * Visitantes, vendas e conversão por fluxo (lista de fluxos) — por padrão, dos últimos 30 dias.
+ * Visitante = lead criado no fluxo (cada visita nova cria um lead): conta pelo índice de leads,
+ * em vez de varrer os page_view da tabela de eventos, que passava do limite de tempo.
+ */
 export async function funnelSummaries(from?: Date, db: Db = prisma) {
   const since = from ?? new Date(Date.now() - 30 * 24 * 3600_000);
   const rows = await db.$queryRaw<{ funnelId: string; visitors: bigint; sales: bigint }[]>`
     SELECT f.id AS "funnelId",
-      (SELECT COUNT(DISTINCT e."leadId") FROM ${tbl("events")} e WHERE e."funnelId" = f.id AND e.type = 'page_view' AND e."createdAt" >= ${since}) AS visitors,
+      (SELECT COUNT(*) FROM ${tbl("leads")} l WHERE l."funnelId" = f.id AND l."createdAt" >= ${since}) AS visitors,
       (SELECT COUNT(*) FROM ${tbl("payments")} p WHERE p."funnelId" = f.id AND p.status = 'APPROVED' AND p."createdAt" >= ${since}) AS sales
     FROM ${tbl("funnels")} f`;
   return Object.fromEntries(
