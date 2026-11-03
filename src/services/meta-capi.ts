@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import type { Payment } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { cached } from "@/lib/memo";
 import { absoluteUrl } from "@/lib/paths";
 import type { FunnelSettings } from "@/types/flow";
 import { getGlobalTracking, getGlobalTrackingCached, globalMetaPixels, mergeTracking, type GlobalTracking } from "./tracking-settings";
@@ -146,9 +147,16 @@ export async function sendMetaEvent(ev: FunnelMetaEvent): Promise<void> {
   const global = await getGlobalTrackingCached();
   if (!globalMetaPixels(global).some((p) => p.token) && !global.metaCapiToken) return; // sem API de Conversões
   const [funnel, lead, product] = await Promise.all([
-    ev.funnelId ? prisma.funnel.findUnique({ where: { id: ev.funnelId }, select: { slug: true, settings: true } }) : null,
+    // fluxo e produto mudam pouco e se repetem em todo evento: guardados 20 s (o lead é lido na hora, pelos cookies)
+    ev.funnelId
+      ? cached(`capi:funnel:${ev.funnelId}`, 20_000, () => prisma.funnel.findUnique({ where: { id: ev.funnelId! }, select: { slug: true, settings: true } }))
+      : null,
     prisma.lead.findUnique({ where: { id: ev.leadId } }),
-    ev.productId ? prisma.product.findUnique({ where: { id: ev.productId }, select: { name: true, price: true, currency: true, metaPixelId: true, metaCapiTokenSealed: true } }) : null,
+    ev.productId
+      ? cached(`capi:product:${ev.productId}`, 20_000, () =>
+          prisma.product.findUnique({ where: { id: ev.productId! }, select: { name: true, price: true, currency: true, metaPixelId: true, metaCapiTokenSealed: true } }),
+        )
+      : null,
   ]);
   if (!lead) return;
   const tokenOf = tokenFinder(global, product);

@@ -306,10 +306,13 @@ export async function resolveExperiment(slug: string, stickyVariantId?: string |
 /** Nós pagos que o lead já desbloqueou (pagamentos aprovados neste fluxo). */
 export async function entitledNodes(funnelId: string, leadId: string) {
   const graph = await loadGraphCached(funnelId);
+  const locked = lockedNodeIds(graph);
+  // fluxo sem conteúdo pago (nada depois de "pagamento aprovado"): não há o que liberar, nem consulta pagamentos
+  if (!locked.size) return { graph, locked, unlocked: new Set<string>() };
   const paid = await prisma.payment.findMany({
     where: { leadId, funnelId, status: "APPROVED", offerNodeId: { not: null } },
     select: { offerNodeId: true },
   });
   const unlocked = unlockedByOffers(graph, paid.map((p) => p.offerNodeId!));
-  return { graph, locked: lockedNodeIds(graph), unlocked };
+  return { graph, locked, unlocked };
 }

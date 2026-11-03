@@ -68,12 +68,10 @@ export default apiHandler({
       });
     }
 
-    const nodeIds = [...new Set(body.events.map((e) => e.nodeId).filter((v): v is string => !!v))];
-    const nodes = await prisma.funnelNode.findMany({ where: { funnelId, id: { in: nodeIds } } });
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-
     // conteúdo pago: só registra nós liberados por pagamento aprovado
+    // (os blocos vêm do fluxo guardado em memória — antes era uma consulta a mais em todo passo do lead)
     const access = await entitledNodes(funnelId, leadId);
+    const nodeMap = new Map(access.graph.nodes.map((n) => [n.id, n]));
     // "Fim" dentro das mensagens de apoio de uma oferta não encerra a conversa
     const followUps = followUpNodeIds(access.graph);
 

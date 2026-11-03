@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { apiHandler, getClientIp, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { cached } from "@/lib/memo";
 import { signLeadToken, verifyLeadToken } from "@/lib/auth";
 import { parseUserAgent } from "@/lib/device";
 import { sanitizeText, sanitizeUrl } from "@/lib/sanitize";
@@ -57,7 +58,10 @@ export default apiHandler({
   POST: async (req) => {
     leadRateLimit(req, "session", 30, 60_000);
     const body = schema.parse(req.body);
-    const funnel = await prisma.funnel.findUnique({ where: { id: body.funnelId }, select: { id: true, status: true } });
+    // todo lead que abre o fluxo passa aqui: status do fluxo guardado alguns segundos (publicar/despublicar vale em até 20 s)
+    const funnel = await cached(`fstatus:${body.funnelId}`, 20_000, () =>
+      prisma.funnel.findUnique({ where: { id: body.funnelId }, select: { id: true, status: true } }),
+    );
     if (!funnel || funnel.status !== "PUBLISHED") throw new HttpError(404, "Fluxo indisponível");
 
     // Retomar conversa existente

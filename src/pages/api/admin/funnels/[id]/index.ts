@@ -1,5 +1,6 @@
 import { apiHandler, HttpError, requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { forget } from "@/lib/memo";
 import { funnelMetaSchema } from "@/lib/validation";
 import { loadGraph } from "@/services/funnels";
 
@@ -26,11 +27,16 @@ export default apiHandler({
         ...(data.settings ? { settings: data.settings } : {}),
       },
     });
+    // publicar/despublicar ou trocar nome/personagem vale na hora nesta instância
+    forget("pf:");
+    forget(`fstatus:${funnel.id}`);
     return { funnel };
   },
   DELETE: async (req) => {
     await requireAdmin(req);
     await prisma.funnel.delete({ where: { id: String(req.query.id) } });
+    forget("pf:");
+    forget(`fstatus:${String(req.query.id)}`);
     return { ok: true };
   },
 });

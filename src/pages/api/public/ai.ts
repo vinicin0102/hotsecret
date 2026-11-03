@@ -47,7 +47,8 @@ export default apiHandler({
     const brain = content.brainId ? await cached(`brain:${content.brainId}`, 20_000, () => prisma.brain.findUnique({ where: { id: content.brainId } })) : null;
     if (!brain || !brain.active) throw new HttpError(404, "Cérebro indisponível");
 
-    const where = { conversationId: session.conversationId, nodeId: node.id, type: "ai_reply" };
+    // leadId junto: usa o índice de eventos por lead (poucos por lead) em vez de varrer os ai_reply de todos
+    const where = { leadId: session.leadId, conversationId: session.conversationId, nodeId: node.id, type: "ai_reply" };
     const replies = await prisma.event.count({ where });
     if (body.start && replies > 0) return { messages: [], offer: null, audio: null, image: null, end: false };
     if (replies >= brain.maxReplies) return { messages: [], offer: null, audio: null, image: null, end: true, limit: true };

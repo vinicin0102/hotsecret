@@ -1,6 +1,7 @@
 // Registro de eventos do funil + transições de etapa do lead + automações.
 import type { LeadStage, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { cached } from "@/lib/memo";
 import { addTagToLead, removeTagFromLead } from "./tags";
 import { inBackground } from "@/lib/background";
 import { sendMetaEvent } from "./meta-capi";
@@ -125,13 +126,9 @@ function sendFunnelEventToMeta(input: TrackInput, eventId: string, becameEngaged
 
 /** Automações configuradas no painel: QUANDO <evento> [no fluxo X] → adicionar/remover tag. */
 async function runAutomations(input: TrackInput) {
-  const rules = await prisma.automation.findMany({
-    where: {
-      active: true,
-      trigger: input.type,
-      OR: [{ funnelId: null }, { funnelId: input.funnelId ?? undefined }],
-    },
-  });
+  // roda em todo passo do lead: a lista (quase sempre curta ou vazia) fica guardada 30 s; o painel esquece ao salvar
+  const all = await cached("automations", 30_000, () => prisma.automation.findMany({ where: { active: true } }));
+  const rules = all.filter((r) => r.trigger === input.type && (!r.funnelId || r.funnelId === input.funnelId));
   for (const rule of rules) {
     if (!rule.tagId) continue;
     if (rule.action === "add_tag") await addTagToLead(input.leadId, rule.tagId, "automation");

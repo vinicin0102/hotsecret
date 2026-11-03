@@ -198,6 +198,7 @@ model Conversation {
 
   @@index([funnelId, startedAt])
   @@index([checkoutStartedAt])
+  @@index([leadId])
   @@map("conversations")
 }
 
@@ -313,6 +314,9 @@ model Payment {
   @@unique([provider, providerPaymentId])
   @@index([status, createdAt])
   @@index([funnelId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([leadId, status])
+  @@index([status, approvedAt])
   @@map("payments")
 }
 

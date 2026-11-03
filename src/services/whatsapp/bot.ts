@@ -124,7 +124,7 @@ export async function replyWithBrain(cfg: WaConfig, settings: WhatsAppSettings, 
 
   // limite de respostas por dia por contato (o "máximo de respostas" do cérebro)
   const today = await prisma.event.count({
-    where: { conversationId: contact.conversationId, type: "ai_reply", createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } },
+    where: { leadId: contact.leadId, conversationId: contact.conversationId, type: "ai_reply", createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } },
   });
   if (today >= brain.maxReplies) return;
 
