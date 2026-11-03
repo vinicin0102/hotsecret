@@ -142,8 +142,22 @@ export function pixelInitiateCheckout(p: PixelProduct) {
   if (active.googleTagId) w.gtag?.("event", "begin_checkout", { value: p.value, currency: p.currency || "BRL", items: [{ item_id: p.id, item_name: p.name }] });
 }
 
+/** id de evento compartilhado entre o pixel do navegador e a API de Conversões */
+export const newEventId = (prefix: string) => `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
+/** compra já disparada neste navegador (recarregar a página não manda a mesma venda de novo) */
+function firstTime(key: string): boolean {
+  try {
+    if (localStorage.getItem(key)) return false;
+    localStorage.setItem(key, "1");
+  } catch {
+    // sem localStorage (aba anônima): o eventID igual ainda evita a contagem dupla na Meta
+  }
+  return true;
+}
+
 export function pixelPurchase(p: PixelProduct) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !firstTime(`hs_px_buy_${p.eventId}`)) return;
   const w = window as W;
   const data = { value: p.value, currency: p.currency || "BRL", content_name: p.name, content_ids: [p.id], content_type: "product", num_items: 1 };
   metaTrack(w, "Purchase", data, p);

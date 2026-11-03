@@ -2,6 +2,8 @@
 import type { LeadStage, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addTagToLead, removeTagFromLead } from "./tags";
+import { inBackground } from "@/lib/background";
+import { sendMetaEvent } from "./meta-capi";
 
 export const EVENT_TYPES = [
   "page_view",
@@ -34,6 +36,7 @@ function stageForEvent(type: string, current: LeadStage): LeadStage | null {
   switch (type) {
     case "button_clicked":
     case "question_answered":
+    case "ai_message":
     case "offer_viewed":
     case "offer_clicked":
       return current === "NEW" ? "INTERESTED" : null;
@@ -74,6 +77,7 @@ export async function trackEvent(input: TrackInput) {
   const lead = await prisma.lead.findUnique({ where: { id: input.leadId }, select: { stage: true } });
   if (lead) {
     const next = stageForEvent(input.type, lead.stage);
+    sendFunnelEventToMeta(input, event.id, lead.stage === "NEW" && next === "INTERESTED");
     await prisma.lead.update({
       where: { id: input.leadId },
       data: {
@@ -99,6 +103,23 @@ export async function touchLead(input: { leadId: string; funnelId?: string | nul
   });
   for (const type of new Set(input.types)) {
     await runAutomations({ leadId: input.leadId, funnelId: input.funnelId, type }).catch((e) => console.error("[automations]", e));
+  }
+}
+
+/**
+ * API de Conversões (segundo plano, não atrasa o chat): o 1º engajamento do lead vira "Lead", oferta vista vira
+ * "ViewContent" e checkout vira "InitiateCheckout" (com o mesmo id que o navegador usou, para a Meta contar uma vez).
+ * A compra ("Purchase") sai quando o gateway confirma o pagamento (payments/service).
+ */
+function sendFunnelEventToMeta(input: TrackInput, eventId: string, becameEngaged: boolean) {
+  const data = (input.data ?? {}) as Record<string, unknown>;
+  const productId = typeof data.productId === "string" && data.productId ? data.productId : null;
+  const base = { leadId: input.leadId, funnelId: input.funnelId ?? null, chat: input.nodeId === "whatsapp" };
+  if (becameEngaged) inBackground(sendMetaEvent({ ...base, name: "Lead", eventId: `lead_${input.leadId}` }), "meta-capi");
+  if (input.type === "offer_viewed" && productId) inBackground(sendMetaEvent({ ...base, name: "ViewContent", eventId: `vc_${eventId}`, productId }), "meta-capi");
+  if (input.type === "checkout_started" && productId) {
+    const ic = typeof data.eventId === "string" && /^ic_[\w-]{4,80}$/.test(data.eventId) ? data.eventId : `ic_${eventId}`;
+    inBackground(sendMetaEvent({ ...base, name: "InitiateCheckout", eventId: ic, productId }), "meta-capi");
   }
 }
 

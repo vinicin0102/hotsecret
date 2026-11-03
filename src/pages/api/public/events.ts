@@ -42,6 +42,9 @@ const schema = z.object({
     )
     .min(1)
     .max(20),
+  /** cookies do pixel da Meta (para a API de Conversões encontrar a pessoa) */
+  fbp: z.string().max(200).regex(/^fb\.\d\.\d+\.\d+$/).optional().catch(undefined),
+  fbc: z.string().max(400).regex(/^fb\.\d\.\d+\.[\w-]+$/).optional().catch(undefined),
 });
 
 const MEDIA_MESSAGE: Record<string, string> = { image: "image", video: "video", audio: "audio" };
@@ -57,6 +60,13 @@ export default apiHandler({
 
     const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
     if (!conversation || conversation.leadId !== leadId) return { ok: false };
+    // cookies do pixel: guarda os que o lead ainda não tem (o clique do anúncio e o navegador dele)
+    if (body.fbp || body.fbc) {
+      await prisma.lead.updateMany({
+        where: { id: leadId, OR: [...(body.fbp ? [{ fbp: null }] : []), ...(body.fbc ? [{ fbc: null }] : [])] },
+        data: { ...(body.fbp ? { fbp: body.fbp } : {}), ...(body.fbc ? { fbc: body.fbc } : {}) },
+      });
+    }
 
     const nodeIds = [...new Set(body.events.map((e) => e.nodeId).filter((v): v is string => !!v))];
     const nodes = await prisma.funnelNode.findMany({ where: { funnelId, id: { in: nodeIds } } });
@@ -172,6 +182,8 @@ export default apiHandler({
             data: { checkoutStartedAt: conversation.checkoutStartedAt ?? new Date(), checkoutNodeId: node.id },
           });
           data.productId = String(content.productId ?? ev.data?.productId ?? "");
+          // o mesmo id do InitiateCheckout disparado no navegador: a API de Conversões usa ele (a Meta conta uma vez)
+          if (typeof ev.data?.eventId === "string" && /^ic_[\w-]{4,80}$/.test(ev.data.eventId)) data.eventId = ev.data.eventId;
           break;
         }
         case "link_clicked":

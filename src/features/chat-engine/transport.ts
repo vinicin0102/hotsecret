@@ -224,14 +224,18 @@ const connectionError = () => (chatLocale.startsWith("es") ? "Error de conexión
 export function createLiveTransport(getToken: () => string | null, opts: { sandbox: boolean; locale?: string }): ChatTransport {
   chatLocale = opts.locale ?? "pt-BR";
   let chain: Promise<void> = Promise.resolve();
+  // cookies do pixel (fbp/fbc) vão junto até o servidor ter o fbp: a API de Conversões casa melhor desde o 1º evento
+  let cookiesSent = false;
   return {
     mode: "live",
     track(events) {
       const token = getToken();
       if (!token || events.length === 0) return;
+      const cookies = cookiesSent ? {} : metaCookies();
+      if (cookies.fbp) cookiesSent = true;
       // fila sequencial: mantém a ordem cronológica das mensagens no banco
       chain = chain
-        .then(() => post("/api/public/events", { token, events }).then(() => undefined))
+        .then(() => post("/api/public/events", { token, events, ...cookies }).then(() => undefined))
         .catch((e) => console.warn("[track]", e));
     },
     flush() {

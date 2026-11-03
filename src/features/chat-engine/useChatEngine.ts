@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiContent, AnswerInputMode, ChoiceButton, FlowGraph, FlowNode, OfferContent, PublicFunnel, TarotCard } from "@/types/flow";
 import { AI_OFFERS_OUT, autoDelay, getNode, findStartNode, matchChoice, nextNodeId, resolveDelay, unlockedByOffers } from "./engine";
 import { ApiError, type ChatTransport, type CheckoutForm, type PayerData, type PublicPaymentInfo, type ServerMessage } from "./transport";
-import { pixelInitiateCheckout, pixelPurchase } from "./pixels";
+import { newEventId, pixelInitiateCheckout, pixelPurchase } from "./pixels";
 import { compressPhoto } from "./photo";
 import { asChatLocale, chatTexts } from "@/features/i18n/chat";
 
@@ -526,7 +526,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const productId = aiProductId ?? (node?.content as { productId?: string } | undefined)?.productId;
       const product = productId ? funnel.products[productId] : undefined;
       track("offer_clicked", offerNodeId, aiProductId ? { productId: aiProductId } : undefined);
-      track("checkout_started", offerNodeId, aiProductId ? { productId: aiProductId } : undefined);
+      // o mesmo id no InitiateCheckout do navegador e no da API de Conversões (a Meta conta uma vez)
+      const icId = newEventId("ic");
+      track("checkout_started", offerNodeId, { ...(aiProductId ? { productId: aiProductId } : {}), eventId: icId });
       // quem clicou em comprar não recebe mais as mensagens de apoio
       if (followUpOffers.current.size > 0) {
         followUpOffers.current.clear();
@@ -535,7 +537,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         setAwaiting(null);
       }
       if (product && transportRef.current?.mode === "live") {
-        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${offerNodeId}_${Date.now()}` });
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: icId });
       }
       setCheckoutOpened(true);
       if (product?.externalCheckoutUrl) {
@@ -861,9 +863,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       const product = funnel.products[productId];
       // a recusa (downsell) já foi registrada quando o card apareceu
       if (!downsell) track("offer_clicked", nodeId, { call: "answered", productId });
-      track("checkout_started", nodeId, { productId, ...(downsell ? { downsell: true } : {}) });
+      const icId = newEventId("ic");
+      track("checkout_started", nodeId, { productId, ...(downsell ? { downsell: true } : {}), eventId: icId });
       if (product && transportRef.current?.mode === "live") {
-        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: icId });
       }
       setCheckoutOpened(true);
       // dados do comprador ainda não informados: o pop-up mostra o formulário antes de gerar
@@ -979,9 +982,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
     const product = funnel.products[productId];
     setVoice({ ...v, pay: { needPayer: false } });
     track("offer_clicked", nodeId, { productId, voiceCall: v.id });
-    track("checkout_started", nodeId, { productId, voiceCall: v.id });
+    const icId = newEventId("ic");
+    track("checkout_started", nodeId, { productId, voiceCall: v.id, eventId: icId });
     if (product && transportRef.current?.mode === "live") {
-      pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
+      pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: icId });
     }
     setCheckoutOpened(true);
     // quem clicou em comprar não recebe mais as mensagens de apoio
@@ -1166,9 +1170,10 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       setVipError(null);
       setVip({ ...v, phase: "pay", payProductId: productId, needPayer: false });
       const product = funnel.products[productId];
-      track("checkout_started", nodeId, { productId, vip: productId === o?.productId ? "complete" : "basic" });
+      const icId = newEventId("ic");
+      track("checkout_started", nodeId, { productId, vip: productId === o?.productId ? "complete" : "basic", eventId: icId });
       if (product && transportRef.current?.mode === "live") {
-        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: `ic_${nodeId}_${Date.now()}` });
+        pixelInitiateCheckout({ value: product.price / 100, name: product.name, id: product.id, metaPixelId: product.metaPixelId, currency: product.currency, eventId: icId });
       }
       setCheckoutOpened(true);
       // quem clicou em comprar não recebe mais as mensagens de apoio do bloco

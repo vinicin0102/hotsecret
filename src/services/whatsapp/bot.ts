@@ -2,6 +2,7 @@
 // Oferta vira cobrança (PIX) na própria conversa; pago, a entrega chega no WhatsApp.
 import type { Payment, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { inBackground } from "@/lib/background";
 import { withComboProducts } from "@/services/combo-grants";
 import { absoluteUrl } from "@/lib/paths";
 import { formatMoney } from "@/lib/format";
@@ -66,18 +67,6 @@ async function isOurEcho(conversationId: string, m: IncomingMessage) {
   return recent.some((r) => ((r.content as { text?: string })?.text ?? "").trim() === m.text.trim());
 }
 
-/**
- * Continua depois de responder o webhook: a Evolution recebe o "ok" na hora (e pode mandar a próxima mensagem do lead),
- * e a resposta da IA segue em segundo plano. Na Vercel, o waitUntil do contexto da requisição mantém a função viva até
- * terminar (o mesmo que o pacote @vercel/functions faz); fora dela, o processo continua rodando.
- */
-function inBackground(task: Promise<unknown>) {
-  const holder = (globalThis as unknown as Record<symbol, { get?: () => { waitUntil?: (p: Promise<unknown>) => void } } | undefined>)[
-    Symbol.for("@vercel/request-context")
-  ];
-  const safe = task.catch((e) => console.error("[whatsapp]", e));
-  holder?.get?.()?.waitUntil?.(safe);
-}
 
 /** recebe o webhook (Evolution ou uazapi): grava as mensagens agora; a resposta vem em segundo plano */
 export async function handleWhatsAppWebhook(body: unknown) {
@@ -91,7 +80,7 @@ export async function handleWhatsAppWebhook(body: unknown) {
       continue;
     }
     const pending = await leadMessage(settings, m);
-    if (pending) inBackground(answerAfterPause(cfg, settings, pending.contactId, pending.conversationId, pending.messageId));
+    if (pending) inBackground(answerAfterPause(cfg, settings, pending.contactId, pending.conversationId, pending.messageId), "whatsapp");
   }
 }
 
