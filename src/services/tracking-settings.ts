@@ -17,6 +17,10 @@ export interface GlobalTracking extends TrackingIds {
   /** código de teste do Gerenciador de Eventos (opcional) */
   metaTestEventCode?: string;
   metaPixels?: StoredMetaPixel[];
+  /** token da API de Eventos do TikTok, criptografado — SEGREDO, nunca vai ao navegador */
+  tiktokTokenSealed?: string;
+  /** código de teste do Gerenciador de Eventos do TikTok (opcional) */
+  tiktokTestEventCode?: string;
 }
 
 const KEY = "tracking";

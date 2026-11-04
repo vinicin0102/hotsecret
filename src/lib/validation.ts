@@ -419,4 +419,6 @@ export const checkoutSchema = z.object({
   // cookies do pixel da Meta (para a API de Conversões)
   fbp: z.string().max(200).regex(/^fb\.\d\.\d+\.\d+$/).optional().catch(undefined),
   fbc: z.string().max(400).regex(/^fb\.\d\.\d+\.[\w-]+$/).optional().catch(undefined),
+  // cookie do pixel do TikTok (para a API de Eventos)
+  ttp: z.string().max(200).regex(/^[\w.-]{10,200}$/).optional().catch(undefined),
 });

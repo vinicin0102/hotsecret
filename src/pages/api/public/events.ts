@@ -45,6 +45,7 @@ const schema = z.object({
   /** cookies do pixel da Meta (para a API de Conversões encontrar a pessoa) */
   fbp: z.string().max(200).regex(/^fb\.\d\.\d+\.\d+$/).optional().catch(undefined),
   fbc: z.string().max(400).regex(/^fb\.\d\.\d+\.[\w-]+$/).optional().catch(undefined),
+  ttp: z.string().max(200).regex(/^[\w.-]{10,200}$/).optional().catch(undefined),
 });
 
 const MEDIA_MESSAGE: Record<string, string> = { image: "image", video: "video", audio: "audio" };
@@ -61,10 +62,10 @@ export default apiHandler({
     const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
     if (!conversation || conversation.leadId !== leadId) return { ok: false };
     // cookies do pixel: guarda os que o lead ainda não tem (o clique do anúncio e o navegador dele)
-    if (body.fbp || body.fbc) {
+    if (body.fbp || body.fbc || body.ttp) {
       await prisma.lead.updateMany({
-        where: { id: leadId, OR: [...(body.fbp ? [{ fbp: null }] : []), ...(body.fbc ? [{ fbc: null }] : [])] },
-        data: { ...(body.fbp ? { fbp: body.fbp } : {}), ...(body.fbc ? { fbc: body.fbc } : {}) },
+        where: { id: leadId, OR: [...(body.fbp ? [{ fbp: null }] : []), ...(body.fbc ? [{ fbc: null }] : []), ...(body.ttp ? [{ ttp: null }] : [])] },
+        data: { ...(body.fbp ? { fbp: body.fbp } : {}), ...(body.fbc ? { fbc: body.fbc } : {}), ...(body.ttp ? { ttp: body.ttp } : {}) },
       });
     }
 

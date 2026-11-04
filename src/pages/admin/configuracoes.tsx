@@ -74,6 +74,12 @@ interface TrackingForm {
   tiktokPixelId: string;
   googleTagId: string;
   metaTestEventCode: string;
+  tiktokTokenConfigured: boolean;
+  tiktokTokenHint: string;
+  tiktokTestEventCode: string;
+  /** token novo digitado (vazio = manter) */
+  tiktokToken?: string;
+  removeTiktokToken?: boolean;
 }
 
 /** Pixels padrão (valem para todos os fluxos que não definirem os próprios). */
@@ -83,7 +89,7 @@ function PixelsCard() {
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const f = form ?? data?.tracking ?? null;
   if (!f) return <div className="card">Carregando pixels...</div>;
-  const set = (k: "tiktokPixelId" | "googleTagId" | "metaTestEventCode", v: string) => setForm({ ...f, [k]: v });
+  const set = (k: "tiktokPixelId" | "googleTagId" | "metaTestEventCode" | "tiktokTestEventCode", v: string) => setForm({ ...f, [k]: v });
   const setPixel = (i: number, patch: Partial<MetaPixelRow>) => setForm({ ...f, metaPixels: f.metaPixels.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
   const addPixel = () => setForm({ ...f, metaPixels: [...f.metaPixels, { id: "", tokenConfigured: false, tokenHint: "" }] });
   const removePixel = (i: number) => setForm({ ...f, metaPixels: f.metaPixels.filter((_, j) => j !== i) });
@@ -113,6 +119,8 @@ function PixelsCard() {
           tiktokPixelId: f.tiktokPixelId,
           googleTagId: f.googleTagId,
           metaTestEventCode: f.metaTestEventCode,
+          tiktokTestEventCode: f.tiktokTestEventCode,
+          ...(f.removeTiktokToken ? { tiktokToken: "" } : f.tiktokToken?.trim() ? { tiktokToken: f.tiktokToken.trim() } : {}),
         },
       });
       setForm(null);
@@ -133,7 +141,8 @@ function PixelsCard() {
 
       <div className="section-title">Pixels da Meta (Facebook / Instagram)</div>
       <p className="hint" style={{ marginTop: -4 }}>
-        Um pixel por conta de anúncios — <b>todos recebem todos os eventos</b>. O token da API de Conversões envia a venda pelo servidor assim que o
+        Um pixel por conta de anúncios. Para cada conta marcar <b>só os leads dela</b>, coloque <code>px=ID_DO_PIXEL</code> nos parâmetros
+        de URL dos anúncios daquela conta; lead sem <code>px</code> vai para todos os pixels. O token da API de Conversões envia a venda pelo servidor assim que o
         pagamento é confirmado (conta a venda mesmo se o lead fechar a página, comum no PIX); a Meta não duplica o evento do pixel e do servidor.
         Gere o token em Gerenciador de Eventos → pixel → Configurações → API de Conversões → “Gerar token de acesso”. Sem token próprio, o pixel usa
         o primeiro token da lista. Pixel novo: depois de salvar, “Enviar vendas dos últimos 7 dias” manda para ele as vendas que já aconteceram
@@ -199,12 +208,50 @@ function PixelsCard() {
           <span className="hint">Use para ver os eventos em “Testar eventos” na Meta. Apague depois de testar.</span>
         </div>
         <div className="field">
-          <label htmlFor="px-tiktok">Pixel do TikTok</label>
+          <label htmlFor="px-google">Google (GA4 / Google Ads)</label>
+          <input id="px-google" className="input" placeholder="Ex.: G-XXXXXXXXXX" value={f.googleTagId} onChange={(e) => set("googleTagId", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="section-title">TikTok</div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        Com o token da API de Eventos, a venda (<b>CompletePayment</b>), o início do pagamento e a oferta vista vão também pelo servidor — contam
+        mesmo com bloqueador de anúncio ou se o lead fechar a página. O TikTok não duplica o evento do pixel e do servidor. Gere o token em
+        Gerenciador de Eventos do TikTok → seu pixel → Configurações → API de Eventos → “Gerar token de acesso”.
+      </p>
+      <div className="settings-grid" style={{ gap: 12 }}>
+        <div className="field">
+          <label htmlFor="px-tiktok">Pixel do TikTok — ID</label>
           <input id="px-tiktok" className="input" placeholder="Ex.: CABCDEFGHIJ1234567" value={f.tiktokPixelId} onChange={(e) => set("tiktokPixelId", e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="px-google">Google (GA4 / Google Ads)</label>
-          <input id="px-google" className="input" placeholder="Ex.: G-XXXXXXXXXX" value={f.googleTagId} onChange={(e) => set("googleTagId", e.target.value)} />
+          <label htmlFor="px-tiktok-token">Token da API de Eventos do TikTok</label>
+          <input
+            id="px-tiktok-token"
+            className="input"
+            type="password"
+            autoComplete="off"
+            placeholder={f.tiktokTokenConfigured && !f.removeTiktokToken ? `Configurado (${f.tiktokTokenHint}) — cole outro para trocar` : "Cole o token aqui"}
+            value={f.tiktokToken ?? ""}
+            onChange={(e) => setForm({ ...f, tiktokToken: e.target.value, removeTiktokToken: false })}
+          />
+          <span className="hint">
+            {f.tiktokTokenConfigured && !f.removeTiktokToken ? <span className="check-ok">✓ Ativo</span> : "Sem token"} · fica só no servidor, criptografado.
+            {f.tiktokTokenConfigured && (
+              <>
+                {" "}
+                <label className="checkbox" style={{ display: "inline-flex", marginLeft: 6 }}>
+                  <input type="checkbox" checked={!!f.removeTiktokToken} onChange={(e) => setForm({ ...f, removeTiktokToken: e.target.checked, tiktokToken: "" })} />
+                  remover token
+                </label>
+              </>
+            )}
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="px-tiktok-test">Código de teste do TikTok (opcional)</label>
+          <input id="px-tiktok-test" className="input" placeholder="Ex.: TEST12345" value={f.tiktokTestEventCode} onChange={(e) => set("tiktokTestEventCode", e.target.value)} />
+          <span className="hint">Para ver os eventos do servidor em “Testar eventos” no TikTok. Apague depois de testar.</span>
         </div>
       </div>
       {msg && <div className={msg.error ? "error-text" : "check-ok"} style={{ marginBottom: 10 }}>{msg.text}</div>}

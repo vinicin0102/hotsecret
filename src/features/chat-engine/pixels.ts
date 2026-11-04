@@ -189,9 +189,14 @@ export function pixelPurchase(p: PixelProduct) {
   if (active.googleTagId) w.gtag?.("event", "purchase", { transaction_id: p.eventId, value: p.value, currency: p.currency || "BRL", items: [{ item_id: p.id, item_name: p.name }] });
 }
 
-/** Cookies do pixel da Meta, enviados ao servidor para a API de Conversões. */
-export function metaCookies(): { fbp?: string; fbc?: string } {
+/** Cookies dos pixels (Meta e TikTok), enviados ao servidor para a API de Conversões e a API de Eventos. */
+export function metaCookies(): { fbp?: string; fbc?: string; ttp?: string } {
   if (typeof document === "undefined") return {};
   const get = (k: string) => document.cookie.split("; ").find((c) => c.startsWith(`${k}=`))?.slice(k.length + 1);
-  return { fbp: get("_fbp"), fbc: get("_fbc") };
+  return { fbp: get("_fbp"), fbc: get("_fbc"), ttp: active.tiktokPixelId ? get("_ttp") : undefined };
+}
+
+/** o servidor já tem os cookies que os pixels ativos criam (para de mandar a cada evento) */
+export function pixelCookiesComplete(c: { fbp?: string; ttp?: string }): boolean {
+  return (!!c.fbp || !flowMetaPixels().length) && (!!c.ttp || !active.tiktokPixelId);
 }

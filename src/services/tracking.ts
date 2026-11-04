@@ -5,6 +5,7 @@ import { cached } from "@/lib/memo";
 import { addTagToLead, removeTagFromLead } from "./tags";
 import { inBackground } from "@/lib/background";
 import { sendMetaEvent } from "./meta-capi";
+import { sendTiktokFunnelEvent } from "./tiktok-events";
 
 export const EVENT_TYPES = [
   "page_view",
@@ -117,10 +118,14 @@ function sendFunnelEventToMeta(input: TrackInput, eventId: string, becameEngaged
   const productId = typeof data.productId === "string" && data.productId ? data.productId : null;
   const base = { leadId: input.leadId, funnelId: input.funnelId ?? null, chat: input.nodeId === "whatsapp" };
   if (becameEngaged) inBackground(sendMetaEvent({ ...base, name: "Lead", eventId: `lead_${input.leadId}` }), "meta-capi");
-  if (input.type === "offer_viewed" && productId) inBackground(sendMetaEvent({ ...base, name: "ViewContent", eventId: `vc_${eventId}`, productId }), "meta-capi");
+  if (input.type === "offer_viewed" && productId) {
+    inBackground(sendMetaEvent({ ...base, name: "ViewContent", eventId: `vc_${eventId}`, productId }), "meta-capi");
+    inBackground(sendTiktokFunnelEvent({ ...base, name: "ViewContent", eventId: `vc_${eventId}`, productId }), "tiktok-events");
+  }
   if (input.type === "checkout_started" && productId) {
     const ic = typeof data.eventId === "string" && /^ic_[\w-]{4,80}$/.test(data.eventId) ? data.eventId : `ic_${eventId}`;
     inBackground(sendMetaEvent({ ...base, name: "InitiateCheckout", eventId: ic, productId }), "meta-capi");
+    inBackground(sendTiktokFunnelEvent({ ...base, name: "InitiateCheckout", eventId: ic, productId }), "tiktok-events");
   }
 }
 

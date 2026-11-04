@@ -14,6 +14,7 @@ import { createZenithCheckout, type ChargeOwner, type ZenithPayerInput } from ".
 import { asCurrency, currencyOfLocale } from "@/lib/format";
 import { getFunnelSettings } from "../funnels";
 import { sendMetaPurchase } from "../meta-capi";
+import { sendTiktokPurchase } from "../tiktok-events";
 import { brainOffers, brainVoiceCalls } from "../ai/brain";
 import { publicNextAction } from "./zenith";
 
@@ -307,6 +308,8 @@ export async function applyPaymentStatus(paymentId: string, status: PaymentStatu
     // venda na API de Conversões da Meta (falha aqui nunca afeta o pagamento)
     const approved = await prisma.payment.findUnique({ where: { id: paymentId } });
     if (approved) await sendMetaPurchase(approved).catch((e) => console.error("[meta-capi]", e));
+    // e na API de Eventos do TikTok (só com o token cadastrado nas Configurações)
+    if (approved) await sendTiktokPurchase(approved).catch((e) => console.error("[tiktok-events]", e));
     // Grupo VIP liberado para quem comprou qualquer produto: o link de acesso aparece no chat
     if (approved) await import("../vip").then((m) => m.grantVipAccessMessage(approved)).catch((e) => console.error("[vip-access]", e));
     // conversa do WhatsApp: avisa e entrega lá mesmo

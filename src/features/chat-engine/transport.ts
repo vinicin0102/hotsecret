@@ -3,7 +3,7 @@ import { afterCallAudio } from "@/lib/audio-match";
 import { withBase } from "@/lib/paths";
 import { asCurrency, currencyOfLocale } from "@/lib/format";
 import { livePreviewReady, type FlowNode, type LivePreview, type TarotCard, type VipOfferTexts } from "@/types/flow";
-import { metaCookies } from "./pixels";
+import { metaCookies, pixelCookiesComplete } from "./pixels";
 import type { ChatCue, TimeRange, UpsellMarker, VideoFrame, VideoTimeline } from "@/types/video";
 import { whatsappDigits } from "@/lib/whatsapp";
 import { normalizeTimeline } from "@/types/video";
@@ -232,7 +232,7 @@ export function createLiveTransport(getToken: () => string | null, opts: { sandb
       const token = getToken();
       if (!token || events.length === 0) return;
       const cookies = cookiesSent ? {} : metaCookies();
-      if (cookies.fbp) cookiesSent = true;
+      if (!cookiesSent && pixelCookiesComplete(cookies)) cookiesSent = true;
       // fila sequencial: mantém a ordem cronológica das mensagens no banco
       chain = chain
         .then(() => post("/api/public/events", { token, events, ...cookies }).then(() => undefined))

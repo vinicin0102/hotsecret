@@ -162,6 +162,9 @@ model Lead {
   fbc               String?
   /// pixel da conta de anúncios de onde o lead veio (?px= no link do anúncio): os eventos vão só para ele
   adPixelId         String?
+  /// TikTok: id do clique no anúncio (?ttclid=) e cookie _ttp do pixel — para a API de Eventos achar a pessoa
+  ttclid            String?
+  ttp               String?
   lastInteractionAt DateTime  @default(now())
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

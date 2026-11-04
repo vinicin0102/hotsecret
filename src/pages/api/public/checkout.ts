@@ -17,6 +17,7 @@ export default apiHandler({
         userAgent: String(req.headers["user-agent"] ?? "").slice(0, 400) || null,
         ...(body.fbp ? { fbp: body.fbp } : {}),
         ...(body.fbc ? { fbc: body.fbc } : {}),
+        ...(body.ttp ? { ttp: body.ttp } : {}),
       },
     });
     const payment = await createCheckout(session, body);
