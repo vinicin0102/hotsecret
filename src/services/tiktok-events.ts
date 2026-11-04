@@ -8,7 +8,7 @@ import { cached } from "@/lib/memo";
 import { absoluteUrl } from "@/lib/paths";
 import { openSecret } from "@/lib/secret-box";
 import type { FunnelSettings } from "@/types/flow";
-import { getGlobalTrackingCached, mergeTracking } from "./tracking-settings";
+import { getGlobalTracking, getGlobalTrackingCached, mergeTracking } from "./tracking-settings";
 
 const EVENTS_URL = (process.env.TIKTOK_EVENTS_URL || "https://business-api.tiktok.com/open_api/v1.3/event/track/").replace(/\/?$/, "/");
 const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");
@@ -88,6 +88,10 @@ async function target(funnelId: string | null | undefined) {
 
 /** POST para o TikTok; a mensagem de erro dele vai para o log (nunca o token) */
 async function post(t: { token: string; pixel: string; testCode?: string }, data: unknown[]): Promise<boolean> {
+  return (await postWithResult(t, data)).ok;
+}
+
+async function postWithResult(t: { token: string; pixel: string; testCode?: string }, data: unknown[]): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(EVENTS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Access-Token": t.token },
@@ -97,9 +101,29 @@ async function post(t: { token: string; pixel: string; testCode?: string }, data
   const r = (await res.json().catch(() => ({}))) as { code?: number; message?: string };
   if (!res.ok || (typeof r.code === "number" && r.code !== 0)) {
     console.error("[tiktok-events] eventos recusados", t.pixel, res.status, JSON.stringify(r).slice(0, 400));
-    return false;
+    return { ok: false, error: r.message?.slice(0, 300) || `HTTP ${res.status}` };
   }
-  return true;
+  return { ok: true };
+}
+
+/**
+ * Botão "Enviar eventos de teste" (Configurações): ViewContent, InitiateCheckout e CompletePayment de R$ 1,00 com o
+ * código de teste — aparecem só em "Testar eventos" no TikTok, não contam nas campanhas. Exige o código de teste.
+ */
+export async function sendTiktokTestEvents(who: { ip?: string; userAgent?: string }): Promise<{ sent: number; error?: string }> {
+  const global = await getGlobalTracking();
+  const token = global.tiktokTokenSealed ? openSecret(global.tiktokTokenSealed) : null;
+  if (!global.tiktokPixelId) return { sent: 0, error: "Cadastre o ID do pixel do TikTok e salve." };
+  if (!token) return { sent: 0, error: "Cadastre o token da API de Eventos do TikTok e salve." };
+  if (!global.tiktokTestEventCode) return { sent: 0, error: "Preencha o código de teste do TikTok e salve (os eventos de teste só vão com ele)." };
+  const stamp = Date.now().toString(36);
+  const lead = { id: `teste_${stamp}`, clientIp: who.ip, userAgent: who.userAgent };
+  const product = { id: "produto_teste", name: "Teste HOT SECRET", price: 100, currency: "BRL" };
+  const data = (["ViewContent", "InitiateCheckout", "CompletePayment"] as const).map((name) =>
+    tiktokEvent({ name, eventId: `teste_${name}_${stamp}`, lead, product, url: absoluteUrl("/") }),
+  );
+  const r = await postWithResult({ token, pixel: global.tiktokPixelId, testCode: global.tiktokTestEventCode }, data);
+  return r.ok ? { sent: data.length } : { sent: 0, error: r.error };
 }
 
 /** ViewContent / InitiateCheckout do funil (segundo plano, nunca atrasa o chat) */

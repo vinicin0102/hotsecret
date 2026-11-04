@@ -106,6 +106,20 @@ function PixelsCard() {
     }
   };
   const saved = new Set((data?.tracking.metaPixels ?? []).map((p) => p.id));
+  /** TikTok: 3 eventos com o código de teste salvo (aparecem em "Testar eventos" no TikTok) */
+  const tiktokTest = async () => {
+    setMsg(null);
+    try {
+      const r = await api<{ sent: number; error?: string }>("/api/admin/tracking/tiktok-test", { body: {} });
+      setMsg(
+        r.error
+          ? { text: `TikTok: ${r.error}`, error: true }
+          : { text: `TikTok: ${r.sent} eventos de teste enviados (ViewContent, InitiateCheckout e CompletePayment de R$ 1,00) ✓ — veja em “Testar eventos”` },
+      );
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : "Erro ao enviar", error: true });
+    }
+  };
 
   const save = async () => {
     setMsg(null);
@@ -252,6 +266,11 @@ function PixelsCard() {
           <label htmlFor="px-tiktok-test">Código de teste do TikTok (opcional)</label>
           <input id="px-tiktok-test" className="input" placeholder="Ex.: TEST12345" value={f.tiktokTestEventCode} onChange={(e) => set("tiktokTestEventCode", e.target.value)} />
           <span className="hint">Para ver os eventos do servidor em “Testar eventos” no TikTok. Apague depois de testar.</span>
+          {data?.tracking.tiktokTokenConfigured && data.tracking.tiktokTestEventCode && (
+            <button className="btn btn-sm" style={{ marginTop: 8, alignSelf: "flex-start" }} onClick={() => void tiktokTest()}>
+              Enviar eventos de teste
+            </button>
+          )}
         </div>
       </div>
       {msg && <div className={msg.error ? "error-text" : "check-ok"} style={{ marginBottom: 10 }}>{msg.text}</div>}
