@@ -1784,3 +1784,44 @@ code.inline {
 .vip-editor > .vip-wide {
   grid-column: 1 / -1;
 }
+
+/* Analytics → Perfil dos compradores */
+.buyer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+/* a tabela larga rola dentro do card, não empurra a página */
+.buyer-grid > *,
+.buyer-highlights > * {
+  min-width: 0;
+}
+.buyer-grid .table-wrap {
+  overflow-x: auto;
+}
+.buyer-grid .table td,
+.buyer-grid .table th {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.buyer-highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.buyer-highlights ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+@media (max-width: 480px) {
+  .buyer-grid,
+  .buyer-highlights {
+    grid-template-columns: 1fr;
+  }
+}

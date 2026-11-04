@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AnalyticsCard } from "@/components/admin/AnalyticsCard";
+import { BuyerProfile } from "@/components/admin/BuyerProfile";
 import { CampaignTable, type CampaignRow } from "@/components/admin/CampaignTable";
 import { FunnelSteps, type Step } from "@/components/admin/FunnelSteps";
 import { RangeFilter, rangeQuery, type RangeValue } from "@/components/admin/RangeFilter";
@@ -70,7 +71,7 @@ export default function Analytics() {
   return (
     <AdminLayout
       title="Analytics"
-      subtitle="Funil, campanhas e testes A/B"
+      subtitle="Funil, campanhas, perfil dos compradores e testes A/B"
       actions={
         <>
           <select className="select" style={{ width: 200 }} value={funnelId} onChange={(e) => setFunnelId(e.target.value)}>
@@ -97,6 +98,10 @@ export default function Analytics() {
       <div className="card" style={{ marginBottom: 16 }}>
         <h3>Vendas por campanha (UTM)</h3>
         <CampaignTable rows={data?.campaigns ?? []} />
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3>Perfil dos compradores</h3>
+        <BuyerProfile query={`${rangeQuery(range)}&funnelId=${funnelId}`} />
       </div>
 
       <div className="card">
