@@ -28,6 +28,30 @@ type W = Window & {
 
 let active: TrackingIds = {};
 
+/**
+ * Pixel da conta de anúncios de onde o lead veio (?px=<pixel> no link do anúncio), guardado no navegador para as
+ * próximas visitas. Com ele, os eventos vão só para esse pixel — cada conta marca só os leads dela.
+ */
+function adPixel(): string | null {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("px");
+    if (fromUrl && /^\d{8,20}$/.test(fromUrl)) {
+      localStorage.setItem("hs_ad_px", fromUrl);
+      return fromUrl;
+    }
+    const saved = localStorage.getItem("hs_ad_px");
+    return saved && /^\d{8,20}$/.test(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+/** só o pixel da conta de origem, quando ele está entre os configurados; senão todos */
+function routed(ids: string[]): string[] {
+  const own = adPixel();
+  return own && ids.includes(own) ? [own] : ids;
+}
+
 function addScript(src: string) {
   const s = document.createElement("script");
   s.async = true;
@@ -40,7 +64,7 @@ export function initPixels(ids: TrackingIds | undefined, offerPixels: string[] =
   if (typeof window === "undefined" || (!ids && !offerPixels.length)) return;
   const w = window as W;
   active = ids ?? {};
-  const metaIds = [...new Set([...flowMetaPixels(), ...offerPixels].filter((v) => /^\d{5,25}$/.test(v)))];
+  const metaIds = routed([...new Set([...flowMetaPixels(), ...offerPixels].filter((v) => /^\d{5,25}$/.test(v)))]);
 
   if (metaIds.length && !w.fbq) {
     const n = function (...args: unknown[]) {
@@ -128,7 +152,7 @@ function flowMetaPixels(): string[] {
  * ofertas, iniciados para o PageView, não recebem. O mesmo eventID em todos: cada pixel deduplica com a API de Conversões.
  */
 function metaTrack(w: W, event: string, data: Record<string, unknown>, p: PixelProduct) {
-  for (const target of new Set([...flowMetaPixels(), ...(p.metaPixelId ? [p.metaPixelId] : [])])) {
+  for (const target of routed([...new Set([...flowMetaPixels(), ...(p.metaPixelId ? [p.metaPixelId] : [])])])) {
     w.fbq?.("trackSingle", target, event, data, { eventID: p.eventId });
   }
 }

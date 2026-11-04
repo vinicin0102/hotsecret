@@ -50,6 +50,16 @@ function fbcFromLanding(landing?: string | null): string | null {
   }
 }
 
+/** ?px=<pixel> no link do anúncio: a conta de anúncios de onde o lead veio */
+function adPixelFromLanding(landing?: string | null): string | null {
+  try {
+    const px = landing ? new URL(landing).searchParams.get("px") : null;
+    return px && /^\d{8,20}$/.test(px) ? px : null;
+  } catch {
+    return null;
+  }
+}
+
 const t = (v?: string | null) => (v ? sanitizeText(v, 200) || null : null);
 /** UTMs guardam até 500 caracteres: no padrão da UTMify o id do anúncio vem no fim ("nome|id") e não pode ser cortado */
 const tu = (v?: string | null) => (v ? sanitizeText(v, 500) || null : null);
@@ -126,6 +136,7 @@ export default apiHandler({
         experimentId,
         variantId,
         fbc: fbcFromLanding(body.landingPage),
+        adPixelId: adPixelFromLanding(body.landingPage),
         clientIp: getClientIp(req).slice(0, 64),
         userAgent: String(req.headers["user-agent"] ?? "").slice(0, 400) || null,
       },

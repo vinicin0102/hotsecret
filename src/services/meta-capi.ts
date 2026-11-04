@@ -92,6 +92,16 @@ async function postEvents(pixelId: string, token: string, data: unknown[], testC
 /** pagamento de teste (sandbox/pré-visualização): não vira venda nos pixels, a não ser com o código de teste da Meta ligado */
 const isTestPayment = (p: Pick<Payment, "provider">) => p.provider === "sandbox" || p.provider === "preview";
 
+/**
+ * Lead que veio do anúncio de uma conta (?px=<pixel> no link): os eventos dele vão só para o pixel dela — sem isso,
+ * toda venda ia para os pixels de todas as contas e a Meta creditava a venda em conta que não vendeu.
+ * Sem ?px (ou com um pixel que não está configurado), segue para todos os pixels do fluxo.
+ */
+export function routeToAdPixel<T extends { id: string }>(targets: T[], lead: { adPixelId?: string | null }): T[] {
+  const own = lead.adPixelId ? targets.filter((t) => t.id === lead.adPixelId) : [];
+  return own.length ? own : targets;
+}
+
 export async function sendMetaPurchase(payment: Payment): Promise<void> {
   const global = await getGlobalTracking();
   if (isTestPayment(payment) && !global.metaTestEventCode) return;
@@ -105,7 +115,10 @@ export async function sendMetaPurchase(payment: Payment): Promise<void> {
   const pixels = [
     ...new Set([...(mergeTracking(global, (funnel?.settings as FunnelSettings | null)?.tracking).metaPixelIds ?? []), ...(product?.metaPixelId ? [product.metaPixelId] : [])]),
   ];
-  const targets = pixels.map((id) => ({ id, token: tokenOf(id) })).filter((t): t is { id: string; token: string } => !!t.token);
+  const targets = routeToAdPixel(
+    pixels.map((id) => ({ id, token: tokenOf(id) })).filter((t): t is { id: string; token: string } => !!t.token),
+    lead,
+  );
   if (!targets.length) return;
   const event = purchaseEvent(payment, lead, product?.name, funnel?.slug);
 
@@ -163,7 +176,10 @@ export async function sendMetaEvent(ev: FunnelMetaEvent): Promise<void> {
   const pixels = [
     ...new Set([...(mergeTracking(global, (funnel?.settings as FunnelSettings | null)?.tracking).metaPixelIds ?? []), ...(product?.metaPixelId ? [product.metaPixelId] : [])]),
   ];
-  const targets = pixels.map((id) => ({ id, token: tokenOf(id) })).filter((t): t is { id: string; token: string } => !!t.token);
+  const targets = routeToAdPixel(
+    pixels.map((id) => ({ id, token: tokenOf(id) })).filter((t): t is { id: string; token: string } => !!t.token),
+    lead,
+  );
   if (!targets.length) return;
   const event = {
     event_name: ev.name,
@@ -211,7 +227,13 @@ export async function backfillMetaPurchases(pixelId: string): Promise<{ sent: nu
   const leadOf = new Map(leads.map((l) => [l.id, l]));
   const nameOf = new Map(products.map((p) => [p.id, p.name]));
   const slugOf = new Map(funnels.map((f) => [f.id, f.slug]));
-  const ready = todo.filter((p) => leadOf.has(p.leadId));
+  // venda de lead que veio de outra conta (?px de outro pixel) não vai para este pixel
+  const configured = new Set(globalMetaPixels(global).map((p) => p.id));
+  const ready = todo.filter((p) => {
+    const lead = leadOf.get(p.leadId);
+    return !!lead && (!lead.adPixelId || lead.adPixelId === pixelId || !configured.has(lead.adPixelId));
+  });
+  if (!ready.length) return { sent: 0, already: payments.length - todo.length };
 
   let sent = 0;
   for (let i = 0; i < ready.length; i += 500) {

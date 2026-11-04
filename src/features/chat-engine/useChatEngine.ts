@@ -134,6 +134,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const started = useRef(false);
   const chatStartedSent = useRef(false);
   const advancedPayments = useRef(new Set<string>());
+  /** pagamentos vistos pendentes nesta visita: só eles podem virar "Compra" no pixel do navegador */
+  const awaitedPayments = useRef(new Set<string>());
   const lastPoll = useRef<string | null>(null);
   const seenServerMsgs = useRef(new Set<string>());
   const transportRef = useRef(transport);
@@ -651,11 +653,14 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   // ---------- Avanço do fluxo após eventos de pagamento ----------
   useEffect(() => {
     for (const p of Object.values(payments)) {
+      if (p.status === "CREATED" || p.status === "PENDING") awaitedPayments.current.add(p.id);
       if (!p.offerNodeId || advancedPayments.current.has(p.id)) continue;
       if (p.status === "APPROVED" || p.status === "FAILED") {
         advancedPayments.current.add(p.id);
-        // venda confirmada pelo gateway (mesmo id do evento enviado pela API de Conversões)
-        if (p.status === "APPROVED" && transportRef.current?.mode === "live") {
+        // venda confirmada pelo gateway (mesmo id do evento enviado pela API de Conversões). Só a que o lead estava
+        // esperando NESTA visita: quem já comprou e volta ao chat não dispara outra "Compra"; teste (sandbox) nunca —
+        // a API de Conversões já manda toda venda real pelo servidor
+        if (p.status === "APPROVED" && transportRef.current?.mode === "live" && p.provider !== "sandbox" && awaitedPayments.current.has(p.id)) {
           const product = funnel.products[p.productId];
           pixelPurchase({ value: p.amount / 100, name: product?.name ?? "Produto", id: p.productId, eventId: p.id, metaPixelId: product?.metaPixelId, currency: product?.currency });
         }

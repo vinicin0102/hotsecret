@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { userDataOf } from "../src/services/meta-capi";
+import { routeToAdPixel, userDataOf } from "../src/services/meta-capi";
 
 const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 const lead = (p: Record<string, unknown>) => ({ id: "lead1", clientIp: "1.2.3.4", userAgent: "UA", fbp: null, fbc: null, country: "BR", email: null, phone: null, ...p }) as never;
@@ -20,4 +20,11 @@ test("correspondência: telefone já com DDI fica igual; inválido e e-mail ruim
   const u = userDataOf(lead({ phone: "123", email: "não é email" }));
   assert.equal(u.ph, undefined);
   assert.equal(u.em, undefined);
+});
+
+test("lead com ?px da conta: eventos só para o pixel dela; sem px ou px desconhecido, para todos", () => {
+  const targets = [{ id: "111111111111" }, { id: "222222222222" }];
+  assert.deepEqual(routeToAdPixel(targets, { adPixelId: "222222222222" }).map((t) => t.id), ["222222222222"]);
+  assert.deepEqual(routeToAdPixel(targets, { adPixelId: null }).map((t) => t.id), ["111111111111", "222222222222"]);
+  assert.deepEqual(routeToAdPixel(targets, { adPixelId: "999999999999" }).map((t) => t.id), ["111111111111", "222222222222"]);
 });
