@@ -1,12 +1,13 @@
 import { useRouter } from "next/router";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AiPausedPill, AiToggle } from "@/components/admin/AiToggle";
 import { StageBadge } from "@/components/admin/Badges";
 import { useFetch } from "@/hooks/useFetch";
 import { formatDateTime } from "@/lib/format";
 
 interface Row {
   id: string;
-  lead: { id: string; name: string | null; email: string | null; stage: string; utmSource: string | null };
+  lead: { id: string; name: string | null; email: string | null; stage: string; utmSource: string | null; aiPausedAt: string | null };
   funnel: string;
   status: string;
   messageCount: number;
@@ -16,7 +17,13 @@ interface Row {
 
 export default function Conversations() {
   const router = useRouter();
-  const { data } = useFetch<{ conversations: Row[] }>("/api/admin/conversations");
+  const { data, setData } = useFetch<{ conversations: Row[] }>("/api/admin/conversations");
+  /** o mesmo lead pode ter mais de uma conversa: o botão muda todas as linhas dele */
+  const setPaused = (leadId: string, paused: boolean) =>
+    data &&
+    setData({
+      conversations: data.conversations.map((c) => (c.lead.id === leadId ? { ...c, lead: { ...c.lead, aiPausedAt: paused ? new Date().toISOString() : null } } : c)),
+    });
   return (
     <AdminLayout title="Conversas" subtitle="Conversas mais recentes — clique para ver o chat completo">
       <div className="table-wrap">
@@ -29,6 +36,7 @@ export default function Conversations() {
               <th>Mensagens</th>
               <th>Status</th>
               <th>Atualizada</th>
+              <th>IA</th>
             </tr>
           </thead>
           <tbody>
@@ -45,9 +53,13 @@ export default function Conversations() {
                 </td>
                 <td>{c.messageCount}</td>
                 <td>
-                  <StageBadge stage={c.lead.stage} /> {c.status === "completed" && <span className="pill">concluída</span>}
+                  <StageBadge stage={c.lead.stage} /> {c.status === "completed" && <span className="pill">concluída</span>}{" "}
+                  {c.lead.aiPausedAt && <AiPausedPill />}
                 </td>
                 <td className="dim">{formatDateTime(c.updatedAt)}</td>
+                <td>
+                  <AiToggle key={`${c.lead.id}:${!!c.lead.aiPausedAt}`} leadId={c.lead.id} paused={!!c.lead.aiPausedAt} onChange={(p) => setPaused(c.lead.id, p)} small />
+                </td>
               </tr>
             ))}
           </tbody>

@@ -104,6 +104,9 @@ async function leadMessage(settings: WhatsAppSettings, m: IncomingMessage) {
   await trackEvent({ leadId: contact.leadId, conversationId: contact.conversationId, type: "ai_message", nodeId: WA_NODE, data: { value: incomingText(m), channel: "whatsapp" } });
 
   if (settings.pausedAll || !settings.brainId || contact.paused || (contact.pausedUntil && contact.pausedUntil > new Date())) return null;
+  // IA encerrada para este lead no painel (Conversas/Lead)
+  const lead = await prisma.lead.findUnique({ where: { id: contact.leadId }, select: { aiPausedAt: true } });
+  if (lead?.aiPausedAt) return null;
   return { contactId: contact.id, conversationId: contact.conversationId, messageId: saved.id };
 }
 

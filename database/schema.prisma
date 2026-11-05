@@ -165,6 +165,8 @@ model Lead {
   /// TikTok: id do clique no anúncio (?ttclid=) e cookie _ttp do pixel — para a API de Eventos achar a pessoa
   ttclid            String?
   ttp               String?
+  /// IA encerrada para este lead (painel → Conversas/Lead): o chat e o WhatsApp não respondem mais com a IA
+  aiPausedAt        DateTime?
   lastInteractionAt DateTime  @default(now())
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

@@ -72,9 +72,11 @@ export default apiHandler({
 
     const [history, lead, paid] = await Promise.all([
       prisma.message.findMany({ where: { conversationId: session.conversationId }, orderBy: { createdAt: "asc" }, take: 200 }),
-      prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, variables: true } }),
+      prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, variables: true, aiPausedAt: true } }),
       prisma.payment.findMany({ where: { leadId: session.leadId, status: "APPROVED" }, include: { product: { select: { name: true } } } }),
     ]);
+    // IA encerrada para este lead no painel: a mensagem dele fica registrada (você vê nas Conversas), sem resposta
+    if (lead?.aiPausedAt) return { messages: [], offer: null, audio: null, image: null, end: false, paused: true };
     const vars = (lead?.variables ?? {}) as Record<string, string>;
     // região do lead pelo IP: guardada na 1ª resposta, para a personagem dizer sempre o mesmo lugar perto dele
     let place = typeof vars._regiao === "string" ? vars._regiao : "";

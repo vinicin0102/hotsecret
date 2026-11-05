@@ -1825,3 +1825,12 @@ code.inline {
     grid-template-columns: 1fr;
   }
 }
+
+/* IA encerrada para o lead (Conversas / página do lead) */
+.ai-paused-pill {
+  background: rgba(217, 79, 125, 0.16);
+  color: #ff8fb0;
+}
+.ai-toggle {
+  white-space: nowrap;
+}

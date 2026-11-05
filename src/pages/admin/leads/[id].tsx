@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AiToggle } from "@/components/admin/AiToggle";
 import { PaymentBadge, STAGE_LABEL, TagChip } from "@/components/admin/Badges";
 import { ConversationViewer, type ViewerMessage } from "@/components/admin/ConversationViewer";
 import { useFetch } from "@/hooks/useFetch";
@@ -31,6 +32,7 @@ interface LeadDetail {
     country: string | null;
     createdAt: string;
     lastInteractionAt: string;
+    aiPausedAt: string | null;
     funnel: { id: string; name: string; slug: string } | null;
     tags: { tag: { id: string; name: string; color: string }; source: string }[];
     payments: { id: string; status: string; amount: number; method: string; createdAt: string; product: { name: string } }[];
@@ -101,6 +103,7 @@ export default function LeadPage() {
     <AdminLayout
       title={l.name || "Visitante anônimo"}
       subtitle={<Link href="/admin/leads">← Voltar para leads</Link>}
+      actions={<AiToggle key={String(!!l.aiPausedAt)} leadId={l.id} paused={!!l.aiPausedAt} onChange={() => void reload()} />}
     >
       <div className="split">
         <div className="card">

@@ -12,7 +12,7 @@ export default apiHandler({
       skip: (page - 1) * 40,
       take: 40,
       include: {
-        lead: { select: { id: true, name: true, email: true, stage: true, utmSource: true } },
+        lead: { select: { id: true, name: true, email: true, stage: true, utmSource: true, aiPausedAt: true } },
         funnel: { select: { name: true } },
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
         _count: { select: { messages: true } },

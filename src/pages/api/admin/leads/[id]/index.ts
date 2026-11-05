@@ -34,6 +34,8 @@ export default apiHandler({
         email: z.string().max(160).optional(),
         phone: z.string().max(30).optional(),
         stage: z.enum(["NEW", "INTERESTED", "CHECKOUT", "BUYER", "ABANDONED"]).optional(),
+        /** encerrar (true) ou reativar (false) a IA para este lead */
+        aiPaused: z.boolean().optional(),
       })
       .parse(req.body);
     const lead = await prisma.lead.update({
@@ -43,8 +45,13 @@ export default apiHandler({
         ...(body.email !== undefined ? { email: sanitizeText(body.email, 160) || null } : {}),
         ...(body.phone !== undefined ? { phone: sanitizeText(body.phone, 30) || null } : {}),
         ...(body.stage ? { stage: body.stage } : {}),
+        ...(body.aiPaused !== undefined ? { aiPausedAt: body.aiPaused ? new Date() : null } : {}),
       },
     });
+    // o mesmo lead no WhatsApp: a tela do WhatsApp mostra "IA pausada" igual
+    if (body.aiPaused !== undefined) {
+      await prisma.whatsAppContact.updateMany({ where: { leadId: lead.id }, data: { paused: body.aiPaused, pausedUntil: null } });
+    }
     return { lead };
   },
   DELETE: async (req) => {
