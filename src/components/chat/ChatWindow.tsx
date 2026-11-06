@@ -579,6 +579,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
             previewMode={transport?.mode === "preview"}
             freePreview={!!engine.call.free}
+            payAudioUrl={callOffer?.vip?.payAudioUrl}
             onBuyMain={engine.buyFreeCall}
             messenger={messenger}
           />

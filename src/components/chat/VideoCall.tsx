@@ -462,6 +462,7 @@ export function CallScreen({
   onSimulate,
   previewMode,
   freePreview,
+  payAudioUrl,
   onBuyMain,
   messenger,
   loadVideo,
@@ -472,6 +473,8 @@ export function CallScreen({
   loadVideo?: (nodeId: string, productId?: string) => Promise<CallVideo | null>;
   /** chamada de vídeo 02: antes de pagar, o trecho FREE toca uma vez e no fim dele aparece a oferta (como upsell) */
   freePreview?: boolean;
+  /** "Áudio no pagamento" da oferta de ligação: vale na oferta que abre no fim do FREE (chamada de vídeo 02) */
+  payAudioUrl?: string;
   /** chamada de vídeo 02: o lead tocou em pagar a oferta principal (ou um ingresso de uma "Oferta" no FREE) */
   onBuyMain?: (productId?: string) => void;
   nodeId: string;
@@ -820,8 +823,10 @@ export function CallScreen({
       )}
 
       {upsell && upsell.style === "offer" && (() => {
-        const offer: OfferContent = { productId: upsell.productId, downsellProductId: upsell.basicProductId, style: "live", vip: upsell.vip };
         const inFree = !paid && !!freePreview;
+        // compra da chamada no fim do FREE: sem áudio próprio na "Oferta" do vídeo, vale o da oferta de ligação
+        const vip = inFree && payAudioUrl && !upsell.vip?.payAudioUrl ? { ...(upsell.vip ?? {}), payAudioUrl } : upsell.vip;
+        const offer: OfferContent = { productId: upsell.productId, downsellProductId: upsell.basicProductId, style: "live", vip };
         // oferta com número de WhatsApp: pagou, o botão de chamar (o vídeo segue quando ele voltar)
         if (upsellDone && upsell.whatsappAfter) {
           return (
