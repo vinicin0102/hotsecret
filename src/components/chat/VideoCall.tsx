@@ -10,7 +10,8 @@ import { UpsellScreen } from "./UpsellScreen";
 import { VipMosaic } from "./VipPreviewCard";
 import { withBase } from "@/lib/paths";
 import { OfferCard } from "./OfferCard";
-import { VipOfferModal, VipPaySheet } from "./LiveChannel";
+import { VipExitModal, VipOfferModal, VipPaySheet } from "./LiveChannel";
+import { useBackGuard } from "@/features/chat-engine/back-guard";
 import type { OfferContent } from "@/types/flow";
 import { WhatsAppContact, WhatsAppDoneSheet, whatsappOffer } from "./WhatsAppOffer";
 
@@ -568,6 +569,13 @@ export function CallScreen({
   const upsellDone = upsell ? boughtUpsell(upsell.productId) || (!!upsell.basicProductId && boughtUpsell(upsell.basicProductId)) : false;
   /** "Oferta" com 2 ingressos: o ingresso escolhido (abre a folha do pagamento) */
   const [offerPick, setOfferPick] = useState<string | null>(null);
+  /** PIX da oferta dentro da chamada: "Vai desistir agora?" no X, ao desligar e no "voltar" do celular */
+  const [askLeave, setAskLeave] = useState<null | "close" | "hangup">(null);
+  const upsellPixOpen = !!offerPick && upsell?.style === "offer";
+  useBackGuard(upsellPixOpen && !askLeave, () => setAskLeave("close"));
+  useEffect(() => {
+    if (!upsellPixOpen) setAskLeave(null);
+  }, [upsellPixOpen]);
   useEffect(() => setOfferPick(null), [upsell?.id]);
   // o loop de animação lê sempre o estado atual por aqui
   /** já viu o FREE (chamada de vídeo 02): depois de pagar, segue direto do VIP */
@@ -823,18 +831,29 @@ export function CallScreen({
           );
         }
         return offerPick ? (
+          <>
           <VipPaySheet
             character={character}
             offer={offer}
             payment={forNode.filter((p) => p.productId === offerPick && p.status !== "FAILED")[0]}
             error={error}
-            onClose={() => {
-              setOfferPick(null);
-              if (inFree && freeEnded.current) onHangUp();
-              else closeUpsell();
-            }}
+            onClose={() => setAskLeave("close")}
             onSimulate={onSimulate}
           />
+          {askLeave && (
+            <VipExitModal
+              offer={offer}
+              onStay={() => setAskLeave(null)}
+              onLeave={() => {
+                const hangup = askLeave === "hangup";
+                setAskLeave(null);
+                setOfferPick(null);
+                if (hangup || (inFree && freeEnded.current)) onHangUp();
+                else closeUpsell();
+              }}
+            />
+          )}
+          </>
         ) : (
           <VipOfferModal
             character={character}
@@ -962,7 +981,7 @@ export function CallScreen({
           <span className="call-ctl msc-btn" aria-hidden="true">
             <MicOffIcon />
           </span>
-          <button className="call-btn decline call-hangup msc-btn msc-decline" onClick={onHangUp} aria-label={tx.hangUp}>
+          <button className="call-btn decline call-hangup msc-btn msc-decline" onClick={() => (upsellPixOpen ? setAskLeave("hangup") : onHangUp())} aria-label={tx.hangUp}>
             <PhoneIcon down />
           </button>
         </div>
@@ -979,7 +998,7 @@ export function CallScreen({
           <button className={`call-ctl ${soundOff ? "off" : ""}`} onClick={toggleSound} aria-label={soundOff ? tx.soundOff : tx.soundOn} aria-pressed={!soundOff}>
             <SpeakerIcon off={soundOff} />
           </button>
-          <button className="call-btn decline call-hangup" onClick={onHangUp} aria-label={tx.hangUp}>
+          <button className="call-btn decline call-hangup" onClick={() => (upsellPixOpen ? setAskLeave("hangup") : onHangUp())} aria-label={tx.hangUp}>
             <PhoneIcon down />
           </button>
           <button className="call-ctl heart" onClick={sendHeart} aria-label={tx.sendHeart}>

@@ -3,6 +3,7 @@ import { asChatLocale, ChatI18nContext, makeChatI18n } from "@/features/i18n/cha
 import type { AudioContent, DeliveryContent, ImageContent, LinkContent, OfferContent, PublicFunnel, VideoContent } from "@/types/flow";
 import { getNode } from "@/features/chat-engine/engine";
 import { useChatEngine, type ChatItem, type ResumeState } from "@/features/chat-engine/useChatEngine";
+import { setBackGuardEnabled, useBackGuard } from "@/features/chat-engine/back-guard";
 import type { CallVideo, ChatTransport } from "@/features/chat-engine/transport";
 import { ChatHeader, MessengerHeader } from "./ChatHeader";
 import { MessageBubble } from "./MessageBubble";
@@ -78,6 +79,22 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
   const fadeOld = !!bgVideo && funnel.appearance?.fadeOld !== false;
   const visibleCount = funnel.appearance?.visibleCount ?? 5;
   const { items, typing, awaiting, payments, ended } = engine;
+
+  // "Vai desistir agora?" em toda tela de PIX: no X, ao desligar e no "voltar" do celular
+  setBackGuardEnabled(!embedded);
+  /** qual tela de PIX está perguntando "vai desistir?" (chamada de vídeo ou ligação de voz; o Canal VIP tem a fase "exit") */
+  const [leaveAsk, setLeaveAsk] = useState<null | "call" | "voice">(null);
+  const callPixOpen = engine.call?.phase === "pix" || (engine.call?.phase === "active" && !!engine.call.free && !!engine.call.needPayer);
+  const voicePayOpen = !!engine.voice?.pay;
+  useBackGuard(engine.vip?.phase === "pay", engine.closeVip);
+  useBackGuard(callPixOpen && leaveAsk !== "call", () => setLeaveAsk("call"));
+  useBackGuard(voicePayOpen && leaveAsk !== "voice", () => setLeaveAsk("voice"));
+  useEffect(() => {
+    // pagou (ou a tela fechou por outro caminho): a pergunta some junto
+    if ((leaveAsk === "call" && !callPixOpen) || (leaveAsk === "voice" && !voicePayOpen)) setLeaveAsk(null);
+  }, [leaveAsk, callPixOpen, voicePayOpen]);
+  /** textos do "vai desistir?" da chamada: os do Canal VIP da oferta, se o dono escreveu */
+  const callOffer = (engine.call?.offer ?? (engine.call ? (getNode(engine.graph, engine.call.nodeId)?.content as OfferContent | undefined) : undefined)) ?? null;
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
@@ -472,7 +489,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
             product={engine.voice.offer ? funnel.products[engine.voice.offer.productId] : undefined}
             endText={engine.voice.endText}
             onBuy={() => void engine.buyVoice()}
-            onClose={engine.closeVoice}
+            onClose={() => (engine.voice?.pay ? setLeaveAsk("voice") : engine.closeVoice())}
             pay={engine.voice.pay}
             payment={
               engine.voice.offer
@@ -487,6 +504,16 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
                 : undefined
             }
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
+          />
+        )}
+        {leaveAsk === "voice" && voicePayOpen && engine.voice?.offer && (
+          <VipExitModal
+            offer={engine.voice.offer}
+            onStay={() => setLeaveAsk(null)}
+            onLeave={() => {
+              setLeaveAsk(null);
+              engine.closeVoice();
+            }}
           />
         )}
         {warmVideo && engine.call && engine.call.phase !== "active" && (
@@ -516,8 +543,19 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
                 ? { loadMethods: () => transport.paymentMethods(engine.call!.payProductId ?? ""), initial: engine.payer, onSubmit: engine.submitCallPayer }
                 : undefined
             }
-            onClose={engine.hangUp}
+            onClose={() => setLeaveAsk("call")}
             onSimulate={transport?.simulatePayment ? (id, s) => engine.simulatePayment(id, s) : undefined}
+          />
+        )}
+        {leaveAsk === "call" && callPixOpen && (
+          <VipExitModal
+            offer={callOffer ?? { productId: engine.call?.payProductId ?? "" }}
+            onStay={() => setLeaveAsk(null)}
+            onLeave={() => {
+              setLeaveAsk(null);
+              engine.track("vip_exit", engine.call?.nodeId);
+              engine.hangUp();
+            }}
           />
         )}
         {engine.call?.phase === "active" && (
