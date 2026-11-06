@@ -66,7 +66,21 @@ interface Audio {
   id: string;
   url: string;
   when?: string;
+  /** quando enviar: a IA decide (padrão) ou regra exata */
+  trigger?: AudioTrigger;
+  replyNumber?: number;
+  keywords?: string;
+  offerId?: string;
 }
+type AudioTrigger = "ai" | "reply" | "keywords" | "offer" | "afterPurchase" | "afterCall";
+const AUDIO_TRIGGERS: { value: AudioTrigger; label: string }[] = [
+  { value: "ai", label: "A IA decide (pela descrição)" },
+  { value: "reply", label: "Na resposta nº…" },
+  { value: "keywords", label: "Quando o lead falar…" },
+  { value: "offer", label: "Junto com a oferta…" },
+  { value: "afterPurchase", label: "Na 1ª resposta depois da compra" },
+  { value: "afterCall", label: "Logo após a ligação de voz" },
+];
 interface Brain {
   id: string;
   name: string;
@@ -323,7 +337,7 @@ function ConnectionCard() {
 }
 
 function TestChat({ brain }: { brain: Brain }) {
-  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; image?: string; video?: string; offer?: string; voice?: boolean; vip?: VipCard }[]>([]);
+  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; audioId?: string; image?: string; video?: string; offer?: string; voice?: boolean; vip?: VipCard }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,7 +356,7 @@ function TestChat({ brain }: { brain: Brain }) {
     try {
       const r = await api<{
         messages: string[];
-        audio: { url: string; when?: string } | null;
+        audio: { id: string; url: string; when?: string } | null;
         image: { url: string; when?: string; kind?: string; card?: VipCard } | null;
         offer: { name: string; price: number; headline: string; style?: string; vipButton?: boolean; combo?: unknown } | null;
         end: boolean;
@@ -352,7 +366,7 @@ function TestChat({ brain }: { brain: Brain }) {
         body: {
           history: next.map((h) => ({
             role: h.role,
-            text: h.voice ? "[ligou para o lead (ligação de voz)]" : h.vip ? "[mandou a prévia do Grupo VIP]" : h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? "[enviou um áudio]" : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
+            text: h.voice ? "[ligou para o lead (ligação de voz)]" : h.vip ? "[mandou a prévia do Grupo VIP]" : h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? `[enviou um áudio${h.audioId ? ` (audio_id "${h.audioId}")` : ""}]` : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
           })),
           language,
         },
@@ -368,7 +382,7 @@ function TestChat({ brain }: { brain: Brain }) {
               },
             ]
           : []),
-        ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url }] : []),
+        ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url, audioId: r.audio.id }] : []),
         ...(r.offer
           ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? (r.offer.combo ? "🎁 Combo" : r.offer.vipButton ? "🔒 Botão + oferta" : "🔴 Canal VIP AO VIVO") : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
           : []),
@@ -1123,7 +1137,8 @@ export default function CerebroPage() {
                 </button>
               </div>
               <p className="hint" style={{ marginTop: -6 }}>
-                Áudios gravados por você. Descreva quando usar cada um; a IA escolhe a hora de mandar (no máximo um por resposta, sem repetir).
+                Áudios gravados por você. Em <b>Quando enviar</b>, escolha uma regra exata (o sistema manda na hora certa, mesmo que a IA esqueça)
+                ou deixe a IA decidir pela descrição. Cada áudio sai uma vez só por conversa, no máximo um por resposta.
               </p>
               {draft.audios.map((a, i) => (
                 <div key={a.id} className="brain-row">
@@ -1131,17 +1146,81 @@ export default function CerebroPage() {
                     <label>Arquivo de áudio</label>
                     <UploadInput value={a.url} onChange={(url) => setAudio(i, { url })} accept="audio/*" />
                   </div>
-                  <div className="row">
-                    <input
-                      className="input"
-                      placeholder="Quando usar. Ex.: quando perguntarem se é seguro / para dar boas-vindas"
-                      value={a.when ?? ""}
-                      onChange={(e) => setAudio(i, { when: e.target.value })}
-                    />
+                  <div className="row" style={{ flexWrap: "wrap" }}>
+                    <select
+                      className="select"
+                      style={{ width: "auto", minWidth: 220 }}
+                      aria-label="Quando enviar"
+                      value={a.trigger ?? "ai"}
+                      onChange={(e) => setAudio(i, { trigger: e.target.value as AudioTrigger })}
+                    >
+                      {AUDIO_TRIGGERS.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                    {a.trigger === "reply" && (
+                      <input
+                        className="input"
+                        style={{ width: 110 }}
+                        type="number"
+                        min={1}
+                        max={100}
+                        aria-label="Número da resposta"
+                        placeholder="Ex.: 1"
+                        value={a.replyNumber ?? ""}
+                        onChange={(e) => setAudio(i, { replyNumber: e.target.value ? Math.max(1, Math.min(100, Number(e.target.value))) : undefined })}
+                      />
+                    )}
+                    {a.trigger === "keywords" && (
+                      <input
+                        className="input"
+                        style={{ flex: 1, minWidth: 220 }}
+                        aria-label="Frases do lead"
+                        placeholder="Frases separadas por vírgula. Ex.: é golpe, é seguro, é confiável"
+                        value={a.keywords ?? ""}
+                        onChange={(e) => setAudio(i, { keywords: e.target.value })}
+                      />
+                    )}
+                    {a.trigger === "offer" && (
+                      <select className="select" style={{ width: "auto", minWidth: 200 }} aria-label="Oferta" value={a.offerId ?? ""} onChange={(e) => setAudio(i, { offerId: e.target.value || undefined })}>
+                        <option value="">Qualquer oferta</option>
+                        {draft.offers.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {products.find((p) => p.id === o.productId)?.name ?? "Oferta"}
+                            {o.headline ? ` — ${o.headline}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <button className="btn btn-ghost btn-sm" onClick={() => set("audios", draft.audios.filter((_, j) => j !== i))}>
                       Remover
                     </button>
                   </div>
+                  <input
+                    className="input"
+                    placeholder={
+                      (a.trigger ?? "ai") === "ai"
+                        ? "Quando usar. Ex.: quando perguntarem se é seguro / para dar boas-vindas"
+                        : "Anotação (opcional): o que diz este áudio, para você lembrar"
+                    }
+                    value={a.when ?? ""}
+                    onChange={(e) => setAudio(i, { when: e.target.value })}
+                  />
+                  <span className="hint">
+                    {a.trigger === "reply"
+                      ? `Sai na ${a.replyNumber ?? "?"}ª resposta da IA na conversa (1 = a primeira). Se naquela resposta já sair outro áudio, vai na seguinte.`
+                      : a.trigger === "keywords"
+                        ? "Sai na resposta à mensagem do lead que tiver uma dessas frases (sem diferença de acento ou maiúscula)."
+                        : a.trigger === "offer"
+                          ? "Sai junto com o card da oferta, antes dele."
+                          : a.trigger === "afterPurchase"
+                            ? "Sai na primeira resposta da IA depois que o lead compra."
+                            : a.trigger === "afterCall"
+                              ? "Sai assim que a ligação de voz termina."
+                              : "A IA escolhe a hora pela descrição — pode variar. Para hora exata, escolha uma regra acima."}
+                  </span>
                 </div>
               ))}
             </div>

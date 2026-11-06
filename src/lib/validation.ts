@@ -272,7 +272,16 @@ const brainOfferSchema = z.object({
     message: "Combo: escolha pelo menos um item (WhatsApp, chamada de vídeo, Grupo VIP ou um produto)",
     path: ["style"],
   });
-const brainAudioSchema = z.object({ id, url: url.pipe(z.string().min(1, "Áudio sem arquivo")), when: optTxt(500) });
+const brainAudioSchema = z.object({
+  id,
+  url: url.pipe(z.string().min(1, "Áudio sem arquivo")),
+  when: optTxt(500),
+  /** quando enviar: a IA decide (padrão) ou regra exata cumprida pelo sistema */
+  trigger: z.enum(["ai", "reply", "keywords", "offer", "afterPurchase", "afterCall"]).optional(),
+  replyNumber: z.number().int().min(1).max(100).optional(),
+  keywords: optTxt(500),
+  offerId: z.string().max(64).optional(),
+});
 
 export const brainSchema = z.object({
   name: txt(80).pipe(z.string().min(1, "Informe o nome")),

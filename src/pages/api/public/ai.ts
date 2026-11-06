@@ -10,7 +10,7 @@ import { requireLeadSession } from "@/services/conversation";
 import { entitledNodes, getFunnelSettings } from "@/services/funnels";
 import { addConversationMessage } from "@/services/payments/service";
 import { trackEvent } from "@/services/tracking";
-import { describeAiError, publicOfferFormat, runBrain, type FlowOfferInfo } from "@/services/ai/brain";
+import { describeAiError, publicOfferFormat, runBrain, sentAudioIdsOf, type FlowOfferInfo } from "@/services/ai/brain";
 import { toTurns } from "@/services/ai/history";
 import { AI_OFFERS_OUT, flowOffersFrom } from "@/features/chat-engine/engine";
 import { leadPlaceFromHeaders, nearLeadRule } from "@/lib/geo";
@@ -118,7 +118,18 @@ export default apiHandler({
         prisma.funnel.findUnique({ where: { id: session.funnelId }, select: { settings: true } }),
       );
       const language = getFunnelSettings(funnelRow?.settings).locale;
-      reply = await runBrain({ brain, history: toTurns(history.slice(-60)), goal: content.goal, context, flowOffers, language, boughtProductIds: [...(await withComboProducts(paid.map((p) => p.productId)))] });
+      reply = await runBrain({
+        brain,
+        history: toTurns(history.slice(-60)),
+        goal: content.goal,
+        context,
+        flowOffers,
+        language,
+        boughtProductIds: [...(await withComboProducts(paid.map((p) => p.productId)))],
+        // respostas da IA já dadas neste bloco + esta (áudio "na resposta nº X")
+        replyNumber: replies + 1,
+        sentAudioIds: sentAudioIdsOf(history),
+      });
     } catch (e) {
       console.error("[ai]", e);
       const lang = await prisma.funnel

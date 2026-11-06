@@ -39,7 +39,9 @@ export default apiHandler({
           .filter((v): v is FlowOfferInfo => !!v);
       }
       // teste no painel: usa a região de quem está testando (igual ao lead no fluxo publicado)
-      const r = await runBrain({ brain, history, goal, flowOffers, language, context: nearLeadRule(leadPlaceFromHeaders(req.headers)) || undefined });
+      // teste: cada mensagem do lead é uma resposta da IA (a abertura sem mensagem é a 1ª)
+      const replyNumber = Math.max(1, history.filter((t) => t.role === "lead").length);
+      const r = await runBrain({ brain, history, goal, flowOffers, language, context: nearLeadRule(leadPlaceFromHeaders(req.headers)) || undefined, replyNumber });
       return {
         messages: r.messages,
         audio: r.audio,

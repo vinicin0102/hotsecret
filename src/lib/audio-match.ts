@@ -7,11 +7,15 @@ const plain = (v: string) =>
     .replace(/[\u0300-\u036f]/g, "");
 
 /** áudio para mandar quando a ligação de voz termina ("logo após ligar", "depois da ligação"); não repete um já enviado */
-export function afterCallAudio<T extends { id: string; url: string; when?: string }>(audios: T[], past: string): T | null {
+export function afterCallAudio<T extends { id: string; url: string; when?: string; trigger?: string }>(audios: T[], past: string): T | null {
+  const unsent = audios.filter((a) => !past.includes(`audio_id "${a.id}"`));
+  // "Quando enviar: logo após a ligação de voz" (regra exata) vale antes da descrição
+  const exact = unsent.find((a) => a.trigger === "afterCall");
+  if (exact) return exact;
   return (
-    audios.find(
+    unsent.find(
       (a) =>
-        !past.includes(`audio_id "${a.id}"`) &&
+        (!a.trigger || a.trigger === "ai") &&
         /\b(apos|depois|terminar|terminou|acabar|acabou|despues|al terminar)\b.{0,25}\b(liga|ligar|ligacao|ligou|chamada|llamada|llamar|llame)|\b(desligar|desligou|desligue|colgar|colgo|cuelgue)\b/.test(plain(a.when ?? "")),
     ) ?? null
   );

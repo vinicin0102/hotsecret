@@ -89,12 +89,36 @@ export function mediaLabel(m: Pick<BrainMedia, "kind" | "bonusText">): string {
     return `prévia do Grupo VIP que ele ganha de BÔNUS (${m.bonusText?.trim() || "vem de bônus na chamada de vídeo"}): card com a capa do seu VIP, quantas fotos e vídeos tem e as prévias borradas — não é vendido à parte`;
   return m.kind === "video" ? "vídeo" : "foto";
 }
+/**
+ * Quando o áudio sai. "ai" (padrão): a IA decide pela descrição. Os outros o sistema cumpre sozinho, sem depender
+ * da IA: na resposta nº X, quando o lead falar uma das frases, junto com uma oferta, depois da compra ou logo após
+ * a ligação de voz.
+ */
+export type AudioTrigger = "ai" | "reply" | "keywords" | "offer" | "afterPurchase" | "afterCall";
 export interface BrainAudio {
   id: string;
   url: string;
-  /** quando a IA deve mandar este áudio */
+  /** quando a IA deve mandar este áudio (trigger "ai") ou anotação do dono */
   when?: string;
+  trigger?: AudioTrigger;
+  /** trigger "reply": número da resposta da IA na conversa (1 = a primeira) */
+  replyNumber?: number;
+  /** trigger "keywords": frases separadas por vírgula; basta o lead falar uma */
+  keywords?: string;
+  /** trigger "offer": oferta do Cérebro (vazio = qualquer oferta) */
+  offerId?: string;
 }
+
+/** ids dos áudios do Cérebro já enviados (mensagens gravadas da conversa) */
+export function sentAudioIdsOf(messages: { type: string; content: unknown }[]): string[] {
+  return messages.flatMap((m) => {
+    const id = m.type === "audio" ? (m.content as { aiAudioId?: unknown } | null)?.aiAudioId : undefined;
+    return typeof id === "string" ? [id] : [];
+  });
+}
+
+/** áudios que a própria IA escolhe (os de regra exata o sistema manda sozinho) */
+export const aiChoosableAudios = (list: BrainAudio[]) => list.filter((a) => !a.trigger || a.trigger === "ai");
 
 // ---------- Configuração (chave criptografada no banco; nunca vai ao navegador) ----------
 const SETTING_KEY = "ai";
@@ -393,7 +417,7 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
     })
     .filter(Boolean)
     .join("\n");
-  const audios = brainAudios(brain)
+  const audios = aiChoosableAudios(brainAudios(brain))
     .map((a) => `- audio_id "${a.id}": ${a.when || "(sem descrição)"}`)
     .join("\n");
   const images = brainImages(brain)
@@ -616,6 +640,40 @@ type BrainInput = Parameters<typeof runBrainWith>[0];
  * a IA reserva (se configurada) responde a mesma mensagem.
  */
 export async function runBrain(input: BrainInput): Promise<BrainReply> {
+  return withAudioTriggers(await runBrainOnce(input), input);
+}
+
+/**
+ * Áudios com regra exata ("Quando enviar" no Cérebro): o sistema manda na hora certa, mesmo que a IA não escolha.
+ * Um por resposta e nunca repetido; prioridade: frase do lead > junto com a oferta > depois da compra > resposta nº X.
+ * "Na resposta nº X" vale a partir dela (se naquela resposta saiu outro áudio, vai na seguinte).
+ */
+export function withAudioTriggers<R extends Pick<BrainReply, "audio" | "offer">>(
+  reply: R,
+  input: Pick<BrainInput, "brain" | "history" | "boughtProductIds" | "replyNumber" | "sentAudioIds">,
+): R {
+  const past = input.history.map((t) => t.text).join("\n");
+  const sent = new Set(input.sentAudioIds ?? []);
+  const pending = brainAudios(input.brain).filter(
+    (a) => a.trigger && a.trigger !== "ai" && a.trigger !== "afterCall" && !sent.has(a.id) && !past.includes(`audio_id "${a.id}"`),
+  );
+  if (!pending.length) return reply;
+  const lastLead = plain([...input.history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "");
+  const phrases = (v?: string) => (v ?? "").split(/[,;\n/]+/).map((s) => plain(s).trim()).filter((s) => s.length >= 2);
+  const rules: [AudioTrigger, (a: BrainAudio) => boolean][] = [
+    ["keywords", (a) => !!lastLead && phrases(a.keywords).some((p) => lastLead.includes(p))],
+    ["offer", (a) => !!reply.offer && (!a.offerId || reply.offer.id === a.offerId)],
+    ["afterPurchase", () => (input.boughtProductIds ?? []).length > 0],
+    ["reply", (a) => !!a.replyNumber && (input.replyNumber ?? 0) >= a.replyNumber],
+  ];
+  for (const [trigger, hit] of rules) {
+    const a = pending.find((x) => x.trigger === trigger && hit(x));
+    if (a) return { ...reply, audio: a };
+  }
+  return reply;
+}
+
+async function runBrainOnce(input: BrainInput): Promise<BrainReply> {
   const started = Date.now();
   let main: BrainReply | null = null;
   let mainErr: unknown = null;
@@ -659,10 +717,14 @@ async function runBrainWith(input: {
   language?: "pt-BR" | "es-MX" | "es-AR";
   /** produtos que o lead já comprou: a oferta deles sai da esteira (não aparece de novo) */
   boughtProductIds?: string[];
+  /** número desta resposta da IA na conversa (1 = a primeira): áudios "na resposta nº X" */
+  replyNumber?: number;
+  /** áudios já enviados nesta conversa (do banco: vale mesmo além das últimas mensagens que vão para a IA) */
+  sentAudioIds?: string[];
 }, forced?: AiTarget, budgetMs = 30_000): Promise<BrainReply> {
   const target = forced ?? (await aiClient());
   const offers = brainOffers(input.brain);
-  const audios = brainAudios(input.brain);
+  const audios = aiChoosableAudios(brainAudios(input.brain));
   const images = brainImages(input.brain);
   const voiceCalls = brainVoiceCalls(input.brain);
   const products = new Map(
