@@ -6,7 +6,7 @@ import { productOption } from "@/lib/format";
 import { withBase } from "@/lib/paths";
 import { NODE_META, nodeTypeLabel } from "./nodeMeta";
 import { DelayEditor } from "./DelayEditor";
-import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
+import { PayAudioField, VipOfferEditor } from "@/components/admin/VipOfferEditor";
 import type { VipOfferTexts } from "@/types/flow";
 
 export interface SidebarProduct {
@@ -398,6 +398,10 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                   <b>Recusar</b> abre o mesmo pop-up com o downsell (se escolhido). O vídeo só começa depois do pagamento aprovado, com as falas e
                   os upsells marcados.
                 </p>
+                <PayAudioField
+                  value={(c.vip as VipOfferTexts | undefined)?.payAudioUrl}
+                  onChange={(url) => setContent({ vip: { ...((c.vip as VipOfferTexts | undefined) ?? {}), payAudioUrl: url } })}
+                />
               </>
             )}
             <div className="field">

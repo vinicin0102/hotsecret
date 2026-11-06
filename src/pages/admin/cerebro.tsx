@@ -8,7 +8,7 @@ import { api, uploadFile } from "@/lib/client";
 import { formatBRL, formatDateTime, formatMoney, productOption } from "@/lib/format";
 import { shortId } from "@/features/chat-engine/engine";
 import { withBase } from "@/lib/paths";
-import { VipOfferEditor } from "@/components/admin/VipOfferEditor";
+import { PayAudioField, VipOfferEditor } from "@/components/admin/VipOfferEditor";
 import { VipPreviewCard } from "@/components/chat/VipPreviewCard";
 import type { VipPreviewCard as VipCard } from "@/services/vip";
 import type { VipOfferTexts } from "@/types/flow";
@@ -1011,6 +1011,7 @@ export default function CerebroPage() {
                           />
                         </div>
                       </div>
+                      <PayAudioField value={o.vip?.payAudioUrl} onChange={(url) => setOffer(i, { vip: { ...(o.vip ?? {}), payAudioUrl: url } })} />
                     </div>
                   )}
                   {o.style === "tarot" && (

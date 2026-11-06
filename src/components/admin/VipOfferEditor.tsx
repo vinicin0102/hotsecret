@@ -8,6 +8,20 @@ import { withBase } from "@/lib/paths";
 
 const linesOf = (v: string) => v.split("\n");
 
+/** "Áudio no pagamento": mensagem de voz da modelo no topo da tela do PIX (Canal VIP e ligação) */
+export function PayAudioField({ value, onChange }: { value?: string; onChange: (url: string) => void }) {
+  return (
+    <div className="field">
+      <label>Áudio no pagamento (opcional — aparece no topo, como mensagem de voz da modelo)</label>
+      <UploadInput value={value ?? ""} onChange={onChange} accept="audio/*" />
+      <span className="hint">
+        Ex.: ela explicando como copiar o PIX e pagar no app do banco. Toca sozinho quando a tela de pagamento abre (na 1ª vez); o lead pode
+        ouvir de novo.
+      </span>
+    </div>
+  );
+}
+
 export function VipOfferEditor({
   vip,
   basicProductId,
@@ -171,11 +185,7 @@ export function VipOfferEditor({
         {field("payTitle", "Título do pagamento", "{NOME} COMEÇOU!")}
         {field("paySubtitle", "Subtítulo do pagamento", "Vídeo chamada iniciada... Realize o pagamento para participar!")}
       </div>
-      <div className="field">
-        <label>Áudio no pagamento (opcional — aparece no topo, como mensagem de voz da modelo)</label>
-        <UploadInput value={v.payAudioUrl ?? ""} onChange={(url) => set({ payAudioUrl: url })} accept="audio/*" />
-        <span className="hint">Ex.: ela explicando como copiar o PIX e pagar no app do banco. Toca sozinho quando a tela de pagamento abre (na 1ª vez); o lead pode ouvir de novo.</span>
-      </div>
+      <PayAudioField value={v.payAudioUrl} onChange={(url) => set({ payAudioUrl: url })} />
       {!inCall && (
       <>
       <div className="field">

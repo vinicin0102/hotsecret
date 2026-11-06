@@ -10,7 +10,7 @@ import { UpsellScreen } from "./UpsellScreen";
 import { VipMosaic } from "./VipPreviewCard";
 import { withBase } from "@/lib/paths";
 import { OfferCard } from "./OfferCard";
-import { VipExitModal, VipOfferModal, VipPaySheet } from "./LiveChannel";
+import { PayAudio, VipExitModal, VipOfferModal, VipPaySheet } from "./LiveChannel";
 import { useBackGuard } from "@/features/chat-engine/back-guard";
 import type { OfferContent } from "@/types/flow";
 import { WhatsAppContact, WhatsAppDoneSheet, whatsappOffer } from "./WhatsAppOffer";
@@ -246,9 +246,12 @@ export function PixPopup({
   onSimulate,
   payerForm,
   overVideo,
+  payAudioUrl,
 }: {
   /** chamada de vídeo 02: o pop-up fica embaixo, por cima do vídeo (FREE em loop) */
   overVideo?: boolean;
+  /** áudio da modelo explicando como pagar (oferta de ligação → "Áudio no pagamento") */
+  payAudioUrl?: string;
   character: PublicCharacter;
   product: PublicProduct | undefined;
   payment: PublicPaymentInfo | undefined;
@@ -286,6 +289,7 @@ export function PixPopup({
             </b>
           </div>
         )}
+        {payAudioUrl && <PayAudio url={payAudioUrl} character={character} />}
         <PixPayBody character={character} payment={payment} error={error} payerForm={payerForm} onSimulate={onSimulate} />
       </div>
     </div>

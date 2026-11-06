@@ -307,7 +307,8 @@ export function publicOfferFormat(o: BrainOffer): {
       },
       ...(o.videoId ? { hasVideo: true } : {}),
     };
-  if (o.style === "call" && o.videoId) return { style: "call", ...(o.freeLoop ? { freeLoop: true } : {}) };
+  if (o.style === "call" && o.videoId)
+    return { style: "call", ...(o.freeLoop ? { freeLoop: true } : {}), ...(o.vip?.payAudioUrl ? { vip: { payAudioUrl: o.vip.payAudioUrl } } : {}) };
   if (o.style === "live")
     return {
       style: "live",

@@ -532,6 +532,7 @@ export function ChatWindow({ funnel, transport, resume, embedded, previewLabel, 
         {(engine.call?.phase === "pix" || (engine.call?.phase === "active" && engine.call.free && engine.call.needPayer)) && (
           <PixPopup
             overVideo={engine.call.phase === "active"}
+            payAudioUrl={callOffer?.vip?.payAudioUrl}
             character={funnel.character}
             product={funnel.products[engine.call.payProductId ?? ""]}
             payment={Object.values(payments)

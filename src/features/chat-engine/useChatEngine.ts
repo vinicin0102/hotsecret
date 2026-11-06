@@ -387,6 +387,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
             ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}), ...(r.offer.combo ? { combo: r.offer.combo } : {}), ...(r.offer.whatsappAfter ? { whatsappAfter: true } : {}) }
             : {}),
           ...(r.offer.freeLoop ? { freeLoop: true } : {}),
+          // ligação do Cérebro: o "Áudio no pagamento" vai junto para o pop-up do PIX
+          ...(r.offer.style === "call" && r.offer.vip ? { vip: r.offer.vip } : {}),
         };
         if (r.offer.style === "tarot" || comboHasCard(r.offer.combo) || r.offer.whatsappAfter) ownCardProducts.current.add(r.offer.productId);
         // botão + oferta: a oferta só abre quando o lead toca no botão

@@ -433,7 +433,7 @@ export function VipOfferCard({ offer, product, bought, onOpen }: { offer: OfferC
 
 /** Folha do pagamento (embaixo, com o chat visível em cima). */
 /** áudio da modelo no topo do pagamento (explica como pagar): toca sozinho na 1ª vez que abre nesta visita */
-function PayAudio({ url, character }: { url: string; character: PublicCharacter }) {
+export function PayAudio({ url, character }: { url: string; character: PublicCharacter }) {
   const { t } = useChatI18n();
   const [autoPlay] = useState(() => {
     try {
