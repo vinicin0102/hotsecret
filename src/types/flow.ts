@@ -113,6 +113,8 @@ export interface VipOfferTexts {
   /** folha do pagamento */
   payTitle?: string;
   paySubtitle?: string;
+  /** áudio da modelo no topo do pagamento (ex.: explicando como pagar) */
+  payAudioUrl?: string;
   /** mensagens que aparecem no chat, acima do pagamento, enquanto ele não paga */
   payMessages?: string[];
   /** imagem borrada com cadeado mostrada no chat junto com o pagamento */

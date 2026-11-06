@@ -6059,3 +6059,45 @@ button.call-self {
   background: var(--wa-green);
   box-shadow: 0 8px 24px rgba(0, 168, 132, 0.35);
 }
+
+/* áudio da modelo no topo do pagamento (explica como pagar) */
+.pay-audio {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 14px auto 2px;
+  max-width: 340px;
+  text-align: left;
+}
+.pay-audio-avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.14);
+  font-weight: 800;
+}
+.pay-audio-bubble {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px 6px;
+  border-radius: 16px 16px 16px 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.pay-audio-bubble .audio-msg {
+  margin: 0;
+}
+.pay-audio-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.vip-sheet.theme-wa .pay-audio-bubble {
+  background: #202c33;
+  border-color: transparent;
+}

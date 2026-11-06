@@ -43,6 +43,7 @@ export const vipTextsSchema = z.object({
   basicLabel: optTxt(60),
   payTitle: optTxt(80),
   paySubtitle: optTxt(160),
+  payAudioUrl: optUrl,
   payMessages: lines(8, 300).optional(),
   lockedImageUrl: optUrl,
   exitTitle: optTxt(80),

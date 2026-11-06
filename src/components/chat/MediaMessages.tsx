@@ -230,7 +230,7 @@ function PlainVideo({
 
 const BARS = [6, 12, 18, 9, 22, 14, 26, 10, 16, 24, 8, 20, 13, 27, 11, 17, 7, 21, 15, 9, 19, 12, 23, 8];
 
-export function AudioMessage({ url, durationSec, caption, onPlay }: { url: string; durationSec?: number; caption?: string; onPlay?: () => void }) {
+export function AudioMessage({ url, durationSec, caption, onPlay, autoPlay }: { url: string; durationSec?: number; caption?: string; onPlay?: () => void; autoPlay?: boolean }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -255,6 +255,23 @@ export function AudioMessage({ url, durationSec, caption, onPlay }: { url: strin
       a.removeEventListener("ended", onEnd);
     };
   }, []);
+
+  // toca sozinho ao aparecer (ex.: áudio do pagamento logo depois do toque do lead); se o celular bloquear, fica o ▶
+  useEffect(() => {
+    const a = audio.current;
+    if (!autoPlay || !a) return;
+    a.play().then(
+      () => {
+        setPlaying(true);
+        if (!played.current) {
+          played.current = true;
+          onPlay?.();
+        }
+      },
+      () => undefined,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay, url]);
 
   const toggle = () => {
     const a = audio.current;

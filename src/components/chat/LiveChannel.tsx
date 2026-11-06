@@ -432,6 +432,30 @@ export function VipOfferCard({ offer, product, bought, onOpen }: { offer: OfferC
 }
 
 /** Folha do pagamento (embaixo, com o chat visível em cima). */
+/** áudio da modelo no topo do pagamento (explica como pagar): toca sozinho na 1ª vez que abre nesta visita */
+function PayAudio({ url, character }: { url: string; character: PublicCharacter }) {
+  const { t } = useChatI18n();
+  const [autoPlay] = useState(() => {
+    try {
+      const key = `hs_pay_audio_${url}`;
+      if (sessionStorage.getItem(key)) return false;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      /* sem sessionStorage: toca */
+    }
+    return true;
+  });
+  return (
+    <div className="pay-audio">
+      {character.avatarUrl ? <img className="pay-audio-avatar" src={character.avatarUrl} alt="" /> : <span className="pay-audio-avatar">{character.name.slice(0, 1)}</span>}
+      <div className="pay-audio-bubble">
+        <AudioMessage url={url} autoPlay={autoPlay} />
+        <div className="pay-audio-hint">🎧 {t.payAudioHint}</div>
+      </div>
+    </div>
+  );
+}
+
 export function VipPaySheet({
   character,
   offer,
@@ -475,6 +499,7 @@ export function VipPaySheet({
       </div>
       <div className="vip-sheet-title">{v.theme === "whatsapp" ? "💬" : "🔥"} {v.payTitle?.replace(/\{nome\}/gi, character.name.toUpperCase()) || `${character.name.toUpperCase()} ${t.vipStarted}`}</div>
       <div className="vip-sheet-sub">{v.paySubtitle || t.vipStartedSub}</div>
+      {v.payAudioUrl && <PayAudio url={v.payAudioUrl} character={character} />}
       {payerForm && !payment ? (
         <PayerForm
           loadMethods={payerForm.loadMethods}
