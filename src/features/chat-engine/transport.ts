@@ -513,7 +513,7 @@ export function createPreviewTransport(
       try {
         const r = await post<{
           messages: string[];
-          audio: { url: string } | null;
+          audio: { id?: string; url: string } | null;
           image: { url: string; kind?: "image" | "video" | "vip"; card?: VipPreviewCard } | null;
           offer: AiReply["offer"];
           end: boolean;
@@ -525,7 +525,7 @@ export function createPreviewTransport(
         );
         for (const m of r.messages) history.push({ role: "bot", text: m });
         if (r.image) history.push({ role: "bot", text: r.image.kind === "vip" ? "[mandou a prévia do Grupo VIP]" : r.image.kind === "video" ? "[enviou um vídeo]" : "[enviou uma foto]" });
-        if (r.audio) history.push({ role: "bot", text: "[enviou um áudio]" });
+        if (r.audio) history.push({ role: "bot", text: `[enviou um áudio${r.audio.id ? ` (audio_id "${r.audio.id}")` : ""}]` });
         if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : r.offer.style === "tarot" ? "mostrou as cartas de tarot da oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
         if (r.showOffers) history.push({ role: "bot", text: "[mostrou os botões de oferta]" });
         if (r.voiceCall) history.push({ role: "bot", text: "[ligou para o lead (ligação de voz)]" });

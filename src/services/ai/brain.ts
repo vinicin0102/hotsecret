@@ -1500,3 +1500,29 @@ export function describeAiError(e: unknown): string {
   if (e instanceof Anthropic.APIError) return `A API respondeu com erro ${e.status ?? ""}.`;
   return "Não foi possível falar com a IA agora.";
 }
+
+/**
+ * Conversa retomada: as ofertas da IA gravadas no chat guardam os textos do Canal VIP de quando apareceram.
+ * Aqui elas ganham os textos atuais do Cérebro (ex.: "Áudio no pagamento" colocado depois), pelo id da oferta.
+ */
+export async function refreshAiOfferMessages<M extends { type: string; nodeId: string | null; content: unknown }>(messages: M[], funnelId: string): Promise<M[]> {
+  const offers = messages.filter((m) => m.type === "offer" && m.nodeId && typeof (m.content as { aiOfferId?: unknown } | null)?.aiOfferId === "string");
+  if (!offers.length) return messages;
+  const { loadGraphCached } = await import("@/services/funnels");
+  const graph = await loadGraphCached(funnelId);
+  const brainOfNode = new Map(
+    graph.nodes.filter((n) => n.type === "ai").map((n) => [n.id, (n.content as { brainId?: string }).brainId]).filter((e): e is [string, string] => !!e[1]),
+  );
+  const ids = [...new Set(offers.map((m) => brainOfNode.get(m.nodeId!)).filter((v): v is string => !!v))];
+  if (!ids.length) return messages;
+  const brains = await prisma.brain.findMany({ where: { id: { in: ids } }, select: { id: true, offers: true } });
+  const offerOf = new Map(brains.map((b) => [b.id, new Map(brainOffers(b).map((o) => [o.id, o]))]));
+  return messages.map((m) => {
+    const c = m.content as { aiOfferId?: string; vip?: VipOfferTexts } | null;
+    const brainId = m.nodeId ? brainOfNode.get(m.nodeId) : undefined;
+    const o = c?.aiOfferId && brainId ? offerOf.get(brainId)?.get(c.aiOfferId) : undefined;
+    if (!o) return m;
+    const vip = (publicOfferFormat(o) as { vip?: VipOfferTexts }).vip;
+    return vip ? { ...m, content: { ...c, vip } } : m;
+  });
+}

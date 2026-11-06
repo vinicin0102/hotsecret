@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { apiHandler, getClientIp, HttpError, leadRateLimit } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { refreshAiOfferMessages } from "@/services/ai/brain";
 import { cached } from "@/lib/memo";
 import { signLeadToken, verifyLeadToken } from "@/lib/auth";
 import { parseUserAgent } from "@/lib/device";
@@ -106,7 +107,8 @@ export default apiHandler({
             token,
             resumed: !body.restart && conv.messages.length > 0,
             conversation: { id: conv.id, status: conv.status, currentNodeId: conv.currentNodeId },
-            messages: conv.messages.map(publicMessage),
+            // ofertas da IA com os textos atuais do Cérebro (ex.: "Áudio no pagamento" colocado depois)
+            messages: (await refreshAiOfferMessages(conv.messages, funnel.id)).map(publicMessage),
             payments: conv.payments.map(publicPayment),
           };
         }
