@@ -122,6 +122,20 @@ export function sentAudioIdsOf(messages: { type: string; content: unknown }[]): 
 /** áudios que a própria IA escolhe (os de regra exata o sistema manda sozinho) */
 export const aiChoosableAudios = (list: BrainAudio[]) => list.filter((a) => !a.trigger || a.trigger === "ai");
 
+/** oferta que chega como LIGAÇÃO de vídeo: a Chamada de vídeo (01/02) ou o Canal chamada de vídeo (Canal VIP que toca) */
+export const isCallOffer = (o: Pick<BrainOffer, "style" | "videoId" | "ring" | "button">) =>
+  (o.style === "call" && !!o.videoId) || (o.style === "live" && !!o.ring && !o.button && !!o.videoId);
+
+/** a oferta principal de chamada (a IA liga quando o lead demonstra interesse): ligação, botão de ligação, combo com chamada, Canal VIP com vídeo */
+export function mainCallOffer<T extends BrainOffer>(offers: T[]): T | undefined {
+  return (
+    offers.find(isCallOffer) ??
+    offers.find((o) => o.style === "live" && o.button && o.videoId) ??
+    offers.find((o) => o.style === "combo" && o.videoId) ??
+    offers.find((o) => o.style === "live" && o.videoId)
+  );
+}
+
 // ---------- Configuração (chave criptografada no banco; nunca vai ao navegador) ----------
 const SETTING_KEY = "ai";
 export type AiProvider = "anthropic" | "deepseek" | "qwen";
@@ -406,7 +420,9 @@ function stableSystem(brain: Brain, products: Map<string, Product>, flowButtons 
             ? "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, ele já te vê ao vivo por um tempinho grátis e, no fim, paga pelo PIX ali mesmo para continuar."
             : "  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, paga pelo PIX e a chamada começa."
           : "",
-        o.style === "live" && o.button
+        o.style === "live" && o.ring && !o.button
+          ? `  Formato: o lead recebe uma CHAMADA DE VÍDEO sua (tela de ligação); ao atender, abre o upgrade com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso"}; ele escolhe, paga pelo PIX e a chamada começa. Avise que vai ligar.`
+          : o.style === "live" && o.button
           ? `  Formato: aparece no chat um BOTÃO "${o.ctaLabel || "FAZER LIGAÇÃO PRIVADA"}"; quando o lead toca, ele vê a oferta${o.videoId ? " e, depois do PIX, começa a chamada de vídeo com você" : " e paga pelo PIX ali mesmo"}. Avise para ele tocar no botão.`
           : o.style === "live"
           ? `  Formato: abre o UPGRADE do CANAL VIP AO VIVO${o.videoId ? " (depois do pagamento começa a chamada de vídeo com você)" : ""} com ${o.downsellProductId && products.get(o.downsellProductId)?.active ? `dois ingressos — acesso completo (${money(p.price, p.currency)}) e acesso básico (${money(products.get(o.downsellProductId)!.price, products.get(o.downsellProductId)!.currency)})` : "o ingresso de acesso"}; ele escolhe e paga ali mesmo.`
@@ -476,10 +492,14 @@ Como escolher a oferta certa:
 - Na primeira mensagem do lead, só ofereça se ele pedir (preço, comprar, um produto). Primeiro converse.
 - Se a mesma oferta apareceu nas suas últimas 3 mensagens, não mande de novo — a não ser que o lead peça outra vez.
 - Esteira: as ofertas seguem a ordem da lista. Quando o histórico mostrar que o lead assistiu ao que comprou e voltou para o chat ([assistiu a chamada que comprou e voltou para o chat]), siga as instruções "Depois da compra" do dono (se houver; senão pergunte com carinho se ele gostou) e já ofereça a PRÓXIMA oferta que ele ainda não comprou. Nunca ofereça de novo o que ele já comprou.${
-    brainOffers(brain).some((o) => o.style === "call" && o.videoId && !o.when?.trim())
-      ? `
-- A CHAMADA DE VÍDEO (a que não tem "Quando oferecer") é a sua oferta principal: sempre que o lead demonstrar interesse (elogio, desejo, curiosidade, pedir mais, pedir foto/vídeo, perguntar preço) e não pedir outro produto específico, LIGUE para ele (offer_id da oferta em formato de chamada), avisando que vai ligar. Se ele recusar, acolha e convide de novo mais tarde, depois de algumas mensagens.`
-      : ""
+    (() => {
+      // a oferta principal de chamada sem "Quando oferecer": a IA oferece sempre que houver interesse
+      const main = mainCallOffer(brainOffers(brain).filter((o) => products.get(o.productId)?.active));
+      if (!main || main.when?.trim()) return "";
+      const ring = isCallOffer(main);
+      return `
+- A sua oferta principal é offer_id "${main.id}" (${products.get(main.productId)?.name ?? "chamada de vídeo"}${ring ? " — chamada de vídeo: você LIGA para o lead" : ""}): sempre que o lead demonstrar interesse (elogio, desejo, curiosidade, pedir mais, pedir foto/vídeo, perguntar preço, dizer que quer) e não pedir outro produto específico, ${ring ? "LIGUE para ele" : "mostre esta oferta"} colocando esse offer_id na MESMA resposta${ring ? ", avisando que vai ligar" : ""}. Não fique só fazendo perguntas: interesse = oferta. Se ele recusar, acolha e convide de novo mais tarde, depois de algumas mensagens.`;
+    })()
   }
 
 ${
@@ -780,7 +800,7 @@ async function runBrainWith(input: {
     ...Object.fromEntries(
       validOffers.map((o) => [
         o.id,
-        `${products.get(o.productId)?.name ?? "oferta"}${o.style === "call" && o.videoId ? " — chamada de vídeo" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? (o.button ? " — botão de ligação privada" : " — canal VIP ao vivo") : o.style === "combo" ? ` — combo: ${comboItems(o, (id) => products.get(id)?.name)}` : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
+        `${products.get(o.productId)?.name ?? "oferta"}${isCallOffer(o) ? " — chamada de vídeo (você liga)" : o.style === "tarot" ? " — cartas de tarot" : o.style === "live" ? (o.button ? " — botão de ligação privada" : " — canal VIP ao vivo") : o.style === "combo" ? ` — combo: ${comboItems(o, (id) => products.get(id)?.name)}` : ""}${o.when ? `; quando: ${o.when.slice(0, 500)}` : ""}`,
       ]),
     ),
     ...Object.fromEntries(audios.map((a) => [a.id, `áudio; quando: ${(a.when || "quando combinar").slice(0, 140)}`])),
@@ -799,7 +819,7 @@ ${
       validOffers
         .map((o) => {
           const p = products.get(o.productId)!;
-          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${o.style === "call" && o.videoId ? " | formato: chamada de vídeo (você liga para o lead)" : o.style === "live" && o.button ? " | formato: botão no chat (o lead toca, vê a oferta e paga)" : o.style === "combo" ? ` | formato: combo (${comboItems(o, (id) => products.get(id)?.name)}) num PIX só` : ""}`;
+          return `- offer_id "${o.id}": ${p.name} — ${money(p.price, p.currency)}${o.when ? ` | quando oferecer: ${o.when}` : ""}${isCallOffer(o) ? " | formato: chamada de vídeo (você liga para o lead)" : o.style === "live" && o.button ? " | formato: botão no chat (o lead toca, vê a oferta e paga)" : o.style === "combo" ? ` | formato: combo (${comboItems(o, (id) => products.get(id)?.name)}) num PIX só` : ""}`;
         })
         .join("\n") || "(nenhuma)"
     }
@@ -992,7 +1012,7 @@ ${flowOffersSection(input.flowOffers)}`;
 
   // a IA não respondeu: se o lead quer comprar, a oferta sai mesmo assim (a venda não para)
   const lastLeadText = [...input.history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
-  const callAsked = has(CALL_INTENT, lastLeadText) && validOffers.some((o) => o.style === "call" && o.videoId);
+  const callAsked = has(CALL_INTENT, lastLeadText) && validOffers.some(isCallOffer);
   if (input.flowOffers && !callAsked && (has(BUY_INTENT, lastLeadText) || has(OPTIONS_INTENT, lastLeadText) || has(OTHERS_INTENT, lastLeadText)) && !has(REFUSE_INTENT, lastLeadText)) {
     // botões de oferta do fluxo ligados no bloco: soltam mesmo sem a IA
     return {
@@ -1009,7 +1029,7 @@ ${flowOffersSection(input.flowOffers)}`;
   }
   const sale = salesFallback(input.history, validOffers);
   if (sale) {
-    const isCall = sale.style === "call" && !!sale.videoId;
+    const isCall = isCallOffer(sale);
     return {
       messages: [isCall ? (es ? "te llamo ahorita 😏" : "vou te ligar agora 😏") : es ? "mira aquí 👇" : "olha aqui 👇"],
       offer: { ...sale, product: products.get(sale.productId)! },
@@ -1095,7 +1115,7 @@ export function notedCall(
       const byId = id ? offers.find((o) => o.id === id) : undefined;
       if (byId) return { offer: byId, voiceCall: null };
       if (/\bvoz\b/.test(k) && voiceCalls.length && !/liga[cç][aã]o de voz/.test(past)) return { offer: null, voiceCall: voiceCalls[0] };
-      const call = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId) ?? offers.find((o) => o.style === "combo" && o.videoId);
+      const call = mainCallOffer(offers);
       if (call) return { offer: call, voiceCall: null };
     }
   }
@@ -1156,7 +1176,7 @@ export function assistReply(
   // botões de oferta do fluxo: o lead pediu preço/opções, perguntou pelos outros packs ou citou um deles
   if (flowOffers && !out.showOffers && !has(REFUSE_INTENT, lastLead)) {
     const named = flowOffers.some((o) => overlap(said, keyWords(`${o.name} ${o.button ?? ""}`)) >= 1);
-    const wantsCall = has(CALL_INTENT, lastLead) && offers.some((o) => o.style === "call" && o.videoId);
+    const wantsCall = has(CALL_INTENT, lastLead) && offers.some(isCallOffer);
     const others = has(OTHERS_INTENT, lastLead);
     if (named || others || (!out.offer && !wantsCall && (has(OPTIONS_INTENT, lastLead) || has(BUY_INTENT, lastLead)))) {
       out.showOffers = true;
@@ -1188,7 +1208,7 @@ export function assistReply(
   const lastBots = history.filter((t) => t.role === "bot").slice(-3).map((t) => t.text).join("\n");
   const shownRecently = (o: BrainOffer) => lastBots.includes(`offer_id "${o.id}"`);
   // chamada de vídeo: depois de uma recusa, só convida de novo depois de 4 mensagens do lead
-  const callOffer = offers.find((o) => o.style === "call" && o.videoId) ?? offers.find((o) => o.style === "live" && o.button && o.videoId) ?? offers.find((o) => o.style === "combo" && o.videoId);
+  const callOffer = mainCallOffer(offers);
   const leadSince = (marker: string) => {
     const i = history.map((t) => t.text).lastIndexOf(marker);
     return { i, n: i < 0 ? Infinity : history.slice(i + 1).filter((t) => t.role === "lead" && !t.text.startsWith("[")).length };
@@ -1199,7 +1219,7 @@ export function assistReply(
   // recusou a ligação de voz: nenhuma chamada toca logo em seguida
   const voiceDecline = leadSince("[recusou a ligação de voz]");
   const callBlocked = (o: BrainOffer) =>
-    (o.id === declinedOfferId && videoDecline.n < 4) || (o.style === "call" && !!o.videoId && voiceDecline.n < 4);
+    (o.id === declinedOfferId && videoDecline.n < 4) || (isCallOffer(o) && voiceDecline.n < 4);
   const asOffer = (o: BrainOffer) => ({ ...o, product: products.get(o.productId)! });
 
   if (out.offer) {
@@ -1208,8 +1228,8 @@ export function assistReply(
     const followsOrder = overlap(leadWords, keyWords(o.when ?? "")) >= 1;
     // oferta errada: o lead citou outro produto pelo nome → manda o que ele pediu
     if (named && named.id !== o.id && namedScore >= 1 && !followsOrder) o = named;
-    const explicit = o.id === named?.id || buy || (o.style === "call" && has(CALL_INTENT, leadText));
-    if (has(CALL_INTENT, leadText) && o.style !== "call" && o.id !== named?.id && !followsOrder) out.offer = null; // pediu ligação: um pack não é o que ele pediu
+    const explicit = o.id === named?.id || buy || (isCallOffer(o) && has(CALL_INTENT, leadText));
+    if (has(CALL_INTENT, leadText) && !isCallOffer(o) && o.id !== named?.id && !followsOrder) out.offer = null; // pediu ligação: um pack não é o que ele pediu
     else if (callBlocked(o) && !has(CALL_INTENT, leadText)) out.offer = null; // acabou de recusar esta chamada
     else if (shownRecently(o) && !explicit) out.offer = null; // não repete a mesma oferta em sequência
     else if (leadMsgs.length <= 1 && !asked && !explicit && !o.when?.trim()) out.offer = null; // cedo demais (sem ordem do dono dizendo quando)
@@ -1325,7 +1345,7 @@ function salesFallback(history: ChatTurn[], offers: BrainOffer[]): BrainOffer | 
   const lastLead = [...history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
   if (!has(BUY_INTENT, lastLead)) return null;
   const lastBot = [...history].reverse().find((t) => t.role === "bot" && !t.text.startsWith("["))?.text ?? "";
-  const calls = offers.filter((o) => o.style === "call" && o.videoId);
+  const calls = offers.filter(isCallOffer);
   if (calls.length && (has(CALL_INTENT, lastLead) || has(CALL_INTENT, lastBot))) return calls[0];
   // a oferta cujo "quando oferecer" mais combina com a conversa
   const words = (v: string) => new Set(v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length >= 4));

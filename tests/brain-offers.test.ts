@@ -111,3 +111,21 @@ test("pedir prévia não é pedir para comprar: a única oferta não é empurrad
   assert.equal(one("mandame un adelanto"), null);
   assert.equal(one("quero comprar"), "of_fotos");
 });
+
+// "Canal chamada de vídeo" (Canal VIP que chega tocando) como oferta principal: a IA liga quando há interesse
+test("Canal chamada de vídeo é a oferta principal: interesse → oferta, mesmo se a IA não escolher", () => {
+  const RING: BrainOffer = { id: "of_ring", productId: "p_call", style: "live", ring: true, videoId: "v1" };
+  const offers = [RING, FOTOS];
+  const pick = (h: ChatTurn[]) => assistReply(reply(), h, offers, PRODUCTS, [], []).offer?.id ?? null;
+  assert.equal(pick([lead("oi"), bot("oi amor"), lead("nossa que gostosa, quero te ver")]), "of_ring");
+  assert.equal(pick([lead("oi"), bot("oi amor"), lead("me liga")]), "of_ring");
+  assert.equal(pick([lead("oi"), bot("oi amor"), lead("quanto custa?")]), "of_ring");
+  // conversa comum não força
+  assert.equal(pick([lead("oi"), bot("oi amor"), lead("tudo bem e vc?")]), null);
+});
+
+test("Canal VIP com vídeo também conta como oferta principal quando não há ligação", () => {
+  const LIVE: BrainOffer = { id: "of_live", productId: "p_call", style: "live", videoId: "v1" };
+  const out = assistReply(reply(), [lead("oi"), bot("oi amor"), lead("adorei, quero ver mais")], [LIVE, FOTOS], PRODUCTS, [], []);
+  assert.equal(out.offer?.id, "of_live");
+});
