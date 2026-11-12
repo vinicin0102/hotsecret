@@ -40,6 +40,8 @@ const DEFAULT_MODEL: AiModelId = "claude-opus-5-5";
 
 export interface BrainOffer {
   id: string;
+  /** Canal chamada de vídeo (style "live"): a oferta chega como ligação tocando; ao atender, abre a venda do Canal VIP (ingressos → PIX); pagou, a chamada de vídeo começa */
+  ring?: boolean;
   productId: string;
   /** quando a IA deve oferecer */
   when?: string;
@@ -291,6 +293,8 @@ export function publicOfferFormat(o: BrainOffer): {
   freeLoop?: boolean;
   /** botão + oferta: no chat só o botão; a oferta abre ao tocar */
   vipButton?: boolean;
+  /** Canal chamada de vídeo: chega tocando como ligação */
+  ring?: boolean;
   /** combo: o que o PIX libera (a chamada vem em hasVideo; o número do WhatsApp nunca vai junto) */
   combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };
   /** pagou: botão para o WhatsApp (o número só sai pelo delivery) */
@@ -315,6 +319,7 @@ export function publicOfferFormat(o: BrainOffer): {
       vip: o.vip ?? {},
       ...(o.videoId ? { hasVideo: true } : {}),
       ...(o.button ? { vipButton: true } : {}),
+      ...(o.ring && !o.button ? { ring: true } : {}),
       ...(o.whatsapp?.phone && o.vip?.theme === "whatsapp" ? { whatsappAfter: true } : {}),
     };
   const cards = o.style === "tarot" ? tarotCardsOf(o) : [];

@@ -41,6 +41,8 @@ interface Offer {
   id: string;
   productId: string;
   style?: "card" | "call" | "tarot" | "live" | "combo";
+  /** Canal chamada de vídeo (style "live"): chega tocando como ligação; atendeu, abre o Canal VIP */
+  ring?: boolean;
   /** chamada de vídeo 02 */
   freeLoop?: boolean;
   /** botão + oferta (style "live"): no chat só o botão; tocando, abre a oferta */
@@ -358,7 +360,7 @@ function TestChat({ brain }: { brain: Brain }) {
         messages: string[];
         audio: { id: string; url: string; when?: string } | null;
         image: { url: string; when?: string; kind?: string; card?: VipCard } | null;
-        offer: { name: string; price: number; headline: string; style?: string; vipButton?: boolean; combo?: unknown } | null;
+        offer: { name: string; price: number; headline: string; style?: string; vipButton?: boolean; ring?: boolean; combo?: unknown } | null;
         end: boolean;
         failure?: string;
         voiceCall?: { id: string } | null;
@@ -384,7 +386,7 @@ function TestChat({ brain }: { brain: Brain }) {
           : []),
         ...(r.audio ? [{ role: "bot" as const, text: r.audio.when ?? "", audio: r.audio.url, audioId: r.audio.id }] : []),
         ...(r.offer
-          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? (r.offer.combo ? "🎁 Combo" : r.offer.vipButton ? "🔒 Botão + oferta" : "🔴 Canal VIP AO VIVO") : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
+          ? [{ role: "bot" as const, text: "", offer: `${r.offer.style === "call" ? "📹 Ligação" : r.offer.style === "tarot" ? "🔮 Cartas de tarot" : r.offer.style === "live" ? (r.offer.combo ? "🎁 Combo" : r.offer.vipButton ? "🔒 Botão + oferta" : r.offer.ring ? "📹 Canal chamada de vídeo" : "🔴 Canal VIP AO VIVO") : "🛒 Oferta"}: ${r.offer.headline} · ${formatBRL(r.offer.price)}` }]
           : []),
         ...(r.voiceCall ? [{ role: "bot" as const, text: "📞 Ligou para o lead (no chat de verdade toca a ligação de voz)", voice: true }] : []),
         ...(r.end ? [{ role: "bot" as const, text: "— a IA encerrou a conversa —" }] : []),
@@ -887,6 +889,7 @@ export default function CerebroPage() {
                           ["call2", "📹 Chamada de vídeo 02"],
                           ["tarot", "🔮 Cartas de tarot"],
                           ["live", "🔴 Canal VIP AO VIVO"],
+                          ["ringlive", "📹 Canal chamada de vídeo"],
                           ["button", "🔒 Botão + oferta"],
                           ["combo", "🎁 Combo (WhatsApp, chamada, VIP…)"],
                         ] as const
@@ -903,9 +906,11 @@ export default function CerebroPage() {
                                 ? o.style === "call" && !o.freeLoop
                                 : s === "button"
                                   ? o.style === "live" && !!o.button
-                                  : s === "live"
-                                    ? o.style === "live" && !o.button
-                                    : (o.style ?? "card") === s)
+                                  : s === "ringlive"
+                                    ? o.style === "live" && !!o.ring && !o.button
+                                    : s === "live"
+                                      ? o.style === "live" && !o.button && !o.ring
+                                      : (o.style ?? "card") === s)
                               ? "active"
                               : ""
                           }
@@ -913,14 +918,16 @@ export default function CerebroPage() {
                             setOffer(
                               i,
                               s === "call2"
-                                ? { style: "call", freeLoop: true, button: undefined }
+                                ? { style: "call", freeLoop: true, button: undefined, ring: undefined }
+                                : s === "ringlive"
+                                  ? { style: "live", ring: true, button: undefined, freeLoop: undefined }
                                 : s === "button"
-                                  ? { style: "live", button: true, freeLoop: undefined }
+                                  ? { style: "live", button: true, freeLoop: undefined, ring: undefined }
                                 : s === "combo"
                                   ? { style: "combo", freeLoop: undefined, button: undefined, downsellProductId: undefined, ...(o.style === "combo" ? {} : { videoId: undefined, whatsapp: { phone: "", message: "" } }) }
                                 : s === "tarot" && !o.tarotCards?.length
-                                  ? { style: s, tarotCards: defaultTarot(), freeLoop: undefined, button: undefined }
-                                  : { style: s, freeLoop: undefined, button: undefined },
+                                  ? { style: s, tarotCards: defaultTarot(), freeLoop: undefined, button: undefined, ring: undefined }
+                                  : { style: s, freeLoop: undefined, button: undefined, ring: undefined },
                             )
                           }
                         >
@@ -929,6 +936,14 @@ export default function CerebroPage() {
                       ))}
                     </div>
                   </div>
+                  {o.style === "live" && o.ring && !o.button && (
+                    <p className="hint">
+                      <b>Canal chamada de vídeo:</b> quando a IA escolher esta oferta, o lead recebe a <b>ligação</b> (foto, toque e vibração). Ao
+                      <b> atender</b>, abre a venda do Canal VIP abaixo (ingressos, benefícios, PIX com o áudio, mensagens e o “vai desistir?”); pagou,
+                      a <b>chamada de vídeo</b> começa com o vídeo escolhido. Recusar a ligação: a IA fica sabendo e continua a conversa.
+                      {!o.videoId && <span className="error-text"> Escolha o vídeo da chamada abaixo.</span>}
+                    </p>
+                  )}
                   {o.style === "live" && o.button && (
                     <>
                       <div className="field">

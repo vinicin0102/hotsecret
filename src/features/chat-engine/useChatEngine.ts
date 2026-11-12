@@ -251,7 +251,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
 
           case "offer": {
             if (!(await wait(node, token))) return;
-            if ((c as unknown as OfferContent).style === "call") {
+            // Canal chamada de vídeo: chega tocando como ligação; atendeu, abre o Canal VIP (ingressos → PIX → vídeo)
+            if ((c as unknown as OfferContent).style === "call" || ((c as unknown as OfferContent).style === "live" && (c as unknown as OfferContent).ring)) {
               // chamada de vídeo recebida: a tela de ligação aparece por cima do chat
               push({ kind: "call", id: lid(), nodeId: node.id, at: now() });
               setCall({ nodeId: node.id, phase: "ringing" });
@@ -384,7 +385,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
           downsellText: r.offer.downsellText,
           ...(r.offer.style === "tarot" ? { style: "tarot" as const, tarotCards: r.offer.tarotCards, tarotBackUrl: r.offer.tarotBackUrl } : {}),
           ...(r.offer.style === "live"
-            ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}), ...(r.offer.combo ? { combo: r.offer.combo } : {}), ...(r.offer.whatsappAfter ? { whatsappAfter: true } : {}) }
+            ? { style: "live" as const, vip: r.offer.vip, ...(r.offer.hasVideo ? { videoId: "brain" } : {}), ...(r.offer.vipButton ? { vipButton: true } : {}), ...(r.offer.ring ? { ring: true } : {}), ...(r.offer.combo ? { combo: r.offer.combo } : {}), ...(r.offer.whatsappAfter ? { whatsappAfter: true } : {}) }
             : {}),
           ...(r.offer.freeLoop ? { freeLoop: true } : {}),
           // ligação do Cérebro: o "Áudio no pagamento" vai junto para o pop-up do PIX
@@ -392,8 +393,8 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         };
         if (r.offer.style === "tarot" || comboHasCard(r.offer.combo) || r.offer.whatsappAfter) ownCardProducts.current.add(r.offer.productId);
         // botão + oferta: a oferta só abre quando o lead toca no botão
-        if (r.offer.style === "live" && !r.offer.vipButton) setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
-        if (r.offer.style === "call") {
+        if (r.offer.style === "live" && !r.offer.vipButton && !r.offer.ring) setVip({ nodeId, phase: "offer", productId: r.offer.productId, offer });
+        if (r.offer.style === "call" || (r.offer.style === "live" && r.offer.ring)) {
           // oferta do Cérebro em formato de chamada: toca a ligação
           setTyping(false);
           push({ kind: "call", id: lid(), nodeId, at: now() });
@@ -899,6 +900,16 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const answerCall = useCallback(() => {
     if (!call) return;
     const productId = call.productId ?? callOffer(call)?.productId ?? "";
+    const o = callOffer(call);
+    if (o?.style === "live" && o.ring) {
+      // Canal chamada de vídeo: atendeu → a venda do Canal VIP abre por cima do chat (o card fica no chat para reabrir);
+      // pagou, a chamada de vídeo começa (efeito do pagamento aprovado do Canal VIP)
+      setCall(null);
+      push({ kind: "offer", id: lid(), nodeId: call.nodeId, ...(call.productId ? { productId: call.productId, offer: o } : {}), at: now() });
+      setVip({ nodeId: call.nodeId, phase: "offer", ...(call.productId ? { productId: call.productId, offer: o } : {}) });
+      track("offer_clicked", call.nodeId, { call: "answered", productId });
+      return;
+    }
     if (callOffer(call)?.freeLoop) {
       // chamada de vídeo 02: a chamada abre com o FREE; a oferta aparece no fim dele (como upsell)
       setCall({ ...call, phase: "active", free: true, payProductId: productId });
@@ -906,7 +917,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
       return;
     }
     void startCallPix(call, productId, false);
-  }, [call, startCallPix]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [call, startCallPix, push, track]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Ligação de voz ----------
   const answerVoice = useCallback(() => {
@@ -1038,7 +1049,9 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
   const declineCall = useCallback(() => {
     if (!call) return;
     const nodeId = call.nodeId;
-    const downsell = callOffer(call)?.downsellProductId;
+    // Canal chamada de vídeo: o 2º produto é o ingresso básico do Canal VIP, não um downsell da ligação
+    const ringLive = callOffer(call)?.style === "live" && !!callOffer(call)?.ring;
+    const downsell = ringLive ? undefined : callOffer(call)?.downsellProductId;
     if (downsell && funnel.products[downsell]) {
       // recusou: card do downsell (chamada mais curta e mais barata), no mesmo estilo dos cards de compra;
       // o PIX só é gerado quando ele toca no botão

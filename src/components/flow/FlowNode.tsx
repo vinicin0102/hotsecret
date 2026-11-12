@@ -188,12 +188,13 @@ function FlowNodeView({ data, selected }: NodeProps<HsFlowNode>) {
             ✕ Pagamento recusado
             <Handle type="source" id="payment:failed" position={Position.Right} />
           </div>
-          {c.style === "call" ? (
+          {(c.style === "call" || (c.style === "live" && !!c.ring)) && (
             <div className="out failed" title="O lead tocou em Recusar na chamada (ex.: oferecer uma chamada mais curta e mais barata)">
               📵 Recusou a chamada
               <Handle type="source" id="btn:decline" position={Position.Right} />
             </div>
-          ) : (
+          )}
+          {c.style !== "call" && (
             <div className="out other" title="Mensagens, áudios e vídeos enviados logo após a oferta. Param quando o lead clica em comprar.">
               💬 Enquanto não compra
               <Handle type="source" id="default" position={Position.Right} />

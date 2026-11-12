@@ -74,6 +74,8 @@ const contentSchemas: Record<NodeType, z.ZodType> = {
     description: optTxt(600),
     ctaLabel: optTxt(60),
     style: z.enum(["card", "call", "live"]).optional(),
+    /** Canal chamada de vídeo: style "live" que chega tocando como ligação */
+    ring: z.boolean().optional(),
     videoId: z.string().max(64).optional(),
     downsellProductId: z.string().max(64).optional(),
     downsellText: optTxt(200),
@@ -248,6 +250,8 @@ const brainOfferSchema = z.object({
   freeLoop: z.boolean().optional(),
   /** botão + oferta (style "live"): no chat só o botão (ctaLabel); tocando, abre a oferta */
   button: z.boolean().optional(),
+  /** Canal chamada de vídeo (style "live"): a oferta chega como ligação; atendeu, abre o Canal VIP */
+  ring: z.boolean().optional(),
   /** combo (style "combo"): WhatsApp pessoal — o número só vira link depois do pagamento aprovado */
   whatsapp: z.object({ phone: z.string().trim().max(32), message: optTxt(300) }).optional(),
   /** combo: o mesmo PIX libera este Grupo VIP (a chamada do combo é o videoId) */

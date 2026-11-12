@@ -340,12 +340,22 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                     ["card", "Card de compra"],
                     ["call", "📹 Chamada de vídeo"],
                     ["live", "🔴 Canal VIP AO VIVO"],
+                    ["ringlive", "📹 Canal chamada de vídeo"],
                   ] as const
-                ).map(([s, label]) => (
-                  <button key={s} type="button" className={((c.style as string) ?? "card") === s ? "active" : ""} onClick={() => setContent({ style: s })}>
-                    {label}
-                  </button>
-                ))}
+                ).map(([s, label]) => {
+                  // Canal chamada de vídeo = Canal VIP que chega tocando como ligação
+                  const active = s === "ringlive" ? c.style === "live" && !!c.ring : s === "live" ? c.style === "live" && !c.ring : ((c.style as string) ?? "card") === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      className={active ? "active" : ""}
+                      onClick={() => setContent(s === "ringlive" ? { style: "live", ring: true } : { style: s, ring: undefined })}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {c.style === "call" && (
@@ -415,6 +425,14 @@ export function FlowSidebar({ node, products, tags, brains = [], videos = [], on
                 ))}
               </select>
             </div>
+            {c.style === "live" && !!c.ring && (
+              <p className="hint">
+                <b>Canal chamada de vídeo:</b> o lead recebe a <b>ligação</b> (foto, toque e vibração). Ao <b>atender</b>, abre a venda do Canal VIP
+                abaixo (ingressos, PIX, mensagens e o “vai desistir?”); pagou, a <b>chamada de vídeo</b> começa com o vídeo escolhido. Recusar segue a
+                saída “Recusou”, se houver; senão o card da oferta fica no chat.
+                {!c.videoId && <span className="error-text"> Escolha o vídeo da chamada abaixo.</span>}
+              </p>
+            )}
             {c.style === "live" && (
               <VipOfferEditor
                 vip={c.vip as VipOfferTexts | undefined}

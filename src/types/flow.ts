@@ -145,6 +145,8 @@ export interface OfferContent {
   freeLoop?: boolean;
   /** botão + oferta (style "live", Cérebro): no chat só o botão (ctaLabel); tocando, abre a oferta → PIX → vídeo */
   vipButton?: boolean;
+  /** Canal chamada de vídeo (style "live"): a oferta chega como ligação tocando; ao atender, abre a venda do Canal VIP (ingressos → PIX); pagou, a chamada de vídeo começa */
+  ring?: boolean;
   /** pagou: botão para o WhatsApp (o número fica no servidor e só vem pelo /api/public/delivery depois do pagamento) */
   whatsappAfter?: boolean;
   /** só no painel/servidor — nunca vai ao navegador (o fluxo público recebe whatsappAfter no lugar) */

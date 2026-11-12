@@ -133,6 +133,8 @@ export interface AiReply {
     combo?: { whatsapp?: boolean; vip?: boolean; products?: string[] };
     /** pagou: botão para o WhatsApp (o link vem do delivery) */
     whatsappAfter?: boolean;
+    /** Canal chamada de vídeo (style "live"): a oferta chega como ligação tocando; ao atender, abre a venda do Canal VIP (ingressos → PIX); pagou, a chamada de vídeo começa */
+    ring?: boolean;
     /** chamada de vídeo 02: ao atender, o FREE toca em loop */
     freeLoop?: boolean;
     tarotCards?: TarotCard[];
