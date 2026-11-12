@@ -19,6 +19,7 @@ const NAV = [
   { href: "/admin/whatsapp", label: "WhatsApp", ico: "✆" },
   { href: "/admin/pagamentos", label: "Pagamentos", ico: "¤" },
   { href: "/admin/analytics", label: "Analytics", ico: "↗" },
+  { href: "/admin/anuncios", label: "Anúncios", ico: "◎" },
   { href: "/admin/armazenamento", label: "Armazenamento", ico: "☁" },
 ];
 

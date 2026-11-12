@@ -595,3 +595,28 @@ model WhatsAppContact {
   @@index([conversationId])
   @@map("whatsapp_contacts")
 }
+
+/// Gasto dos anúncios da Meta por dia e anúncio (API de Marketing, só leitura) — tela Anúncios (estilo UTMify)
+model AdSpend {
+  id           String   @id @default(cuid())
+  /// dia no fuso da conta de anúncios (YYYY-MM-DD)
+  day          String
+  accountId    String
+  campaignId   String
+  campaignName String
+  adsetId      String
+  adsetName    String
+  adId         String
+  adName       String
+  /// centavos na moeda da conta
+  spend        Int
+  impressions  Int
+  clicks       Int
+  currency     String   @default("BRL")
+  updatedAt    DateTime @updatedAt
+
+  @@unique([adId, day])
+  @@index([day])
+  @@index([accountId, day])
+  @@map("ad_spend")
+}

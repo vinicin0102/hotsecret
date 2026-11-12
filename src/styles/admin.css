@@ -1834,3 +1834,40 @@ code.inline {
 .ai-toggle {
   white-space: nowrap;
 }
+
+/* Anúncios (gasto × vendas) */
+.ads-stats {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+.ads-pos {
+  color: #4ade80;
+}
+.ads-mid {
+  color: #facc15;
+}
+.ads-neg {
+  color: #f87171;
+}
+.ads-table td,
+.ads-table th {
+  white-space: nowrap;
+}
+.ads-name {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ads-params {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  word-break: break-all;
+  white-space: normal;
+}
+/* as tabelas rolam dentro do card, não empurram a página no celular */
+.ads-grid > * {
+  min-width: 0;
+}
