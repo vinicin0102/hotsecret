@@ -303,7 +303,7 @@ export const brainSchema = z.object({
   images: z
     .array(
       z
-        .object({ id, url: url.optional().default(""), when: optTxt(500), kind: z.enum(["image", "video", "vip"]).optional(), groupId: z.string().max(64).optional(), bonusText: optTxt(120) })
+        .object({ id, url: url.optional().default(""), when: optTxt(500), kind: z.enum(["image", "video", "vip"]).optional(), groupId: z.string().max(64).optional(), bonusText: optTxt(120), blur: z.boolean().optional() })
         // card do Grupo VIP: precisa do grupo; foto/vídeo: precisa do arquivo
         .refine((i) => (i.kind === "vip" ? !!i.groupId : !!i.url), "Prévia sem arquivo (ou prévia do Grupo VIP sem o grupo escolhido)"),
     )
@@ -330,6 +330,8 @@ export const brainSchema = z.object({
     .max(10)
     .default([]),
   maxReplies: z.number().int().min(1).max(200).default(30),
+  /** conversa longa: mensagens do lead antes da primeira oferta (0 = desligado) */
+  warmupMessages: z.number().int().min(0).max(60).default(0),
   fallbackMessage: txt(300).default(""),
 });
 

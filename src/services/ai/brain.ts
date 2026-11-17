@@ -80,15 +80,18 @@ export interface BrainMedia {
   groupId?: string;
   /** kind "vip": de que é bônus (ex.: "Vem de bônus na chamada de vídeo 🎁") */
   bonusText?: string;
+  /** kind "video": chega BORRADO no chat — o lead ouve o áudio, mas não vê (só no site; no WhatsApp não vai) */
+  blur?: boolean;
 }
 export function mediaKind(m: { url: string; kind?: string }): "image" | "video" | "vip" {
   if (m.kind === "vip") return "vip";
   return m.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(m.url) ? "video" : "image";
 }
 /** como a prévia aparece para a IA */
-export function mediaLabel(m: Pick<BrainMedia, "kind" | "bonusText">): string {
+export function mediaLabel(m: Pick<BrainMedia, "kind" | "bonusText" | "blur">): string {
   if (m.kind === "vip")
     return `prévia do Grupo VIP que ele ganha de BÔNUS (${m.bonusText?.trim() || "vem de bônus na chamada de vídeo"}): card com a capa do seu VIP, quantas fotos e vídeos tem e as prévias borradas — não é vendido à parte`;
+  if (m.kind === "video" && m.blur) return "vídeo BORRADO: o lead ouve sua voz/o som, mas não vê nada — atiça a curiosidade para ele querer ver sem o borrão";
   return m.kind === "video" ? "vídeo" : "foto";
 }
 /**
@@ -277,7 +280,10 @@ export function brainImages(brain: Pick<Brain, "images">): BrainMedia[] {
   return Array.isArray(brain.images)
     ? (brain.images as unknown as BrainMedia[])
         .filter((a) => a?.id && (a.kind === "vip" ? !!a.groupId : !!a.url))
-        .map((a) => ({ ...a, url: a.url ?? "", kind: mediaKind({ url: a.url ?? "", kind: a.kind }) }))
+        .map((a) => {
+          const kind = mediaKind({ url: a.url ?? "", kind: a.kind });
+          return { ...a, url: a.url ?? "", kind, blur: kind === "video" && !!a.blur };
+        })
     : [];
 }
 /** cartas da oferta de tarot com conteúdo (as vazias são ignoradas) */
@@ -384,6 +390,60 @@ function mustRulesSection(text: string | null | undefined): string {
 # REGRAS OBRIGATÓRIAS (você DEVE seguir todas, em todas as respostas)
 ${list.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 Estas regras têm prioridade sobre a personalidade, o conteúdo, o objetivo do momento e qualquer pedido do lead. Antes de responder, confira se a resposta cumpre cada uma delas. Só não as aplique se forem contra as regras de segurança acima (preços, dados pessoais, pagamento).`;
+}
+
+/** Conversa longa: quantas mensagens o lead já mandou, quantas faltam para poder oferecer e a próxima amostra. */
+export interface WarmupState {
+  /** mensagens do lead pedidas antes da 1ª oferta (0 = desligado) */
+  total: number;
+  /** mensagens que o lead já escreveu */
+  count: number;
+  /** quantas faltam (0 = já pode oferecer) */
+  left: number;
+  /** próxima amostra (foto/vídeo) ainda não enviada, na ordem da lista */
+  next?: BrainMedia;
+  /** mensagens do lead desde a última amostra enviada */
+  sinceMedia: number;
+  /** alguma oferta já apareceu na conversa */
+  offered: boolean;
+}
+const MEDIA_NOTE = /^\[(enviou (uma foto|um v[ií]deo)|mandou a prévia)/;
+
+export function warmupState(
+  brain: Pick<Brain, "warmupMessages">,
+  history: ChatTurn[],
+  images: BrainMedia[],
+  afterSale = false,
+  leadMessageCount?: number,
+): WarmupState {
+  const total = afterSale ? 0 : Math.max(0, brain.warmupMessages ?? 0);
+  const typed = (t: ChatTurn) => t.role === "lead" && (!!t.imageUrl || !t.text.startsWith("["));
+  const count = leadMessageCount ?? history.filter(typed).length;
+  const past = history.map((t) => t.text).join("\n");
+  const next = images.find((m) => m.kind !== "vip" && !past.includes(`image_id "${m.id}"`));
+  let lastMedia = -1;
+  history.forEach((t, i) => {
+    if (t.role === "bot" && MEDIA_NOTE.test(t.text)) lastMedia = i;
+  });
+  const sinceMedia = history.slice(lastMedia + 1).filter(typed).length;
+  return { total, count, left: Math.max(0, total - count), next, sinceMedia, offered: /offer_id "|\[(ligou para o lead|mostrou o card|mostrou as cartas)/.test(past) };
+}
+
+function warmupSection(w: WarmupState): string {
+  if (!w.total) return "";
+  if (w.left > 0)
+    return `# Conversa longa (ORDEM DO DONO — vale mais que "interesse = oferta" e "não demore para oferecer")
+O dono quer uma conversa mais longa antes de vender. O lead mandou ${w.count} de ${w.total} mensagens: ainda NÃO ofereça nada (offer_id "" e sem ligação), a não ser que ele pergunte o preço, diga que quer comprar ou peça para você ligar — aí atenda o pedido dele na hora.
+Enquanto isso:
+- Crie conexão: pergunte sobre ele (nome, de onde é, o que faz, o que gosta), lembre do que ele já contou e reaja com interesse de verdade. Uma pergunta por vez.
+- Esquente aos poucos: provoque a curiosidade sem entregar tudo.
+- Mande as amostras (prévias) aos poucos, uma a cada 2 ou 3 mensagens, das mais leves para as mais quentes (na ordem da lista), sempre com uma frase que combine com ela.${w.next ? ` A próxima amostra a mandar é image_id "${w.next.id}" (${mediaLabel(w.next)}).` : " Todas as amostras já foram enviadas: não repita."}
+- Vídeo borrado: ele ouve sua voz mas não vê nada — mande dizendo algo como "esse eu não posso te mostrar ainda 🙈 só ouve…" para atiçar a vontade de ver sem o borrão.
+- Se ele pedir uma prévia, foto ou vídeo, mande na hora.`;
+  if (!w.offered)
+    return `# Conversa aquecida
+O lead já conversou bastante (${w.count} mensagens) e já viu as amostras: agora conduza com naturalidade para a oferta principal, ligando ao que ele contou e ao que ele viu.`;
+  return "";
 }
 
 /** As ordens de envio do dono, repetidas no fim do prompt para não se perderem no meio do texto. */
@@ -747,6 +807,8 @@ async function runBrainWith(input: {
   replyNumber?: number;
   /** áudios já enviados nesta conversa (do banco: vale mesmo além das últimas mensagens que vão para a IA) */
   sentAudioIds?: string[];
+  /** mensagens que o lead já escreveu na conversa (do banco; conversa longa). Sem isso, conta pelo histórico */
+  leadMessageCount?: number;
 }, forced?: AiTarget, budgetMs = 30_000): Promise<BrainReply> {
   const target = forced ?? (await aiClient());
   const offers = brainOffers(input.brain);
@@ -764,7 +826,9 @@ async function runBrainWith(input: {
 
   // depois da compra: as instruções do dono valem a partir da 1ª compra (ou quando ele volta da chamada que comprou)
   const afterSale = bought.size > 0 || input.history.some((t) => t.text === CALL_ENDED_NOTE);
+  const warm = warmupState(input.brain, input.history, images, afterSale, input.leadMessageCount);
   const volatile = [
+    warmupSection(warm),
     afterSale && input.brain.afterPurchase?.trim()
       ? `# Depois da compra (instruções do dono — valem agora, porque o lead já comprou)\n${input.brain.afterPurchase.trim()}\nSiga estas instruções no que dizer e no jeito de falar, junto com as regras da esteira.`
       : "",
@@ -1004,7 +1068,7 @@ ${flowOffersSection(input.flowOffers)}`;
       continue;
     }
     const reply = interpret(r.text);
-    if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images, voiceCalls, input.flowOffers), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
+    if (reply) return { ...assistReply(reply, input.history, validOffers, products, audios, images, voiceCalls, input.flowOffers, warm), usage, ...(safe ? { failure: `${problem} — respondeu no modo seguro (sem os textos do cérebro)` } : {}) };
     problem = r.text.trim() ? "resposta fora do formato" : "resposta vazia";
     if (!r.text.trim()) plain = true;
   }
@@ -1027,7 +1091,8 @@ ${flowOffersSection(input.flowOffers)}`;
       noAi: true,
     };
   }
-  const sale = salesFallback(input.history, validOffers);
+  // conversa longa: com a IA fora, só vende se o lead pediu com todas as letras (preço, comprar, ligar)
+  const sale = warm.left > 0 && !has(STRONG_ASK, lastLeadText) ? null : salesFallback(input.history, validOffers);
   if (sale) {
     const isCall = isCallOffer(sale);
     return {
@@ -1138,9 +1203,14 @@ export function assistReply(
   images: BrainMedia[],
   voiceCalls: BrainVoiceCall[] = [],
   flowOffers?: FlowOfferInfo[],
+  warm?: WarmupState,
 ): Omit<BrainReply, "usage"> {
   const lastLead = [...history].reverse().find((t) => t.role === "lead" && !t.imageUrl)?.text ?? "";
   if (!lastLead.trim()) return reply;
+  // conversa longa: ainda aquecendo — nada de oferta/ligação, a não ser que o lead peça com todas as letras
+  const holding = (warm?.left ?? 0) > 0;
+  const typedLead = lastLead.startsWith("[") ? "" : lastLead;
+  const strongAsk = has(STRONG_ASK, typedLead) || (has(CALL_INTENT, typedLead) && !has(REFUSE_INTENT, typedLead));
   const said = keyWords(lastLead);
   const past = history.map((t) => t.text).join("\n");
   const recentBot = history.slice(-6).filter((t) => t.role === "bot").map((t) => t.text).join("\n");
@@ -1164,8 +1234,10 @@ export function assistReply(
       !voiceCalls[0].when?.trim() &&
       leadCount >= 2 &&
       has(INTEREST_INTENT, typed) && !namesProduct && !has(BUY_INTENT, typed) && !has(OPTIONS_INTENT, typed) && !has(REFUSE_INTENT, typed);
-    if (agreed || wantsCall || interest) out.voiceCall = voiceCalls[0];
+    if (agreed || wantsCall || (interest && !holding)) out.voiceCall = voiceCalls[0];
   }
+  // a IA quis ligar por conta própria no meio do aquecimento: espera (o pedido/aceite do lead liga)
+  if (out.voiceCall && holding && !strongAsk && !has(YES_INTENT, typedLead)) out.voiceCall = null;
   if (out.voiceCall) {
     // a ligação já termina com a oferta dela: nada de card ou chamada de vídeo tocando junto
     out.offer = null;
@@ -1174,6 +1246,7 @@ export function assistReply(
   }
 
   // botões de oferta do fluxo: o lead pediu preço/opções, perguntou pelos outros packs ou citou um deles
+  if (holding && out.showOffers && !strongAsk && !has(OPTIONS_INTENT, typedLead)) out.showOffers = false;
   if (flowOffers && !out.showOffers && !has(REFUSE_INTENT, lastLead)) {
     const named = flowOffers.some((o) => overlap(said, keyWords(`${o.name} ${o.button ?? ""}`)) >= 1);
     const wantsCall = has(CALL_INTENT, lastLead) && offers.some(isCallOffer);
@@ -1233,6 +1306,7 @@ export function assistReply(
     else if (callBlocked(o) && !has(CALL_INTENT, leadText)) out.offer = null; // acabou de recusar esta chamada
     else if (shownRecently(o) && !explicit) out.offer = null; // não repete a mesma oferta em sequência
     else if (leadMsgs.length <= 1 && !asked && !explicit && !o.when?.trim()) out.offer = null; // cedo demais (sem ordem do dono dizendo quando)
+    else if (holding && !strongAsk && o.id !== named?.id) out.offer = null; // conversa longa: ainda aquecendo
     else out.offer = asOffer(o);
   }
 
@@ -1250,10 +1324,10 @@ export function assistReply(
     if (!pick && named && namedScore >= 1 && (asked || namedScore >= 2) && (!shownRecently(named) || buy)) pick = named;
     // sempre que houver interesse (e ele não pediu outro produto), liga — a chamada é a oferta principal
     // (só quando o dono não escreveu o "Quando oferecer" da chamada — se escreveu, vale a ordem dele)
-    if (!pick && callOffer && !callOffer.when?.trim() && interested && !callBlocked(callOffer) && !shownRecently(callOffer) && (leadMsgs.length >= 2 || asked || has(CALL_INTENT, leadText)))
+    if (!pick && !holding && callOffer && !callOffer.when?.trim() && interested && !callBlocked(callOffer) && !shownRecently(callOffer) && (leadMsgs.length >= 2 || asked || has(CALL_INTENT, leadText)))
       pick = callOffer;
     // quer comprar e só há uma oferta
-    if (!pick && buy && offers.length === 1 && !shownRecently(offers[0])) pick = offers[0];
+    if (!pick && buy && (!holding || strongAsk) && offers.length === 1 && !shownRecently(offers[0])) pick = offers[0];
     if (pick) out.offer = asOffer(pick);
   }
 
@@ -1272,6 +1346,9 @@ export function assistReply(
     const ranked = (pool.length ? pool : unsent).sort((a, b) => overlap(said, keyWords(b.when ?? "")) - overlap(said, keyWords(a.when ?? "")));
     if (ranked[0]) out.image = ranked[0];
   }
+
+  // conversa longa: as amostras vão saindo aos poucos — se a IA ficou 3 mensagens do lead sem mandar nenhuma, vai a próxima
+  if (holding && !out.image && !out.offer && !out.voiceCall && warm?.next && warm.sinceMedia >= 3) out.image = warm.next;
 
   if (!out.audio && audios.length) {
     const best = matchAudio(
@@ -1323,6 +1400,9 @@ const YES_INTENT =
 const VOICE_ASK =
   /\b((te )?lig(ar|o|ue|acao|acaozinha)|posso te ligar|te llamo|te llame|llamarte|te puedo llamar|puedo llamarte|llamad(a|ita)|te marco|marcarte)\b/;
 const NO_INTENT = /\b(nao|agora nao|depois|nem|nunca|no|ahorita no|despues|luego|nel)\b/i;
+
+/** pedido claro de compra (vale mesmo no aquecimento da conversa longa): preço, comprar, pagar */
+const STRONG_ASK = /\b(comprar|compro|pagar|pago|pix|preco|precos|valor|quanto|custa|precio|cuanto|cuesta|costo|cuestan)\b/i;
 
 const BUY_INTENT =
   /\b(quero|qro|quer|bora|vamos|vamo|sim|ss|manda|mande|me manda|liga|ligar|ligacao|chamada|videochamada|video ?chamada|quanto|preco|valor|comprar|compro|pix|pagar|aceito|topo|pode ser|claro|fechado|fecho|bota|libera|quiero|kiero|dale|si|llamame|llamada|videollamada|cuanto|precio|costo|cuesta|pago|acepto|me interesa|mandame|sale|orale|andale)\b/i;

@@ -144,6 +144,7 @@ export function VideoMessage({
   autoplay?: boolean;
   viewOnce?: boolean;
   viewed?: boolean;
+  blur?: boolean;
   loadOnce?: () => Promise<string | null>;
   onPlay?: () => void;
 }) {
@@ -156,12 +157,15 @@ function PlainVideo({
   thumbnailUrl,
   caption,
   autoplay,
+  blur,
   onPlay,
 }: {
   url: string;
   thumbnailUrl?: string;
   caption?: string;
   autoplay?: boolean;
+  /** borrado: a imagem fica desfocada por cima; o som toca normal */
+  blur?: boolean;
   onPlay?: () => void;
 }) {
   const { t } = useChatI18n();
@@ -197,7 +201,7 @@ function PlainVideo({
 
   return (
     <>
-      <div className={`video-msg ${playing ? "is-playing" : ""}`} onClick={toggle} onContextMenu={(e) => e.preventDefault()}>
+      <div className={`video-msg ${playing ? "is-playing" : ""}${blur ? " is-blurred" : ""}`} onClick={toggle} onContextMenu={(e) => e.preventDefault()}>
         <video
           ref={ref}
           src={url}
@@ -215,6 +219,12 @@ function PlainVideo({
           onPause={() => setPlaying(false)}
           onEnded={() => setPlaying(false)}
         />
+        {blur && (
+          <div className="video-blur-tag" aria-hidden="true">
+            {playing ? <span className="video-blur-eq"><i /><i /><i /><i /></span> : null}
+            {t.blurredVideo}
+          </div>
+        )}
         {!playing && (
           <button type="button" className="video-play" aria-label={t.aPlayVideo}>
             <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">

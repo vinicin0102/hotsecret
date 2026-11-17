@@ -6,7 +6,7 @@ import { inBackground } from "@/lib/background";
 import { withComboProducts } from "@/services/combo-grants";
 import { absoluteUrl } from "@/lib/paths";
 import { formatMoney } from "@/lib/format";
-import { brainOffers, publicOfferFormat, runBrain, sentAudioIdsOf } from "@/services/ai/brain";
+import { brainImages, brainOffers, publicOfferFormat, runBrain, sentAudioIdsOf } from "@/services/ai/brain";
 import { deliveryFor } from "@/services/combo";
 import { toTurns } from "@/services/ai/history";
 import { addConversationMessage, chargeProduct, syncPaymentWithProvider } from "@/services/payments/service";
@@ -135,8 +135,9 @@ export async function replyWithBrain(cfg: WaConfig, settings: WhatsAppSettings, 
   const pending = await prisma.payment.findMany({ where: { leadId: contact.leadId, status: { in: ["PENDING", "CREATED"] }, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } } });
   for (const p of pending) await syncPaymentWithProvider(p).catch(() => undefined);
 
-  const [history, lead, paid] = await Promise.all([
-    prisma.message.findMany({ where: { conversationId: contact.conversationId }, orderBy: { createdAt: "asc" }, take: 200 }),
+  const [history, leadMessageCount, lead, paid] = await Promise.all([
+    prisma.message.findMany({ where: { conversationId: contact.conversationId }, orderBy: { createdAt: "desc" }, take: 200 }).then((l) => l.reverse()),
+    prisma.message.count({ where: { conversationId: contact.conversationId, sender: "user", type: { in: ["text", "image"] } } }),
     prisma.lead.findUnique({ where: { id: contact.leadId }, select: { name: true } }),
     prisma.payment.findMany({ where: { leadId: contact.leadId, status: "APPROVED" }, include: { product: { select: { name: true } } } }),
   ]);
@@ -152,7 +153,9 @@ export async function replyWithBrain(cfg: WaConfig, settings: WhatsAppSettings, 
   try {
     // respostas da IA já dadas a este contato + esta (áudio "na resposta nº X")
     const replyNumber = (await prisma.event.count({ where: { leadId: contact.leadId, conversationId: contact.conversationId, type: "ai_reply" } })) + 1;
-    reply = await runBrain({ brain, history: toTurns(history.slice(-60)), context, language: settings.language, boughtProductIds: [...(await withComboProducts(paid.map((p) => p.productId)))], replyNumber, sentAudioIds: sentAudioIdsOf(history) });
+    // vídeo borrado não existe no WhatsApp (lá o vídeo chegaria nítido): fica de fora das amostras
+    const waBrain = { ...brain, images: brainImages(brain).filter((m) => !m.blur) as unknown as typeof brain.images };
+    reply = await runBrain({ brain: waBrain, history: toTurns(history.slice(-60)), context, language: settings.language, boughtProductIds: [...(await withComboProducts(paid.map((p) => p.productId)))], replyNumber, sentAudioIds: sentAudioIdsOf(history), leadMessageCount });
   } catch (e) {
     console.error("[whatsapp] IA falhou", e);
     if (brain.fallbackMessage?.trim()) reply = { messages: [brain.fallbackMessage.trim()], offer: null, audio: null, image: null, end: false };

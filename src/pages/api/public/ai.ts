@@ -70,8 +70,11 @@ export default apiHandler({
     }
     await prisma.conversation.update({ where: { id: session.conversationId }, data: { currentNodeId: node.id } });
 
-    const [history, lead, paid] = await Promise.all([
-      prisma.message.findMany({ where: { conversationId: session.conversationId }, orderBy: { createdAt: "asc" }, take: 200 }),
+    const [history, leadMessageCount, lead, paid] = await Promise.all([
+      // as 200 mais recentes (conversa longa: as antigas não empurram as novas para fora)
+      prisma.message.findMany({ where: { conversationId: session.conversationId }, orderBy: { createdAt: "desc" }, take: 200 }).then((l) => l.reverse()),
+      // conversa longa: só o que ele escreveu (ou fotos) neste bloco de IA — respostas do quiz antes não contam
+      prisma.message.count({ where: { conversationId: session.conversationId, nodeId: node.id, sender: "user", type: { in: ["text", "image"] } } }),
       prisma.lead.findUnique({ where: { id: session.leadId }, select: { name: true, variables: true, aiPausedAt: true } }),
       prisma.payment.findMany({ where: { leadId: session.leadId, status: "APPROVED" }, include: { product: { select: { name: true } } } }),
     ]);
@@ -129,6 +132,7 @@ export default apiHandler({
         // respostas da IA já dadas neste bloco + esta (áudio "na resposta nº X")
         replyNumber: replies + 1,
         sentAudioIds: sentAudioIdsOf(history),
+        leadMessageCount,
       });
     } catch (e) {
       console.error("[ai]", e);
@@ -157,7 +161,7 @@ export default apiHandler({
       else console.warn(`[ai] prévia do Grupo VIP não enviada: grupo ${reply.image.groupId} não existe ou não está publicado (cérebro ${brain.name})`);
     } else if (reply.image) {
       const kind = reply.image.kind === "video" ? "video" : "image";
-      await addConversationMessage(session.conversationId, "bot", kind, { url: reply.image.url, caption: "", aiImageId: reply.image.id }, node.id);
+      await addConversationMessage(session.conversationId, "bot", kind, { url: reply.image.url, caption: "", aiImageId: reply.image.id, ...(reply.image.blur ? { blur: true } : {}) }, node.id);
     }
     if (reply.voiceCall) {
       await addConversationMessage(session.conversationId, "bot", "voice_call", { status: "ringing", callId: reply.voiceCall.id, text: "Ligação de voz" }, node.id);
@@ -220,7 +224,7 @@ export default apiHandler({
             ? { url: "", kind: "vip", card: vipCard }
             : null
           : reply.image
-            ? { url: reply.image.url, kind: reply.image.kind === "video" ? "video" : "image" }
+            ? { url: reply.image.url, kind: reply.image.kind === "video" ? "video" : "image", ...(reply.image.blur ? { blur: true } : {}) }
             : null,
       offer,
       end: reply.end,

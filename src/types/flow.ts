@@ -58,6 +58,8 @@ export interface VideoContent {
   viewOnce?: boolean;
   /** (mensagem salva) vídeo de visualização única já aberto */
   viewed?: boolean;
+  /** amostra do Cérebro que chega borrada: o lead ouve, mas não vê */
+  blur?: boolean;
 }
 export interface AudioContent {
   url: string;

@@ -16,6 +16,7 @@ const pt = {
   aContinueVideo: "Continuar vídeo",
   aWatchOnce: "Assistir vídeo de visualização única",
   aPlayVideo: "Reproduzir vídeo",
+  blurredVideo: "🔒 Só dá pra ouvir…",
   // janela
   today: "Hoje",
   privateA: "Esta conversa é",
@@ -276,6 +277,7 @@ const es: ChatTexts = {
   aContinueVideo: "Continuar video",
   aWatchOnce: "Ver video de una sola vez",
   aPlayVideo: "Reproducir video",
+  blurredVideo: "🔒 Solo puedes escucharlo…",
   today: "Hoy",
   privateA: "Esta conversación es",
   privateB: "privada",
@@ -527,6 +529,7 @@ const esAR: ChatTexts = {
   tarotHint: "Tocá una carta para descubrir ✨",
   tapToHear: "🔊 Tocá para escuchar",
   tapToHearVideo: "🔇 Tocá para escuchar",
+  blurredVideo: "🔒 Solo podés escucharlo…",
   viewOnceTap: "Se ve una sola vez · tocá para verlo",
   viewOnceRetry: "No abrió. Tocá para intentar de nuevo",
   copyInstructions: "Copiá los datos de abajo y pagá desde la app de tu banco:",

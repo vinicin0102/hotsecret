@@ -39,7 +39,7 @@ export function toTurns(messages: Msg[]): ChatTurn[] {
         }
         turns.push({
           role: "bot",
-          text: `[enviou ${m.type === "image" ? "uma foto" : "um vídeo"}${c.caption ? `: ${String(c.caption)}` : ""}${c.aiImageId ? ` (image_id "${String(c.aiImageId)}")` : ""}]`,
+          text: `[enviou ${m.type === "image" ? "uma foto" : c.blur ? "um vídeo borrado (o lead só ouve, não vê)" : "um vídeo"}${c.caption ? `: ${String(c.caption)}` : ""}${c.aiImageId ? ` (image_id "${String(c.aiImageId)}")` : ""}]`,
         });
         break;
       case "vip_preview":

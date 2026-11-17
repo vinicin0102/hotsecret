@@ -96,9 +96,11 @@ interface Brain {
   offers: Offer[];
   audios: Audio[];
   /** kind "vip": card do Grupo VIP (groupId) em vez de um arquivo */
-  images: (Audio & { kind?: "image" | "video" | "vip"; groupId?: string; bonusText?: string })[];
+  images: (Audio & { kind?: "image" | "video" | "vip"; groupId?: string; bonusText?: string; blur?: boolean })[];
   voiceCalls?: VoiceCallItem[];
   maxReplies: number;
+  /** conversa longa: mensagens do lead antes da 1ª oferta (0 = desligado) */
+  warmupMessages?: number;
   fallbackMessage: string;
 }
 interface VoiceCallItem {
@@ -135,6 +137,7 @@ const EMPTY: Draft = {
   audios: [],
   images: [],
   maxReplies: 30,
+  warmupMessages: 0,
   fallbackMessage: "",
 };
 
@@ -339,7 +342,7 @@ function ConnectionCard() {
 }
 
 function TestChat({ brain }: { brain: Brain }) {
-  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; audioId?: string; image?: string; video?: string; offer?: string; voice?: boolean; vip?: VipCard }[]>([]);
+  const [history, setHistory] = useState<{ role: "lead" | "bot"; text: string; audio?: string; audioId?: string; image?: string; video?: string; blur?: boolean; imageId?: string; offer?: string; voice?: boolean; vip?: VipCard }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -359,7 +362,7 @@ function TestChat({ brain }: { brain: Brain }) {
       const r = await api<{
         messages: string[];
         audio: { id: string; url: string; when?: string } | null;
-        image: { url: string; when?: string; kind?: string; card?: VipCard } | null;
+        image: { id?: string; url: string; when?: string; kind?: string; card?: VipCard; blur?: boolean } | null;
         offer: { name: string; price: number; headline: string; style?: string; vipButton?: boolean; ring?: boolean; combo?: unknown } | null;
         end: boolean;
         failure?: string;
@@ -368,7 +371,11 @@ function TestChat({ brain }: { brain: Brain }) {
         body: {
           history: next.map((h) => ({
             role: h.role,
-            text: h.voice ? "[ligou para o lead (ligação de voz)]" : h.vip ? "[mandou a prévia do Grupo VIP]" : h.video ? "[enviou um vídeo]" : h.image ? "[enviou uma foto]" : h.audio ? `[enviou um áudio${h.audioId ? ` (audio_id "${h.audioId}")` : ""}]` : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
+            text: h.voice
+              ? "[ligou para o lead (ligação de voz)]"
+              : h.vip || h.video || h.image
+                ? `[${h.vip ? "mandou a prévia do Grupo VIP" : h.video ? (h.blur ? "enviou um vídeo borrado (só o áudio)" : "enviou um vídeo") : "enviou uma foto"}${h.imageId ? ` (image_id "${h.imageId}")` : ""}]`
+                : h.audio ? `[enviou um áudio${h.audioId ? ` (audio_id "${h.audioId}")` : ""}]` : h.offer ? `[mostrou o card da oferta ${h.offer}]` : h.text,
           })),
           language,
         },
@@ -380,7 +387,8 @@ function TestChat({ brain }: { brain: Brain }) {
               {
                 role: "bot" as const,
                 text: r.image.when ?? "",
-                ...(r.image.kind === "vip" && r.image.card ? { vip: r.image.card } : r.image.kind === "video" ? { video: r.image.url } : { image: r.image.url }),
+                imageId: r.image.id,
+                ...(r.image.kind === "vip" && r.image.card ? { vip: r.image.card } : r.image.kind === "video" ? { video: r.image.url, blur: !!r.image.blur } : { image: r.image.url }),
               },
             ]
           : []),
@@ -433,7 +441,10 @@ function TestChat({ brain }: { brain: Brain }) {
                 <VipPreviewCard card={h.vip} />
               </div>
             ) : h.video ? (
-              <video src={h.video} controls playsInline style={{ maxWidth: 200, borderRadius: 10, display: "block" }} />
+              <div className={h.blur ? "brain-video-blur" : undefined} style={{ maxWidth: 200 }}>
+                <video src={h.video} controls playsInline style={{ maxWidth: 200, borderRadius: 10, display: "block" }} />
+                {h.blur && <span className="pill">🔒 borrado · só o áudio</span>}
+              </div>
             ) : h.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={h.image} alt="" style={{ maxWidth: 180, borderRadius: 10, display: "block" }} />
@@ -622,7 +633,7 @@ export default function CerebroPage() {
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d));
   const setOffer = (i: number, patch: Partial<Offer>) => set("offers", draft!.offers.map((o, j) => (j === i ? { ...o, ...patch } : o)));
-  const setImage = (i: number, patch: Partial<Audio>) =>
+  const setImage = (i: number, patch: Partial<Audio> & { blur?: boolean }) =>
     setDraft((d) => (d ? { ...d, images: (d.images ?? []).map((a, j) => (j === i ? { ...a, ...patch } : a)) } : d));
   const imagesRef = useRef<HTMLInputElement>(null);
   const [imgBusy, setImgBusy] = useState<string | null>(null);
@@ -749,6 +760,40 @@ export default function CerebroPage() {
                     value={draft.maxReplies}
                     onChange={(e) => set("maxReplies", Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
                   />
+                </div>
+              </div>
+              <div className="field warmup-field">
+                <label htmlFor="b-warmup">💬 Conversa longa: mensagens do lead antes da primeira oferta</label>
+                <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <input
+                    id="b-warmup"
+                    className="input"
+                    type="number"
+                    min={0}
+                    max={60}
+                    style={{ width: 90 }}
+                    value={draft.warmupMessages ?? 0}
+                    onChange={(e) => set("warmupMessages", Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+                  />
+                  {[0, 6, 10, 15].map((n) => (
+                    <button key={n} type="button" className={`btn btn-sm ${(draft.warmupMessages ?? 0) === n ? "btn-primary" : ""}`} onClick={() => set("warmupMessages", n)}>
+                      {n === 0 ? "Desligado" : `${n} mensagens`}
+                    </button>
+                  ))}
+                </div>
+                <div className="hint">
+                  {(draft.warmupMessages ?? 0) > 0 ? (
+                    <>
+                      A IA conversa, cria conexão e vai mandando as <b>amostras</b> (fotos, vídeos e vídeos borrados — lá embaixo em Prévias) aos poucos,
+                      na ordem da lista: se ficar 3 mensagens sem mandar nenhuma, o sistema manda a próxima. Só oferece depois que o lead mandar{" "}
+                      <b>{draft.warmupMessages} mensagens</b> — antes disso, só se ele perguntar o preço, disser que quer comprar ou pedir pra ligar.
+                      {draft.maxReplies <= (draft.warmupMessages ?? 0) + 5 && (
+                        <span className="error-text"> Aumente o “Máximo de respostas” (está {draft.maxReplies}): a IA para de responder antes de chegar na oferta.</span>
+                      )}
+                    </>
+                  ) : (
+                    "Desligado: a IA oferece assim que o lead demonstra interesse. Ligue para uma conversa mais longa, com amostras antes da venda."
+                  )}
                 </div>
               </div>
               <label className="checkbox">
@@ -1376,7 +1421,11 @@ export default function CerebroPage() {
                 </div>
               </div>
               <p className="hint" style={{ marginTop: -6 }}>
-                Fotos e vídeos curtos que a IA pode mandar quando o lead pedir uma prévia, uma provinha, uma foto ou um vídeo. Descreva cada um (o que
+                Fotos e vídeos curtos (amostras) que a IA pode mandar quando o lead pedir uma prévia, uma provinha, uma foto ou um vídeo — e, com a
+                conversa longa ligada, aos poucos durante a conversa, na ordem da lista (deixe as mais leves em cima). Marque{" "}
+                <b>Borrado</b> num vídeo para ele chegar desfocado: o lead ouve a sua voz, mas não vê nada (só no chat do site; no WhatsApp esse
+                vídeo não vai, porque lá chegaria nítido). O borrão é aplicado no celular do lead: quem entende de computador consegue achar o
+                arquivo original — use um trecho que você aceita mostrar, ou suba o vídeo já borrado. Descreva cada um (o que
                 mostra e quando usar): a IA escolhe o certo, manda no máximo um por resposta, não repete e depois puxa para a oferta. Dá para selecionar
                 vários de uma vez. Vídeos: MP4, de preferência curtos e leves. <b>♛ Prévia do Grupo VIP</b>: a IA manda um card com a capa do seu VIP,
                 quantas fotos e vídeos tem e as prévias borradas, na hora em que explica o que ele ganha — como bônus (sem preço e sem botão).
@@ -1413,13 +1462,19 @@ export default function CerebroPage() {
                     ) : !a.url ? (
                       <div className="ph">sem arquivo</div>
                     ) : a.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(a.url) ? (
-                      <div className="brain-video">
+                      <div className={`brain-video${a.blur ? " brain-video-blur" : ""}`}>
                         <video src={a.url} muted playsInline preload="metadata" controls />
-                        <span className="pill">▶ vídeo</span>
+                        <span className="pill">{a.blur ? "🔒 borrado · só o áudio" : "▶ vídeo"}</span>
                       </div>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={a.url} alt="" />
+                    )}
+                    {a.kind !== "vip" && a.url && (a.kind === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(a.url)) && (
+                      <label className="checkbox" style={{ margin: 0 }} title="No chat o vídeo chega desfocado: o lead ouve a sua voz, mas não vê nada">
+                        <input type="checkbox" checked={!!a.blur} onChange={(e) => setImage(i, { blur: e.target.checked, kind: "video" } as Partial<Audio> & { blur?: boolean })} />
+                        Borrado (o lead só ouve o áudio)
+                      </label>
                     )}
                     <textarea
                       className="textarea"
@@ -1428,9 +1483,35 @@ export default function CerebroPage() {
                       value={a.when ?? ""}
                       onChange={(e) => setImage(i, { when: e.target.value })}
                     />
-                    <button className="btn btn-ghost btn-sm" onClick={() => set("images", (draft.images ?? []).filter((_, j) => j !== i))}>
-                      Remover
-                    </button>
+                    <div className="row" style={{ gap: 4 }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={i === 0}
+                        title="Subir (as de cima saem primeiro na conversa longa)"
+                        onClick={() => {
+                          const l = [...(draft.images ?? [])];
+                          [l[i - 1], l[i]] = [l[i], l[i - 1]];
+                          set("images", l);
+                        }}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={i === (draft.images ?? []).length - 1}
+                        title="Descer"
+                        onClick={() => {
+                          const l = [...(draft.images ?? [])];
+                          [l[i + 1], l[i]] = [l[i], l[i + 1]];
+                          set("images", l);
+                        }}
+                      >
+                        ↓
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => set("images", (draft.images ?? []).filter((_, j) => j !== i))}>
+                        Remover
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

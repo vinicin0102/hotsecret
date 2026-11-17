@@ -486,6 +486,8 @@ model Brain {
   /// ligações de voz: [{ id, url (áudio), when, offerId, endText }]
   voiceCalls      Json     @default("[]")
   maxReplies      Int      @default(30)
+  /// conversa longa: mensagens do lead antes da primeira oferta (0 = desligado)
+  warmupMessages  Int      @default(0)
   fallbackMessage String   @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

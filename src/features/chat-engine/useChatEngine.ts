@@ -364,7 +364,7 @@ export function useChatEngine(funnel: PublicFunnel, transport: ChatTransport | n
         if (runId.current !== token) return;
         setTyping(false);
         if (r.image.kind === "vip" && r.image.card) push({ kind: "message", id: lid(), sender: "bot", type: "vip_preview", content: r.image.card as unknown as Record<string, unknown>, nodeId, at: now() });
-        else if (r.image.kind !== "vip") push({ kind: "message", id: lid(), sender: "bot", type: r.image.kind === "video" ? "video" : "image", content: { url: r.image.url }, nodeId, at: now() });
+        else if (r.image.kind !== "vip") push({ kind: "message", id: lid(), sender: "bot", type: r.image.kind === "video" ? "video" : "image", content: { url: r.image.url, ...(r.image.blur ? { blur: true } : {}) }, nodeId, at: now() });
       }
       if (r.audio) {
         setTyping(true);

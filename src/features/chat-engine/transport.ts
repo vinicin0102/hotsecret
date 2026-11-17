@@ -116,7 +116,7 @@ export interface AiReply {
   messages: string[];
   audio: { url: string } | null;
   /** kind "vip": card do Grupo VIP (card vem pronto do servidor) */
-  image?: { url: string; kind?: "image" | "video" | "vip"; card?: VipPreviewCard } | null;
+  image?: { url: string; kind?: "image" | "video" | "vip"; card?: VipPreviewCard; blur?: boolean } | null;
   offer: {
     productId: string;
     headline?: string;
@@ -516,7 +516,7 @@ export function createPreviewTransport(
         const r = await post<{
           messages: string[];
           audio: { id?: string; url: string } | null;
-          image: { url: string; kind?: "image" | "video" | "vip"; card?: VipPreviewCard } | null;
+          image: { id?: string; url: string; kind?: "image" | "video" | "vip"; card?: VipPreviewCard; blur?: boolean } | null;
           offer: AiReply["offer"];
           end: boolean;
           showOffers?: boolean;
@@ -526,7 +526,10 @@ export function createPreviewTransport(
           { history, goal: cfg.goal, flowOffers: aiFlowOffers(nodeId), language },
         );
         for (const m of r.messages) history.push({ role: "bot", text: m });
-        if (r.image) history.push({ role: "bot", text: r.image.kind === "vip" ? "[mandou a prévia do Grupo VIP]" : r.image.kind === "video" ? "[enviou um vídeo]" : "[enviou uma foto]" });
+        if (r.image) {
+          const tag = r.image.id ? ` (image_id "${r.image.id}")` : "";
+          history.push({ role: "bot", text: r.image.kind === "vip" ? `[mandou a prévia do Grupo VIP${tag}]` : r.image.kind === "video" ? `[enviou um vídeo${r.image.blur ? " borrado (só o áudio)" : ""}${tag}]` : `[enviou uma foto${tag}]` });
+        }
         if (r.audio) history.push({ role: "bot", text: `[enviou um áudio${r.audio.id ? ` (audio_id "${r.audio.id}")` : ""}]` });
         if (r.offer) history.push({ role: "bot", text: `[${r.offer.style === "call" ? "ligou para o lead com a oferta" : r.offer.style === "tarot" ? "mostrou as cartas de tarot da oferta" : "mostrou o card da oferta"} ${r.offer.headline ?? ""}]` });
         if (r.showOffers) history.push({ role: "bot", text: "[mostrou os botões de oferta]" });
@@ -534,7 +537,7 @@ export function createPreviewTransport(
         return {
           messages: r.messages,
           audio: r.audio ? { url: r.audio.url } : null,
-          image: r.image ? { url: r.image.url, kind: r.image.kind, ...(r.image.card ? { card: r.image.card } : {}) } : null,
+          image: r.image ? { url: r.image.url, kind: r.image.kind, ...(r.image.card ? { card: r.image.card } : {}), ...(r.image.blur ? { blur: true } : {}) } : null,
           offer: r.offer,
           end: r.end,
           showOffers: r.showOffers,

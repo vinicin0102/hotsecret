@@ -34,7 +34,7 @@ export function ConversationViewer({ messages }: { messages: ViewerMessage[] }) 
           case "video":
             body = (
               <>
-                🎬 Vídeo {c.caption ? `— ${String(c.caption)}` : ""}
+                🎬 {c.blur ? "Vídeo borrado (só o áudio)" : "Vídeo"} {c.caption ? `— ${String(c.caption)}` : ""}
                 {c.viewOnce ? <div className="hint">① visualização única{c.viewed ? " · já visualizado" : " · ainda não aberto"}</div> : null}
               </>
             );
